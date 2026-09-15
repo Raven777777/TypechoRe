@@ -157,7 +157,7 @@ class Edit extends Users implements ActionInterface
             ],
             null,
             _t('用户组'),
-            _t('不同的用户组拥有不同的权限.') . '<br />' . _t('具体的权限分配表请<a href="https://docs.typecho.org/develop/acl">参考这里</a>.')
+            _t('不同的用户组拥有不同的权限.') . '<br />' . _t('具体的权限分配表请<a href="%s">参考这里</a>.', \Typecho\Common::PROJECT_ORIGIN_URL . '/wiki/develop/acl')
         );
         $form->addInput($group);
 

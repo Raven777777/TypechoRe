@@ -40,7 +40,17 @@ class SQLite extends Pdo
     public function init(Config $config): \PDO
     {
         $pdo = new \PDO("sqlite:{$config->file}");
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 5);
         $this->isSQLite2 = version_compare($pdo->getAttribute(\PDO::ATTR_SERVER_VERSION), '3.0.0', '<');
+
+        /** 并发加固: 非零 busy_timeout + WAL 模式, 读写不再互斥, 消除 "database is locked" */
+        if (!$this->isSQLite2) {
+            $pdo->exec('PRAGMA journal_mode = WAL;');
+            $pdo->exec('PRAGMA synchronous = NORMAL;');
+        }
+        $pdo->exec('PRAGMA busy_timeout = 5000;');
+
         return $pdo;
     }
 

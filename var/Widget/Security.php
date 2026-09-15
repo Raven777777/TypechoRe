@@ -62,7 +62,7 @@ class Security extends Base
      */
     public function protect()
     {
-        if ($this->enabled && $this->request->get('_') != $this->getToken($this->request->getReferer())) {
+        if ($this->enabled && !hash_equals($this->getToken(null), (string)$this->request->get('_'))) {
             $this->response->goBack();
         }
     }
@@ -70,12 +70,16 @@ class Security extends Base
     /**
      * 获取token
      *
-     * @param string|null $suffix 后缀
+     * token 仅由服务端可知的 secret / authCode / uid 派生,
+     * 不再绑定 Referer, 使用恒定时间比较, 避免在 Referer 缺失
+     * (CSP strict-origin 等) 场景下防护失效
+     *
+     * @param string|null $suffix 后缀 (保留参数以兼容原签名, 现已不参与计算)
      * @return string
      */
     public function getToken(?string $suffix): string
     {
-        return md5($this->token . '&' . $suffix);
+        return hash('sha256', $this->token . '&csrf');
     }
 
     /**

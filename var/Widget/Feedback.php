@@ -91,17 +91,20 @@ class Feedback extends Comments implements ActionInterface
                     $refererPart = parse_url($referer);
                     $currentPart = parse_url($this->content->permalink);
 
+                    $refererHost = $refererPart['host'] ?? '';
+                    $currentHost = $currentPart['host'] ?? '';
+
                     if (
-                        $refererPart['host'] != $currentPart['host'] ||
-                        0 !== strpos($refererPart['path'], $currentPart['path'])
+                        empty($refererHost) || $refererHost != $currentHost ||
+                        0 !== strpos(($refererPart['path'] ?? ''), ($currentPart['path'] ?? ''))
                     ) {
                         //自定义首页支持
                         if ('page:' . $this->content->cid == $this->options->frontPage) {
                             $currentPart = parse_url(rtrim($this->options->siteUrl, '/') . '/');
 
                             if (
-                                $refererPart['host'] != $currentPart['host'] ||
-                                0 !== strpos($refererPart['path'], $currentPart['path'])
+                                $refererHost != ($currentPart['host'] ?? '') ||
+                                0 !== strpos(($refererPart['path'] ?? ''), ($currentPart['path'] ?? ''))
                             ) {
                                 throw new Exception(_t('评论来源页错误.'), 403);
                             }
@@ -287,6 +290,7 @@ class Feedback extends Comments implements ActionInterface
         /** 如果不是POST方法 */
         if (!$this->request->isPost() || $this->request->getReferer()) {
             $this->response->redirect($this->content->permalink);
+            return;
         }
 
         /** 如果库中已经存在当前ip为spam的trackback则直接拒绝 */

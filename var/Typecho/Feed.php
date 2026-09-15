@@ -378,7 +378,7 @@ xml:base="' . $this->baseUrl . '"
             $result .= '<title type="text">' . htmlspecialchars($this->title) . '</title>
 <subtitle type="text">' . htmlspecialchars($this->subTitle ?? '') . '</subtitle>
 <updated>' . $this->dateFormat($lastUpdate) . '</updated>
-<generator uri="https://typecho.org/" version="' . $this->version . '">Typecho</generator>
+<generator uri="' . Common::PROJECT_URL . '" version="' . $this->version . '">' . Common::SOFTWARE . '</generator>
 <link rel="alternate" type="text/html" href="' . $this->baseUrl . '" />
 <id>' . $this->feedUrl . '</id>
 <link rel="self" type="application/atom+xml" href="' . $this->feedUrl . '" />

@@ -178,6 +178,12 @@ class Options extends Base
             }
         }
 
+        /** 运行时重写软件名称为 Fork 版本, 仅保留版本号以维持升级检测 */
+        if (!empty($options['generator'])) {
+            [, $version] = array_pad(explode(' ', $options['generator'], 2), 2, Common::VERSION);
+            $options['generator'] = Common::SOFTWARE . ' ' . $version;
+        }
+
         $this->push($options);
     }
 
@@ -766,6 +772,6 @@ class Options extends Base
     private function tryDeserialize(string $value)
     {
         $isSerialized = strpos($value, 'a:') === 0 || $value === 'b:0;';
-        return $isSerialized ? @unserialize($value) : json_decode($value, true);
+        return $isSerialized ? @unserialize($value, ['allowed_classes' => false]) : json_decode($value, true);
     }
 }

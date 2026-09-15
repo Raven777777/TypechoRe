@@ -130,6 +130,16 @@ class Backup extends BaseOptions implements ActionInterface
         fwrite($fp, $header);
         fclose($fp);
 
+        // throwFile 内部会 exit, 注册 shutdown 清理临时文件, 避免包含敏感数据的副本残留在临时目录
+        $cleanup = is_string($backupFile) ? $backupFile : null;
+        if (null !== $cleanup) {
+            register_shutdown_function(function () use ($cleanup) {
+                if (is_file($cleanup)) {
+                    @unlink($cleanup);
+                }
+            });
+        }
+
         $this->response->throwFile($backupFile, 'application/octet-stream');
     }
 
@@ -206,7 +216,7 @@ class Backup extends BaseOptions implements ActionInterface
                 $this->response->goBack();
             }
 
-            $path = __TYPECHO_BACKUP_DIR__ . '/' . $this->request->get('file');
+            $path = __TYPECHO_BACKUP_DIR__ . '/' . basename($this->request->get('file'));
 
             if (!file_exists($path)) {
                 Notice::alloc()->set(_t('备份文件不存在'), 'error');

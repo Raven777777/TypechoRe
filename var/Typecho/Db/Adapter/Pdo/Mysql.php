@@ -51,13 +51,22 @@ class Mysql extends Pdo
      */
     public function init(Config $config): \PDO
     {
+        $isModernPdoMysql = class_exists('\Pdo\Mysql');
+        $sslCaAttr = $isModernPdoMysql ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA;
+        $sslVerifyAttr = $isModernPdoMysql
+            ? \Pdo\Mysql::ATTR_SSL_VERIFY_SERVER_CERT
+            : \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT;
+        $useBufferedQueryAttr = $isModernPdoMysql
+            ? \Pdo\Mysql::ATTR_USE_BUFFERED_QUERY
+            : \PDO::MYSQL_ATTR_USE_BUFFERED_QUERY;
+
         $options = [];
         if (!empty($config->sslCa)) {
-            $options[\PDO::MYSQL_ATTR_SSL_CA] = $config->sslCa;
+            $options[$sslCaAttr] = $config->sslCa;
 
             if (isset($config->sslVerify)) {
                 // FIXME: https://github.com/php/php-src/issues/8577
-                $options[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = $config->sslVerify;
+                $options[$sslVerifyAttr] = $config->sslVerify;
             }
         }
 
@@ -74,13 +83,7 @@ class Mysql extends Pdo
             $options
         );
 
-        if (class_exists('\Pdo\Mysql')) {
-            // 新版本写法
-            $pdo->setAttribute(\Pdo\Mysql::ATTR_USE_BUFFERED_QUERY, true);
-        } else {
-            // 兼容旧版本
-            $pdo->setAttribute(\PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
-        }
+        $pdo->setAttribute($useBufferedQueryAttr, true);
 
         if ($config->charset) {
             $pdo->exec("SET NAMES '{$config->charset}'");

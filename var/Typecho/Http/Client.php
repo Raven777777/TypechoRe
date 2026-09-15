@@ -59,6 +59,13 @@ class Client
     private bool $multipart = true;
 
     /**
+     * 是否启用出站主机校验 (SSRF/DNS rebinding 防护)
+     *
+     * @var bool
+     */
+    private bool $safeHostCheck = false;
+
+    /**
      * 需要在body中传递的值
      *
      * @var array|string
@@ -234,6 +241,19 @@ class Client
     }
 
     /**
+     * 启用出站请求主机校验: 请求前解析主机为公网 IP 并将连接绑定到该 IP,
+     * 消除 DNS rebinding (TOCTOU) 与内网 SSRF 风险
+     *
+     * @param bool $enable
+     * @return $this
+     */
+    public function setSafeHost(bool $enable = true): Client
+    {
+        $this->safeHostCheck = $enable;
+        return $this;
+    }
+
+    /**
      * @param int $key
      * @param mixed $value
      * @return $this
@@ -276,8 +296,7 @@ class Client
         $query = empty($params['query']) ? '' : $params['query'];
 
         if (!empty($this->query)) {
-            $query = empty($query) ? $this->query : '&' . $this->query;
-        }
+            $query = empty($query) ? $this->query : '&' . $this->query;        }
 
         if (!empty($query)) {
             $params['query'] = $query;
@@ -330,6 +349,19 @@ class Client
             return strlen($header);
         });
 
+        /** 防止 SSRF/DNS rebinding: 一次性解析并绑定到校验通过的 IP */
+        if ($this->safeHostCheck && !empty($params['host'])) {
+            $port = $params['port'] ?? ('https' == strtolower($params['scheme'] ?? '') ? 443 : 80);
+            $ip = Common::resolveSafeHost($params['host']);
+
+            if (null === $ip) {
+                unset($ch);
+                throw new Exception('Unsafe or unresolvable host', 500);
+            }
+
+            curl_setopt($ch, CURLOPT_RESOLVE, [$params['host'] . ':' . $port . ':' . $ip]);
+        }
+
         foreach ($this->options as $key => $val) {
             curl_setopt($ch, $key, $val);
         }
@@ -337,21 +369,13 @@ class Client
         $response = curl_exec($ch);
         if (false === $response) {
             $error = curl_error($ch);
-            if (PHP_VERSION_ID >= 80000) {
-                unset($ch);
-            } else {
-                curl_close($ch);
-            }
+            unset($ch);
             throw new Exception($error, 500);
         }
 
         $this->responseStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $this->responseBody = $response;
-        if (PHP_VERSION_ID >= 80000) {
-            unset($ch);
-        } else {
-            curl_close($ch);
-        }
+        unset($ch);
     }
 
     /**

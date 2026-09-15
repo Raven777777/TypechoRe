@@ -1,8 +1,15 @@
-Typecho Blogging Platform
-=========================
+TypechoRe Blogging Platform
+===========================
 
-Typecho is a PHP-based blog software and is designed to be the most powerful blog engine in the world.
-Typecho is released under the GNU General Public License 2.0.
+**TypechoRe** is an actively maintained Fork of [Typecho](https://github.com/typecho/typecho) — a PHP-based blogging software.
+
+> 这是 [Typecho](https://github.com/typecho/typecho) 的 Fork 版本。所有底层机制与数据结构保持与上游兼容（ GNU General Public License 2.0 ）。
+
+## Fork 定位
+
+* 安全加固：路径穿越 / SSRF / 反序列化 / CSRF 增强、Cookie 安全属性、SQLite 并发优化等
+* 移除对官方服务器的外网请求（如后台 `do=feed`、`do=checkVersion`）
+* 独立命名 TypechoRe，保持与原版功能兼容
 
 ## Main Features
 
@@ -15,16 +22,12 @@ Typecho is released under the GNU General Public License 2.0.
 
 ## Requirements
 
-* PHP 7.4.0 or higher
+* PHP 7.4.0 or higher (PHP 8.5 supported)
 * Database (MariaDB, MySQL, SQLite, PostgreSQL)
   * MariaDB or MySQL 5.5.3 or higher
   * SQLite 3.7.11 or higher
   * PostgreSQL 9.1 or higher
 
-## Screenshots
-
-![Typecho](https://typecho.org/usr/themes/bluecode/img/screenshot/st1.png)
-
 ## Contributing
 
-Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
+Report issues at https://github.com/Raven777777/MoeCounterRe/issues

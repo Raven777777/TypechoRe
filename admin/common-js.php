@@ -18,10 +18,20 @@
                     secure = <?php echo json_encode(\Typecho\Cookie::getSecure()); ?>;
 
                 if (!!cookies.notice && 'success|notice|error'.indexOf(cookies.noticeType) >= 0) {
-                    var head = $('.typecho-head-nav'),
-                        p = $('<div class="message popup ' + cookies.noticeType + '">'
-                        + '<ul><li>' + $.parseJSON(cookies.notice).join('</li><li>') 
-                        + '</li></ul></div>'), offset = 0;
+                    var head = $('.typecho-head-nav'), p, offset = 0, ul = $('<ul>').appendTo($('<div>'));
+                    var noticeType = /^(success|notice|error)$/.exec(cookies.noticeType) ? cookies.noticeType : 'notice';
+
+                    // 逐条构建节点, 使用 text() 转义内容, 防止 Cookie 中包含的用户数据注入 DOM
+                    var items = null;
+                    try { items = JSON.parse(cookies.notice); } catch (e) { items = null; }
+                    if (!$.isArray(items)) { items = []; }
+
+                    ul = $('<ul>');
+                    $.each(items, function (i, item) {
+                        $('<li>').text(String(item)).appendTo(ul);
+                    });
+
+                    p = $('<div class="message popup">').addClass(noticeType).append(ul);
 
                     if (head.length > 0) {
                         p.insertAfter(head);
@@ -49,7 +59,11 @@
                 }
 
                 if (cookies.highlight) {
-                    $('#' + cookies.highlight).effect('highlight', 1000);
+                    // highlight 仅允许合法 id 字符, 防止选择器注入
+                    var highlight = cookies.highlight.replace(/[^_0-9a-zA-Z-]/g, '');
+                    if (highlight) {
+                        $('#' + highlight).effect('highlight', 1000);
+                    }
                     $.cookie(prefix + '__typecho_notice_highlight', null, {path : path, domain: domain, secure: secure});
                 }
             })();

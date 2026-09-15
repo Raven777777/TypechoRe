@@ -72,7 +72,7 @@ class Upgrade
                     continue;
                 }
 
-                $value = @unserialize($row['text']);
+                $value = @unserialize($row['text'], ['allowed_classes' => false]);
                 if ($value !== false) {
                     $db->query($db->update('table.contents')
                         ->rows(['text' => json_encode($value)])
@@ -89,7 +89,7 @@ class Upgrade
                 || strpos($row['name'], 'plugin:') === 0
                 || strpos($row['name'], 'theme:') === 0
             ) {
-                $value = @unserialize($row['value']);
+                $value = @unserialize($row['value'], ['allowed_classes' => false]);
                 if ($value !== false) {
                     $db->query($db->update('table.options')
                         ->rows(['value' => json_encode($value)])

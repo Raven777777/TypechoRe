@@ -13,6 +13,16 @@ function themeConfig($form)
 
     $form->addInput($logoUrl->addRule('url', _t('请填写一个合法的URL地址')));
 
+    $faviconUrl = new \Typecho\Widget\Helper\Form\Element\Text(
+        'faviconUrl',
+        null,
+        null,
+        _t('站点图标地址'),
+        _t('在这里填入一个图片 URL 地址, 以在浏览器标题栏显示 LOGO')
+    );
+
+    $form->addInput($faviconUrl->addRule('url', _t('请填写一个合法的URL地址')));
+
     $sidebarBlock = new \Typecho\Widget\Helper\Form\Element\Checkbox(
         'sidebarBlock',
         [

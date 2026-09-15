@@ -209,7 +209,17 @@ class Response
                 $timeout = 1;
             }
 
-            setrawcookie($key, rawurlencode($value), $timeout, $path, $domain, $secure, $httponly);
+            $options = ['expires' => $timeout, 'path' => $path, 'samesite' => 'Lax'];
+            if ('' !== $domain) {
+                $options['domain'] = $domain;
+            }
+            if ($secure) {
+                $options['secure'] = true;
+            }
+            if ($httponly) {
+                $options['httponly'] = true;
+            }
+            setrawcookie($key, rawurlencode($value), $options);
         }
     }
 

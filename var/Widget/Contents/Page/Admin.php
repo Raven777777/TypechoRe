@@ -56,6 +56,9 @@ class Admin extends Contents
             $this->parentId = $this->request->filter('int')->get('parent', 0);
             $this->pushAll($this->getRows($this->getChildIds($this->parentId)));
         }
+
+        /** 批量预取作者/分类/修订版, 消除列表 N+1 查询 */
+        $this->initListData();
     }
 
     /**

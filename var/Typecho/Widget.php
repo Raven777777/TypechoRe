@@ -158,13 +158,19 @@ abstract class Widget
                     call_user_func($disableSandboxOrCallback, $widget);
                 }
             } catch (Terminal $e) {
-                $widget = $widget ?? null;
+                // 构造或执行未产生实例时, 无法返回有效的 widget, 原样抛出避免返回 null 违反返回类型
+                if (!isset($widget)) {
+                    throw $e;
+                }
             } finally {
                 if ($sandbox) {
                     Response::getInstance()->endSandbox();
                     Request::getInstance()->endSandbox();
 
-                    return $widget;
+                    if (isset($widget)) {
+                        return $widget;
+                    }
+                    throw $e ?? new \RuntimeException('Widget "' . $className . '" failed to initialize');
                 }
             }
 
@@ -404,6 +410,10 @@ abstract class Widget
      */
     public function altBy(int $current, ...$args)
     {
+        if (empty($args)) {
+            return;
+        }
+
         $num = count($args);
         $split = $current % $num;
         echo $args[(0 == $split ? $num : $split) - 1];

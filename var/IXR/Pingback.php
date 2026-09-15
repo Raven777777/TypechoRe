@@ -36,7 +36,10 @@ class Pingback
         }
 
         try {
-            $client->setTimeout(5)
+            // 启用出站主机校验: 校验时解析的公网 IP 会被直接绑定到连接,
+            // 消除 DNS rebinding (TOCTOU) 与内网 SSRF
+            $client->setSafeHost(true)
+                ->setTimeout(5)
                 ->send($url);
         } catch (HttpException $e) {
             throw new Exception('Pingback http error', 50);

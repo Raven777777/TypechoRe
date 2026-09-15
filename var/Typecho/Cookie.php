@@ -43,7 +43,13 @@ class Cookie
      * @var bool
      * @access private
      */
-    private static bool $httponly = false;
+    private static bool $httponly = true;
+
+    /**
+     * @var string
+     * @access private
+     */
+    private static string $samesite = 'Lax';
 
     /**
      * 获取前缀
@@ -72,6 +78,12 @@ class Cookie
         self::$domain = $parsed['host'];
         /** 在路径后面强制加上斜杠 */
         self::$path = empty($parsed['path']) ? '/' : Common::url(null, $parsed['path']);
+
+        /** HTTPS 站点自动启用 secure 标记 */
+        $https = (!empty($_SERVER['HTTPS']) && 'off' !== strtolower($_SERVER['HTTPS']))
+            || 0 === stripos($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '', 'https')
+            || strtolower($parsed['scheme'] ?? '') === 'https';
+        self::$secure = $https;
     }
 
     /**
@@ -111,9 +123,9 @@ class Cookie
      */
     public static function setOptions(array $options)
     {
-        self::$domain = $options['domain'] ?: self::$domain;
-        self::$secure = !!$options['secure'];
-        self::$httponly = !!$options['httponly'];
+        self::$domain = ($options['domain'] ?? '') ?: self::$domain;
+        self::$secure = !!($options['secure'] ?? false);
+        self::$httponly = !!($options['httponly'] ?? true);
     }
 
     /**

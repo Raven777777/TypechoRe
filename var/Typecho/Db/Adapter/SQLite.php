@@ -42,6 +42,13 @@ class SQLite implements Adapter
         try {
             $dbHandle = new \SQLite3($config->file);
             $this->isSQLite2 = version_compare(\SQLite3::version()['versionString'], '3.0.0', '<');
+
+            /** 并发加固: 非零 busy_timeout + WAL 模式, 读写不再互斥, 消除 "database is locked" */
+            $dbHandle->busyTimeout(5000);
+            if (!$this->isSQLite2) {
+                $dbHandle->exec('PRAGMA journal_mode = WAL;');
+                $dbHandle->exec('PRAGMA synchronous = NORMAL;');
+            }
         } catch (\Exception $e) {
             throw new ConnectionException($e->getMessage(), $e->getCode());
         }
@@ -78,9 +85,20 @@ class SQLite implements Adapter
         ?string $action = null,
         ?string $table = null
     ): \SQLite3Result {
-        if ($stm = $handle->prepare($query)) {
-            if ($resource = $stm->execute()) {
-                return $resource;
+        /** SQLITE_BUSY (5) 时短暂重试, 应对极端并发下的瞬时锁 */
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            if ($attempt > 0) {
+                usleep(50000);
+            }
+
+            if ($stm = $handle->prepare($query)) {
+                if ($resource = $stm->execute()) {
+                    return $resource;
+                }
+            }
+
+            if (\SQLITE_BUSY != $handle->lastErrorCode()) {
+                break;
             }
         }
 

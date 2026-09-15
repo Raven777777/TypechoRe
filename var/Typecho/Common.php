@@ -170,6 +170,15 @@ namespace Typecho {
         /** 程序版本 */
         public const VERSION = '1.3.0';
 
+        /** 程序名称 (Fork 版本) */
+        public const SOFTWARE = 'TypechoRe';
+
+        /** Fork 项目地址 */
+        public const PROJECT_URL = 'https://github.com/Raven777777/MoeCounterRe';
+
+        /** 原始上游项目地址 */
+        public const PROJECT_ORIGIN_URL = 'https://github.com/typecho/typecho';
+
         /**
          * 将路径转化为链接
          *
@@ -371,7 +380,7 @@ EOF;
             //关闭自闭合标签
             $startPos = strrpos($string, "<");
 
-            if (false == $startPos) {
+            if (false === $startPos) {
                 return $string;
             }
 
@@ -726,7 +735,7 @@ EOF;
                 $salt = substr($to, 3, 9);
                 return self::hash($from, $salt) === $to;
             } else {
-                return md5($from) === $to;
+                return hash_equals($to, md5($from));
             }
         }
 
@@ -794,7 +803,7 @@ EOF;
             $result = '';
             $max = strlen($chars) - 1;
             for ($i = 0; $i < $length; $i++) {
-                $result .= $chars[rand(0, $max)];
+                $result .= $chars[random_int(0, $max)];
             }
             return $result;
         }
@@ -1005,30 +1014,50 @@ EOF;
          */
         public static function checkSafeHost(string $host): bool
         {
-            if ('localhost' == $host) {
-                return false;
+            return null !== self::resolveSafeHost($host);
+        }
+
+        /**
+         * 解析并校验主机名, 返回校验通过的 IP 地址
+         *
+         * 返回该 IP 供出站请求直接绑定 (CURLOPT_RESOLVE),
+         * 消除"校验时解析公网 IP, 请求时二次解析为内网 IP"的
+         * DNS rebinding (TOCTOU) 漏洞
+         *
+         * @param string $host
+         * @return string|null 校验通过返回 IPv4/IPv6 地址, 否则返回 null
+         */
+        public static function resolveSafeHost(string $host): ?string
+        {
+            if ('' == $host || 'localhost' == strtolower($host)) {
+                return null;
+            }
+
+            /** 直接传入字面 IP 时无需进行 DNS 解析 */
+            if (false !== filter_var($host, FILTER_VALIDATE_IP)) {
+                return filter_var($host, FILTER_VALIDATE_IP,
+                    FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ?: null;
             }
 
             $address = gethostbyname($host);
-            $inet = inet_pton($address);
 
-            if (false === $inet) {
-                // 有可能是ipv6的地址
-                $records = dns_get_record($host, DNS_AAAA);
-
-                if (empty($records)) {
-                    return false;
-                }
-
-                $address = $records[0]['ipv6'];
-                $inet = inet_pton($address);
+            if (false !== $address && $address !== $host) {
+                return filter_var($address, FILTER_VALIDATE_IP,
+                    FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ?: null;
             }
 
-            return filter_var(
-                $address,
-                FILTER_VALIDATE_IP,
-                FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
-            ) !== false;
+            // 有可能是ipv6的地址
+            if (function_exists('dns_get_record')) {
+                $records = dns_get_record($host, DNS_AAAA);
+
+                if (!empty($records) && !empty($records[0]['ipv6'])) {
+                    $address = $records[0]['ipv6'];
+                    return filter_var($address, FILTER_VALIDATE_IP,
+                        FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ?: null;
+                }
+            }
+
+            return null;
         }
 
         /**
@@ -1060,9 +1089,7 @@ EOF;
                 $fInfo = @finfo_open(FILEINFO_MIME_TYPE);
 
                 if (false !== $fInfo) {
-                    $mimeType = finfo_file($fInfo, $fileName);
-                    finfo_close($fInfo);
-                    return $mimeType;
+                    return finfo_file($fInfo, $fileName);
                 }
             }
 

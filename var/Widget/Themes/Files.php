@@ -93,6 +93,35 @@ class Files extends Base
     }
 
     /**
+     * 判断文件是否属于允许编辑的白名单
+     *
+     * 与编辑器 UI 侧 (execute) 使用相同的字符白名单,
+     * 供 action 端点统一复用, 防止路径穿越写入
+     *
+     * @param string $theme 外观名称
+     * @param string $file 文件名
+     * @return bool
+     */
+    public static function isEditableFile(string $theme, string $file): bool
+    {
+        if (!preg_match("/^([_0-9a-z-. ])+$/i", $theme)
+            || !preg_match("/^([_0-9a-z-. ])+$/i", $file)
+            || (!defined('__TYPECHO_THEME_WRITEABLE__') || __TYPECHO_THEME_WRITEABLE__) === false
+        ) {
+            return false;
+        }
+
+        $dir = Options::alloc()->themeFile($theme);
+        $realDir = realpath($dir) ?: '';
+        $realFile = realpath($dir . '/' . $file) ?: '';
+
+        return '' !== $realDir && '' !== $realFile
+            && is_dir($realDir)
+            && 0 === strpos($realFile, $realDir . DIRECTORY_SEPARATOR)
+            && is_file($realFile);
+    }
+
+    /**
      * 获取菜单标题
      *
      * @return string

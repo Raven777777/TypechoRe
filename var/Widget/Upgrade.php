@@ -47,7 +47,10 @@ class Upgrade extends BaseOptions implements ActionInterface
         $message = [];
 
         foreach ($ref->getMethods() as $method) {
-            preg_match("/^v([_0-9]+)$/", $method->getName(), $matches);
+            if (!preg_match("/^v([_0-9]+)$/", $method->getName(), $matches)) {
+                continue;
+            }
+
             $version = str_replace('_', '.', $matches[1]);
 
             if (version_compare($currentVersion, $version, '>=')) {
@@ -69,7 +72,7 @@ class Upgrade extends BaseOptions implements ActionInterface
 
             /** 更新版本号 */
             $this->update(
-                ['value' => 'Typecho ' . $version],
+                ['value' => Common::SOFTWARE . ' ' . $version],
                 $this->db->sql()->where('name = ?', 'generator')
             );
 
@@ -78,7 +81,7 @@ class Upgrade extends BaseOptions implements ActionInterface
 
         /** 更新版本号 */
         $this->update(
-            ['value' => 'Typecho ' . Common::VERSION],
+                ['value' => Common::SOFTWARE . ' ' . Common::VERSION],
             $this->db->sql()->where('name = ?', 'generator')
         );
 

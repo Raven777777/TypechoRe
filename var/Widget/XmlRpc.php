@@ -363,16 +363,18 @@ class XmlRpc extends Contents implements ActionInterface, Hook
 
         if (!empty($content['categories']) && is_array($content['categories'])) {
             foreach ($content['categories'] as $category) {
-                if (
-                    !$this->db->fetchRow($this->db->select('mid')
-                        ->from('table.metas')->where('type = ? AND name = ?', 'category', $category))
-                ) {
+                $row = $this->db->fetchRow($this->db->select('mid')
+                    ->from('table.metas')->where('type = ? AND name = ?', 'category', $category));
+
+                if (null === $row) {
                     $this->wpNewCategory($blogId, $userName, $password, ['name' => $category]);
+                    $row = $this->db->fetchRow($this->db->select('mid')
+                        ->from('table.metas')->where('type = ? AND name = ?', 'category', $category));
                 }
 
-                $input['category'][] = $this->db->fetchObject($this->db->select('mid')
-                    ->from('table.metas')->where('type = ? AND name = ?', 'category', $category)
-                    ->limit(1))->mid;
+                if (null !== $row) {
+                    $input['category'][] = $row['mid'];
+                }
             }
         }
 
@@ -1113,15 +1115,15 @@ class XmlRpc extends Contents implements ActionInterface, Hook
         ];
 
         if (isset($struct['comment_author'])) {
-            $input['author'] = $struct['author'];
+            $input['author'] = $struct['comment_author'];
         }
 
         if (isset($struct['comment_author_email'])) {
-            $input['mail'] = $struct['author_email'];
+            $input['mail'] = $struct['comment_author_email'];
         }
 
         if (isset($struct['comment_author_url'])) {
-            $input['url'] = $struct['author_url'];
+            $input['url'] = $struct['comment_author_url'];
         }
 
         if (isset($struct['comment_parent'])) {
@@ -1759,8 +1761,8 @@ class XmlRpc extends Contents implements ActionInterface, Hook
 <?xml version="1.0" encoding="{$this->options->charset}"?>
 <rsd version="1.0" xmlns="http://archipelago.phrasewise.com/rsd">
     <service>
-        <engineName>Typecho</engineName>
-        <engineLink>https://typecho.org/</engineLink>
+        <engineName>{$this->options->software}</engineName>
+        <engineLink>{\Typecho\Common::PROJECT_URL}</engineLink>
         <homePageLink>{$this->options->siteUrl}</homePageLink>
         <apis>
             <api name="WordPress" blogID="1" preferred="true" apiLink="{$this->options->xmlRpcUrl}" />

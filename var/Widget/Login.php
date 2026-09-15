@@ -96,9 +96,21 @@ class Login extends Users implements ActionInterface
         /** 跳转验证后地址 */
         if (!empty($this->request->referer)) {
             /** fix #952 & validate redirect url */
+            $refererParts = parse_url($this->request->referer);
+            $siteParts = parse_url($this->options->siteUrl);
+            $adminParts = parse_url($this->options->adminUrl);
+
+            $refererHost = strtolower($refererParts['host'] ?? '');
+            $sameHost = '' !== $refererHost
+                && (($refererHost === strtolower($siteParts['host'] ?? '')
+                    && !empty($siteParts['host']))
+                || ($refererHost === strtolower($adminParts['host'] ?? '')
+                    && !empty($adminParts['host'])));
+
+            // scheme/host 必须属于本站, 防止开放重定向 (http://blog.com.evil.com 会绕过前缀比较)
             if (
-                0 === strpos($this->request->referer, $this->options->adminUrl)
-                || 0 === strpos($this->request->referer, $this->options->siteUrl)
+                ($sameHost && in_array(strtolower($refererParts['scheme'] ?? ''), ['http', 'https']))
+                || ('/' === substr($this->request->referer, 0, 1) && '//' !== substr($this->request->referer, 0, 2))
             ) {
                 $this->response->redirect($this->request->referer);
             }

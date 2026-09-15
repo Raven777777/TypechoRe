@@ -105,5 +105,8 @@ class Admin extends Contents
             ->page($this->currentPage, $this->parameter->pageSize);
 
         $this->db->fetchAll($select, [$this, 'push']);
+
+        /** 批量预取作者/分类/修订版, 消除列表 N+1 查询 */
+        $this->initListData();
     }
 }

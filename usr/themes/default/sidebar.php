@@ -55,7 +55,7 @@
                 <?php endif; ?>
                 <li><a href="<?php $this->options->feedUrl(); ?>"><?php _e('文章 RSS'); ?></a></li>
                 <li><a href="<?php $this->options->commentsFeedUrl(); ?>"><?php _e('评论 RSS'); ?></a></li>
-                <li><a href="https://typecho.org">Typecho</a></li>
+                <li><a href="<?php echo \Typecho\Common::PROJECT_URL; ?>"><?php echo \Typecho\Common::SOFTWARE; ?></a></li>
             </ul>
         </section>
     <?php endif; ?>

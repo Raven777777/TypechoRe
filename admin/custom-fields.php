@@ -66,7 +66,7 @@ $defaultFields = isset($post) ? $post->getDefaultFieldItems() : $page->getDefaul
     <div class="add">
         <button type="button" class="btn btn-xs operate-add"><?php _e('+添加字段'); ?></button>
         <div class="description kit-hidden-mb">
-            <?php _e('自定义字段可以扩展你的模板功能, 使用方法参见 <a href="https://docs.typecho.org/help/custom-fields">帮助文档</a>'); ?>
+            <?php _e('自定义字段可以扩展你的模板功能, 参见原生 <a href="%s">文档</a>', \Typecho\Common::PROJECT_ORIGIN_URL . '/wiki'); ?>
         </div>
     </div>
 </details>

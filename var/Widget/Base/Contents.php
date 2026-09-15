@@ -193,7 +193,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
         $draft = $this->db->fetchObject($this->db->select('type', 'parent')
             ->from('table.contents')->where('cid = ?', $cid));
 
-        if ('revision' === $draft->type && $draft->parent) {
+        if (isset($draft) && null !== $draft && 'revision' === $draft->type && $draft->parent) {
             $result = '@' . $result;
         }
 
@@ -735,10 +735,11 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
     {
         if ('attachment' == $this->type) {
             $content = json_decode($this->row['text'], true);
+            $content = is_array($content) ? $content : [];
 
             //增加数据信息
             $attachment = new Config($content);
-            $attachment->isImage = in_array($content['type'], [
+            $attachment->isImage = in_array($content['type'] ?? '', [
                 'jpg', 'jpeg', 'gif', 'png', 'tiff', 'bmp', 'webp', 'avif'
             ]);
             $attachment->url = Upload::attachmentHandle($attachment);
@@ -868,7 +869,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
     {
         $content = $this->content;
         $parts = preg_split("/(<\/\s*(?:p|blockquote|q|pre|table)\s*>)/i", $content, 2, PREG_SPLIT_DELIM_CAPTURE);
-        if (!empty($parts)) {
+        if (false !== $parts && count($parts) > 1) {
             $content = $parts[0] . $parts[1];
         }
 

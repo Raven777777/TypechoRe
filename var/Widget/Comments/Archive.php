@@ -146,6 +146,7 @@ class Archive extends Comments
                 }
 
             }
+            unset($comment);
 
             $this->stack = $outputComments;
         }

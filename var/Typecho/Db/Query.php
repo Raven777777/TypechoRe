@@ -3,6 +3,7 @@
 namespace Typecho\Db;
 
 use Typecho\Db;
+use Typecho\Db\Exception;
 
 /**
  * Typecho数据库查询语句构建类
@@ -552,7 +553,7 @@ class Query
                     . ' SET ' . implode(' , ', $columns)
                     . $this->sqlPreBuild['where'];
             default:
-                return null;
+                throw new Exception('Invalid query action ' . ($this->sqlPreBuild['action'] ?? ''));
         }
     }
 }

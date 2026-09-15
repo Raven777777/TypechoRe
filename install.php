@@ -256,7 +256,7 @@ function install_get_default_options(): array
             'charset' => 'UTF-8',
             'contentType' => 'text/html',
             'gzip' => 0,
-            'generator' => 'Typecho ' . \Typecho\Common::VERSION,
+            'generator' => \Typecho\Common::SOFTWARE . ' ' . \Typecho\Common::VERSION,
             'title' => 'Hello World',
             'description' => 'Your description here.',
             'keywords' => 'typecho,php,blog',
@@ -1365,12 +1365,12 @@ function install_step_3_perform()
         $installDb->query(
             $installDb->insert('table.comments')->rows([
                 'cid' => 1, 'created' => \Typecho\Date::time(),
-                'author' => 'Typecho',
+                'author' => \Typecho\Common::SOFTWARE,
                 'ownerId' => 1,
-                'url' => 'https://typecho.org',
+                'url' => \Typecho\Common::PROJECT_URL,
                 'ip' => '127.0.0.1',
                 'agent' => $options->generator,
-                'text' => _t('欢迎加入 Typecho 大家族'),
+                'text' => _t('欢迎加入 TypechoRe 大家族 (基于 Typecho 的 Fork 版本)'),
                 'type' => 'comment',
                 'status' => 'approved',
                 'parent' => 0
@@ -1492,7 +1492,7 @@ function install_dispatch()
 </head>
 <body>
     <div class="body container">
-        <h1><a href="https://typecho.org" target="_blank" class="i-logo">Typecho</a></h1>
+        <h1><a href="https://github.com/Raven777777/MoeCounterRe" target="_blank" class="i-logo">TypechoRe</a></h1>
         <?php $method(); ?>
     </div>
 </body>

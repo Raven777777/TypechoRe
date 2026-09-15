@@ -12,6 +12,10 @@
             'author'   => _t('%s 发布的文章')
         ], '', ' - '); ?><?php $this->options->title(); ?></title>
 
+    <?php if ($this->options->faviconUrl): ?>
+        <link rel="icon" href="<?php $this->options->faviconUrl() ?>">
+    <?php endif; ?>
+
     <!-- 使用url函数转换相关路径 -->
     <link rel="stylesheet" href="<?php $this->options->themeUrl('normalize.css'); ?>">
     <link rel="stylesheet" href="<?php $this->options->themeUrl('grid.css'); ?>">

@@ -107,12 +107,12 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
         /** 首先插入部分数据 */
         $insertId = $this->db->query($this->db->insert('table.comments')->rows($insertStruct));
 
-        /** 更新评论数 */
-        $num = $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])->from('table.comments')
-            ->where('status = ? AND cid = ?', 'approved', $rows['cid']))->num;
-
-        $this->db->query($this->db->update('table.contents')->rows(['commentsNum' => $num])
-            ->where('cid = ?', $rows['cid']));
+        /** 更新评论数, 使用原子表达式避免并发覆盖 */
+        if ('approved' == ($insertStruct['status'] ?? null)) {
+            $this->db->query($this->db->update('table.contents')
+                ->expression('commentsNum', 'commentsNum + 1')
+                ->where('cid = ?', $rows['cid']));
+        }
 
         return $insertId;
     }
@@ -129,10 +129,11 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
     {
         /** 获取内容主键 */
         $updateCondition = clone $condition;
-        $updateComment = $this->db->fetchObject($condition->select('cid')->from('table.comments')->limit(1));
+        $updateComment = $this->db->fetchObject($condition->select('cid', 'status')->from('table.comments')->limit(1));
 
         if ($updateComment) {
             $cid = $updateComment->cid;
+            $prevStatus = $updateComment->status;
         } else {
             return 0;
         }
@@ -161,12 +162,17 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
         /** 更新评论数据 */
         $updateRows = $this->db->query($updateCondition->update('table.comments')->rows($updateStruct));
 
-        /** 更新评论数 */
-        $num = $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])->from('table.comments')
-            ->where('status = ? AND cid = ?', 'approved', $cid))->num;
-
-        $this->db->query($this->db->update('table.contents')->rows(['commentsNum' => $num])
-            ->where('cid = ?', $cid));
+        /** 更新评论数, 状态在 approved 与非 approved 之间切换时使用原子表达式增减 */
+        $newStatus = $updateStruct['status'] ?? $prevStatus;
+        if ($newStatus != $prevStatus) {
+            if ('approved' == $newStatus) {
+                $this->db->query($this->db->update('table.contents')
+                    ->expression('commentsNum', 'commentsNum + 1')->where('cid = ?', $cid));
+            } elseif ('approved' == $prevStatus) {
+                $this->db->query($this->db->update('table.contents')
+                    ->expression('commentsNum', 'commentsNum - 1')->where('cid = ?', $cid));
+            }
+        }
 
         return $updateRows;
     }
@@ -180,25 +186,33 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
      */
     public function delete(Query $condition): int
     {
-        /** 获取内容主键 */
+        /** 获取删除条件 */
         $deleteCondition = clone $condition;
-        $deleteComment = $this->db->fetchObject($condition->select('cid')->from('table.comments')->limit(1));
 
-        if ($deleteComment) {
-            $cid = $deleteComment->cid;
-        } else {
+        /** 统计将被删除的各 post 的 approved 评论数, 用于原子递减评论数 */
+        $approvals = [];
+        $matched = $this->db->fetchAll($condition->select('cid', 'status')->from('table.comments'));
+
+        if (empty($matched)) {
             return 0;
+        }
+
+        foreach ($matched as $row) {
+            if ('approved' == $row['status']) {
+                $cid = $row['cid'];
+                $approvals[$cid] = ($approvals[$cid] ?? 0) + 1;
+            }
         }
 
         /** 删除评论数据 */
         $deleteRows = $this->db->query($deleteCondition->delete('table.comments'));
 
-        /** 更新评论数 */
-        $num = $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])->from('table.comments')
-            ->where('status = ? AND cid = ?', 'approved', $cid))->num;
-
-        $this->db->query($this->db->update('table.contents')->rows(['commentsNum' => $num])
-            ->where('cid = ?', $cid));
+        /** 更新评论数, 使用原子表达式避免并发覆盖 */
+        foreach ($approvals as $cid => $num) {
+            $this->db->query($this->db->update('table.contents')
+                ->expression('commentsNum', 'commentsNum - ' . (int)$num)
+                ->where('cid = ?', $cid));
+        }
 
         return $deleteRows;
     }
