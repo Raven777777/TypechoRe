@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 include 'common.php';
 
 if ($user->hasLogin() || !$options->allowRegister) {

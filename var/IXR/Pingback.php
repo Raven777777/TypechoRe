@@ -59,7 +59,7 @@ class Pingback
             $encoding = strtoupper($matches[1]);
         }
 
-        $this->html = $encoding == 'UTF-8' ? $response : mb_convert_encoding($response, 'UTF-8', $encoding);
+        $this->html = self::convertEncoding($response, $encoding);
 
         if (
             !$client->getResponseHeader('X-Pingback') &&
@@ -67,6 +67,29 @@ class Pingback
         ) {
             throw new Exception("Source server doesn't support pingback", 50);
         }
+    }
+
+    /**
+     * 将远端内容转换为 UTF-8, 源站声明的 charset 不可信,
+     * 非法编码时回退为按原文处理, 避免 ValueError 中断请求
+     *
+     * @param string $content
+     * @param string $encoding
+     * @return string
+     */
+    private static function convertEncoding(string $content, string $encoding): string
+    {
+        if ('UTF-8' == strtoupper($encoding)) {
+            return $content;
+        }
+
+        try {
+            $converted = @mb_convert_encoding($content, 'UTF-8', $encoding);
+        } catch (\ValueError $e) {
+            $converted = false;
+        }
+
+        return is_string($converted) ? $converted : $content;
     }
 
     /**
@@ -80,7 +103,7 @@ class Pingback
             return Common::subStr(Common::removeXSS(trim(strip_tags($matchTitle[1]))), 0, 150, '...');
         }
 
-        return parse_url($this->target, PHP_URL_HOST);
+        return (string)parse_url($this->target, PHP_URL_HOST);
     }
 
     /**
@@ -94,8 +117,8 @@ class Pingback
         /** 干掉html tag，只留下<a>*/
         $text = Common::stripTags($this->html, '<a href="">');
 
-        /** 此处将$target quote,留着后面用*/
-        $pregLink = preg_quote($this->target);
+        /** 此处将$target quote,留着后面用 (pattern 以 | 为分隔符, 需一并转义) */
+        $pregLink = preg_quote($this->target, '|');
 
         /** 找出含有target链接的最长的一行作为$finalText*/
         $finalText = null;
@@ -103,9 +126,9 @@ class Pingback
 
         foreach ($lines as $line) {
             $line = trim($line);
-            if (null != $line) {
+            if ('' !== $line) {
                 if (preg_match("|<a[^>]*href=[\"']{$pregLink}[\"'][^>]*>(.*?)</a>|", $line)) {
-                    if (strlen($line) > strlen($finalText)) {
+                    if (null === $finalText || strlen($line) > strlen($finalText)) {
                         /** <a>也要干掉，*/
                         $finalText = Common::stripTags($line);
                         break;

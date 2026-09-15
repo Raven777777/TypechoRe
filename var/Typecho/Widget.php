@@ -157,21 +157,21 @@ abstract class Widget
                 if ($sandbox && is_callable($disableSandboxOrCallback)) {
                     call_user_func($disableSandboxOrCallback, $widget);
                 }
-            } catch (Terminal $e) {
-                // 构造或执行未产生实例时, 无法返回有效的 widget, 原样抛出避免返回 null 违反返回类型
-                if (!isset($widget)) {
+            } catch (\Throwable $e) {
+                // 实例未构建成功时原样抛出, 避免掩盖原始异常或返回 null 违反返回类型;
+                // 沙箱模式 (及 Terminal 控制流) 下实例已构建时, 保持上游行为正常返回实例
+                if (!isset($widget) || !($sandbox || $e instanceof Terminal)) {
                     throw $e;
                 }
             } finally {
                 if ($sandbox) {
                     Response::getInstance()->endSandbox();
                     Request::getInstance()->endSandbox();
-
-                    if (isset($widget)) {
-                        return $widget;
-                    }
-                    throw $e ?? new \RuntimeException('Widget "' . $className . '" failed to initialize');
                 }
+            }
+
+            if ($sandbox) {
+                return $widget;
             }
 
             self::$widgetPool[$key] = $widget;

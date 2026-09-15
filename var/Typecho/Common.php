@@ -733,7 +733,7 @@ EOF;
 
             if ('$T$' == substr($to, 0, 3)) {
                 $salt = substr($to, 3, 9);
-                return self::hash($from, $salt) === $to;
+                return hash_equals($to, self::hash($from, $salt));
             } else {
                 return hash_equals($to, md5($from));
             }
@@ -1033,17 +1033,21 @@ EOF;
                 return null;
             }
 
+            /** PHP 8.2+ 追加 GLOBAL_RANGE, 额外拦截 CGNAT (100.64/10) 等特殊网段 */
+            $flags = FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE;
+            if (defined('FILTER_FLAG_GLOBAL_RANGE')) {
+                $flags |= FILTER_FLAG_GLOBAL_RANGE;
+            }
+
             /** 直接传入字面 IP 时无需进行 DNS 解析 */
             if (false !== filter_var($host, FILTER_VALIDATE_IP)) {
-                return filter_var($host, FILTER_VALIDATE_IP,
-                    FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ?: null;
+                return filter_var($host, FILTER_VALIDATE_IP, $flags) ?: null;
             }
 
             $address = gethostbyname($host);
 
             if (false !== $address && $address !== $host) {
-                return filter_var($address, FILTER_VALIDATE_IP,
-                    FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ?: null;
+                return filter_var($address, FILTER_VALIDATE_IP, $flags) ?: null;
             }
 
             // 有可能是ipv6的地址
@@ -1052,8 +1056,7 @@ EOF;
 
                 if (!empty($records) && !empty($records[0]['ipv6'])) {
                     $address = $records[0]['ipv6'];
-                    return filter_var($address, FILTER_VALIDATE_IP,
-                        FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ?: null;
+                    return filter_var($address, FILTER_VALIDATE_IP, $flags) ?: null;
                 }
             }
 
@@ -1080,16 +1083,24 @@ EOF;
          */
         public static function mimeContentType(string $fileName): string
         {
-            //改为并列判断
+            //改为并列判断, 探测失败时回退到扩展名映射, 避免 false 违反返回类型
             if (function_exists('mime_content_type')) {
-                return mime_content_type($fileName);
+                $mimeType = @mime_content_type($fileName);
+
+                if (false !== $mimeType) {
+                    return $mimeType;
+                }
             }
 
             if (function_exists('finfo_open')) {
                 $fInfo = @finfo_open(FILEINFO_MIME_TYPE);
 
                 if (false !== $fInfo) {
-                    return finfo_file($fInfo, $fileName);
+                    $mimeType = @finfo_file($fInfo, $fileName);
+
+                    if (false !== $mimeType) {
+                        return $mimeType;
+                    }
                 }
             }
 

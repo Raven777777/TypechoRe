@@ -108,9 +108,11 @@ class Login extends Users implements ActionInterface
                     && !empty($adminParts['host'])));
 
             // scheme/host 必须属于本站, 防止开放重定向 (http://blog.com.evil.com 会绕过前缀比较)
+            // 相对地址需排除 // 与 /\ 前缀 (浏览器将反斜杠规范化为斜杠, /\evil.com 等价于 //evil.com)
             if (
                 ($sameHost && in_array(strtolower($refererParts['scheme'] ?? ''), ['http', 'https']))
-                || ('/' === substr($this->request->referer, 0, 1) && '//' !== substr($this->request->referer, 0, 2))
+                || ('/' === substr($this->request->referer, 0, 1)
+                    && !in_array(substr($this->request->referer, 0, 2), ['//', '/\\'], true))
             ) {
                 $this->response->redirect($this->request->referer);
             }

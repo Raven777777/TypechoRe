@@ -167,7 +167,9 @@ class Options extends Base
             $themeOptionsKey = 'theme:' . $options['theme'];
             if (!empty($options[$themeOptionsKey])) {
                 $themeOptions = $this->tryDeserialize($options[$themeOptionsKey]);
-                $options = array_merge($options, $themeOptions);
+                if (is_array($themeOptions)) {
+                    $options = array_merge($options, $themeOptions);
+                }
             }
         } elseif (function_exists('install_get_default_options')) {
             $defaultOptions = install_get_default_options();

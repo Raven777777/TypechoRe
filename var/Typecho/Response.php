@@ -209,7 +209,7 @@ class Response
                 $timeout = 1;
             }
 
-            $options = ['expires' => $timeout, 'path' => $path, 'samesite' => 'Lax'];
+            $options = ['expires' => $timeout, 'path' => $path, 'samesite' => Cookie::getSameSite()];
             if ('' !== $domain) {
                 $options['domain'] = $domain;
             }

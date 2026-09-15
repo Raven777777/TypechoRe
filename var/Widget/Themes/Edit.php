@@ -110,9 +110,15 @@ class Edit extends Options implements ActionInterface
         $path = $this->options->themeFile($theme, $file);
 
         if (is_writable($path)) {
+            $content = (string)$this->request->get('content');
             $handle = fopen($path, 'wb');
-            if ($handle && fwrite($handle, $this->request->get('content'))) {
+            $written = $handle ? fwrite($handle, $content) : false;
+
+            if ($handle) {
                 fclose($handle);
+            }
+
+            if (strlen($content) === $written) {
                 Notice::alloc()->set(_t("文件 %s 的更改已经保存", $file), 'success');
             } else {
                 Notice::alloc()->set(_t("文件 %s 无法被写入", $file), 'error');

@@ -71,7 +71,7 @@ class Plugin implements PluginInterface
             _t('延迟时间（毫秒）'),
             _t('离开标签页后延迟多少毫秒再切换标题, 请输入大于0的整数')
         );
-        $form->addInput($delayTime->addRule('isInteger', _t('必须为整数'))->addRule('min', _t('不能小于1'), 1));
+        $form->addInput($delayTime->addRule('isInteger', _t('必须为整数'))->addRule('regexp', _t('请输入大于 0 的整数'), '/^[1-9][0-9]*$/'));
     }
 
     /**

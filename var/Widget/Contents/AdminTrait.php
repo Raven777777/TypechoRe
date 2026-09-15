@@ -108,13 +108,10 @@ trait AdminTrait
         }
 
         $cids = [];
-        $authorIds = [];
         foreach ($this->stack as $row) {
             $cids[] = (int)$row['cid'];
-            $authorIds[] = (int)($row['authorId'] ?? 0);
         }
         $cids = array_values(array_unique($cids));
-        $authorIds = array_values(array_unique(array_filter($authorIds)));
 
         /** 预取修订版 */
         $revisionMap = [];
@@ -128,28 +125,33 @@ trait AdminTrait
             }
         }
 
-        /** 预取分类 */
+        /** 预取分类, 字段与 Base\Contents::___categories 保持一致 (permalink 除外) */
         $categoryMap = [];
         if (!empty($cids)) {
             $rows = $this->db->fetchAll($this->db->select(
                 'table.relationships.cid',
                 'table.metas.mid',
                 'table.metas.name',
-                'table.metas.slug'
+                'table.metas.slug',
+                'table.metas.description',
+                'table.metas.count',
+                'table.metas.parent'
             )->from('table.relationships')
                 ->join('table.metas', 'table.relationships.mid = table.metas.mid')
                 ->where('table.metas.type = ? AND table.relationships.cid IN ?', 'category', $cids)
                 ->order('table.metas.order', 'ASC'));
 
             foreach ($rows as $row) {
-                $categoryMap[$row['cid']][] = $row;
+                $cid = $row['cid'];
+                unset($row['cid']);
+                $categoryMap[$cid][] = $row;
             }
         }
 
         /** 每 uid 复用同一个作者 widget, 利用 widgetPool 按别名缓存 */
         $authorWidgets = [];
         $authorWidget = function (int $uid) use (&$authorWidgets): ?Author {
-            if (isset($authorWidgets[$uid])) {
+            if (array_key_exists($uid, $authorWidgets)) {
                 return $authorWidgets[$uid];
             }
             try {
@@ -164,12 +166,7 @@ trait AdminTrait
             $cid = (int)$row['cid'];
             $authorId = (int)($row['authorId'] ?? 0);
 
-            if (isset($revisionMap[$cid]) || array_key_exists($cid, $revisionMap)) {
-                $row['#revision'] = $revisionMap[$cid];
-            } else {
-                $row['#revision'] = null;
-            }
-
+            $row['#revision'] = $revisionMap[$cid] ?? null;
             $row['#categories'] = $categoryMap[$cid] ?? [];
 
             if ($authorId > 0) {

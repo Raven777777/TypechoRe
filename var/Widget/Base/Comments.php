@@ -170,7 +170,8 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
                     ->expression('commentsNum', 'commentsNum + 1')->where('cid = ?', $cid));
             } elseif ('approved' == $prevStatus) {
                 $this->db->query($this->db->update('table.contents')
-                    ->expression('commentsNum', 'commentsNum - 1')->where('cid = ?', $cid));
+                    ->expression('commentsNum', 'commentsNum - 1')
+                    ->where('cid = ? AND commentsNum > 0', $cid));
             }
         }
 
@@ -211,7 +212,7 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
         foreach ($approvals as $cid => $num) {
             $this->db->query($this->db->update('table.contents')
                 ->expression('commentsNum', 'commentsNum - ' . (int)$num)
-                ->where('cid = ?', $cid));
+                ->where('cid = ? AND commentsNum >= ?', $cid, (int)$num));
         }
 
         return $deleteRows;

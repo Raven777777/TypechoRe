@@ -296,7 +296,8 @@ class Client
         $query = empty($params['query']) ? '' : $params['query'];
 
         if (!empty($this->query)) {
-            $query = empty($query) ? $this->query : '&' . $this->query;        }
+            $query = empty($query) ? $this->query : $query . '&' . $this->query;
+        }
 
         if (!empty($query)) {
             $params['query'] = $query;

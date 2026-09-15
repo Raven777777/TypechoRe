@@ -116,7 +116,18 @@ class Cookie
     }
 
     /**
+     * @access public
+     * @return string
+     */
+    public static function getSameSite(): string
+    {
+        return self::$samesite;
+    }
+
+    /**
      * 设置额外的选项
+     *
+     * 仅覆盖显式提供的键, 避免重置 setPrefix 中自动探测的 secure 标记
      *
      * @param array $options
      * @return void
@@ -124,8 +135,21 @@ class Cookie
     public static function setOptions(array $options)
     {
         self::$domain = ($options['domain'] ?? '') ?: self::$domain;
-        self::$secure = !!($options['secure'] ?? false);
-        self::$httponly = !!($options['httponly'] ?? true);
+
+        if (array_key_exists('secure', $options)) {
+            self::$secure = !!$options['secure'];
+        }
+
+        if (array_key_exists('httponly', $options)) {
+            self::$httponly = !!$options['httponly'];
+        }
+
+        if (!empty($options['samesite'])) {
+            $samesite = ucfirst(strtolower((string)$options['samesite']));
+            if (in_array($samesite, ['None', 'Lax', 'Strict'], true)) {
+                self::$samesite = $samesite;
+            }
+        }
     }
 
     /**
@@ -148,8 +172,9 @@ class Cookie
      * @param string $key 指定的参数
      * @param mixed $value 设置的值
      * @param integer $expire 过期时间,默认为0,表示随会话时间结束
+     * @param bool|null $httponly 是否仅可通过 HTTP 协议访问, null 表示使用全局默认值
      */
-    public static function set(string $key, $value, int $expire = 0)
+    public static function set(string $key, $value, int $expire = 0, ?bool $httponly = null)
     {
         $key = self::$prefix . $key;
         $_COOKIE[$key] = $value;
@@ -160,7 +185,7 @@ class Cookie
             self::$path,
             self::$domain,
             self::$secure,
-            self::$httponly
+            $httponly ?? self::$httponly
         );
     }
 
@@ -168,15 +193,24 @@ class Cookie
      * 删除指定的COOKIE值
      *
      * @param string $key 指定的参数
+     * @param bool|null $httponly 是否仅可通过 HTTP 协议访问, null 表示使用全局默认值
      */
-    public static function delete(string $key)
+    public static function delete(string $key, ?bool $httponly = null)
     {
         $key = self::$prefix . $key;
         if (!isset($_COOKIE[$key])) {
             return;
         }
 
-        Response::getInstance()->setCookie($key, '', -1, self::$path, self::$domain, self::$secure, self::$httponly);
+        Response::getInstance()->setCookie(
+            $key,
+            '',
+            -1,
+            self::$path,
+            self::$domain,
+            self::$secure,
+            $httponly ?? self::$httponly
+        );
         unset($_COOKIE[$key]);
     }
 }

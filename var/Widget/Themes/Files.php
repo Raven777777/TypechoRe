@@ -61,10 +61,10 @@ class Files extends Base
 
             if (
                 preg_match("/^([_0-9a-z-. ])+$/i", $this->currentFile)
-                && file_exists($dir . '/' . $this->currentFile)
+                && is_file($dir . '/' . $this->currentFile)
             ) {
                 foreach ($files as $file) {
-                    if (file_exists($file)) {
+                    if (is_file($file)) {
                         $file = basename($file);
                         $this->push([
                             'file'    => $file,

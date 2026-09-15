@@ -33,7 +33,9 @@ class Notice extends Widget
         $this->highlight = $theId;
         Cookie::set(
             '__typecho_notice_highlight',
-            $theId
+            $theId,
+            0,
+            false
         );
     }
 
@@ -63,11 +65,15 @@ class Notice extends Widget
 
         Cookie::set(
             '__typecho_notice',
-            json_encode($notice)
+            json_encode($notice),
+            0,
+            false
         );
         Cookie::set(
             '__typecho_notice_type',
-            $type
+            $type,
+            0,
+            false
         );
     }
 }
