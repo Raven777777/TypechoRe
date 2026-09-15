@@ -174,7 +174,7 @@ namespace Typecho {
         public const SOFTWARE = 'TypechoRe';
 
         /** Fork 项目地址 */
-        public const PROJECT_URL = 'https://github.com/Raven777777/MoeCounterRe';
+        public const PROJECT_URL = 'https://github.com/Raven777777/MTypechoRe';
 
         /** 原始上游项目地址 */
         public const PROJECT_ORIGIN_URL = 'https://github.com/typecho/typecho';
