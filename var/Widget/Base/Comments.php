@@ -99,7 +99,8 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
             $insertStruct['coid'] = $rows['coid'];
         }
 
-        /** 过长的客户端字符串要截断 */
+        /** 过长的客户端字符串要截断, 请求缺失 User-Agent 时兜底为空串 */
+        $insertStruct['agent'] = (string)$insertStruct['agent'];
         if (Common::strLen($insertStruct['agent']) > 511) {
             $insertStruct['agent'] = Common::subStr($insertStruct['agent'], 0, 511, '');
         }
