@@ -97,7 +97,7 @@ $stat = \Widget\Stat::alloc();
                         <ul>
                             <li>
                                 <?php _e('%s %s', $options->software, $options->version); ?><br />
-                                <a href="https://github.com/Raven777777/MoeCounterRe" target="_blank"><?php _e('项目地址 (Fork)'); ?></a><br />
+                                <a href="https://github.com/Raven777777/TypechoRe" target="_blank"><?php _e('项目地址 (Fork)'); ?></a><br />
                                 <a href="https://github.com/typecho/typecho" target="_blank"><?php _e('原始项目'); ?></a>
                             </li>
                         </ul>

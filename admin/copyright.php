@@ -4,7 +4,7 @@
         <a href="<?php echo \Typecho\Common::PROJECT_URL; ?>" class="i-logo-s"><?php echo \Typecho\Common::SOFTWARE; ?></a>
         <p><?php echo sprintf(
             _t('由 %s 强力驱动, 版本 %s'),
-            '<a href="' . \Typecho\Common::PROJECT_URL . '">' . $options->software . ' (' . \Typecho\Common::SOFTWARE . ')</a>',
+            '<a href="' . \Typecho\Common::PROJECT_URL . '">' . $options->software . '</a>',
             $options->version
         ); ?></p>
         <p><?php echo sprintf(

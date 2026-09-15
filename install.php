@@ -1492,7 +1492,7 @@ function install_dispatch()
 </head>
 <body>
     <div class="body container">
-        <h1><a href="https://github.com/Raven777777/MoeCounterRe" target="_blank" class="i-logo">TypechoRe</a></h1>
+        <h1><a href="https://github.com/Raven777777/TypechoRe" target="_blank" class="i-logo">TypechoRe</a></h1>
         <?php $method(); ?>
     </div>
 </body>
