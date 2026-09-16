@@ -50,7 +50,13 @@ class Box extends PageNavigator
         ];
 
         $template = array_merge($default, $template);
-        extract($template);
+
+        // 显式取值而非 extract(): 避免传入的键覆盖本方法内的局部变量
+        $itemTag = (string)($template['itemTag'] ?? '');
+        $textTag = (string)($template['textTag'] ?? '');
+        $currentClass = (string)($template['currentClass'] ?? '');
+        $prevClass = (string)($template['prevClass'] ?? '');
+        $nextClass = (string)($template['nextClass'] ?? '');
 
         // 定义item
         $itemBegin = empty($itemTag) ? '' : ('<' . $itemTag . '>');

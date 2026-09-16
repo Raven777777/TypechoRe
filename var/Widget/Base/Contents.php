@@ -568,11 +568,11 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
     {
         if ('attachment' == $this->type) {
             if ($this->attachment->isImage) {
-                return '<img src="' . $this->attachment->url . '" alt="' .
-                    $this->title . '" />';
+                return '<img src="' . Common::escape($this->attachment->url) . '" alt="' .
+                    Common::escape($this->title) . '" />';
             } else {
-                return '<a href="' . $this->attachment->url . '" title="' .
-                    $this->title . '">' . $this->title . '</a>';
+                return '<a href="' . Common::escape($this->attachment->url) . '" title="' .
+                    Common::escape($this->title) . '">' . Common::escape($this->title) . '</a>';
             }
         } elseif ($this->hidden) {
             return '<form class="protected" action="' . $this->security->getTokenUrl($this->permalink)

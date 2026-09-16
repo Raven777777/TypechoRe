@@ -70,11 +70,15 @@ class Mysql extends Pdo
             }
         }
 
+        // 把 charset 写进 DSN 而不仅仅依赖 SET NAMES: 后者不会让客户端转义逻辑
+        // (PDO::quote / mysqlnd) 感知字符集, 多字节编码下存在宽字节注入风险
+        $charset = $config->charset ? ';charset=' . $config->charset : '';
+
         $dsn = !empty($config->dsn)
             ? $config->dsn
             : (strpos($config->host, '/') !== false
-                ? "mysql:dbname={$config->database};unix_socket={$config->host}"
-                : "mysql:dbname={$config->database};host={$config->host};port={$config->port}");
+                ? "mysql:dbname={$config->database};unix_socket={$config->host}{$charset}"
+                : "mysql:dbname={$config->database};host={$config->host};port={$config->port}{$charset}");
 
         $pdo = new \PDO(
             $dsn,

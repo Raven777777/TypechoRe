@@ -334,7 +334,8 @@ class Request
         $finalBaseUrl = $this->getBaseUrl();
 
         // Remove the query string from REQUEST_URI
-        if ($pos = strpos($requestUri, '?')) {
+        // 注意必须用 false !== 判断: strpos() 在 '?' 位于首位时返回 0
+        if (false !== ($pos = strpos($requestUri, '?'))) {
             $requestUri = substr($requestUri, 0, $pos);
         }
 
@@ -390,22 +391,224 @@ class Request
     public function getIp(): string
     {
         if (null === $this->ip) {
+            $remoteAddr = (string)($this->getServer('REMOTE_ADDR') ?? '');
+            $trusted = self::getTrustedProxies();
+
             $header = defined('__TYPECHO_IP_SOURCE__') ? __TYPECHO_IP_SOURCE__ : 'X-Forwarded-For';
-            $ip = $this->getHeader($header, $this->getHeader('Client-Ip', $this->getServer('REMOTE_ADDR')));
+            $forwarded = (string)($this->getHeader($header, $this->getHeader('Client-Ip')) ?? '');
 
-            if (!empty($ip)) {
-                [$ip] = array_map('trim', explode(',', $ip));
-                $ip = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6);
+            $ip = null;
+
+            // 只有在配置了可信代理且对端确实是代理时, 才采信转发头;
+            // 否则任何人都能用 X-Forwarded-For 伪造来源, 绕过评论频率限制与 IP 黑名单
+            if (!empty($trusted) && self::isTrustedProxy($remoteAddr, $trusted)) {
+                // XFF 形如 "client, proxy1, proxy2": 自右向左跳过可信代理,
+                // 第一个不可信地址才是真实客户端
+                $ip = self::firstUntrustedIp($forwarded, $trusted);
+            } elseif (empty($trusted)) {
+                // 未配置可信代理: 保持原有行为 (取最左侧), 但跳过非法片段
+                foreach (explode(',', $forwarded) as $candidate) {
+                    $ip = self::normalizeIp($candidate);
+                    if (null !== $ip) {
+                        break;
+                    }
+                }
             }
 
-            if (!empty($ip)) {
-                $this->ip = $ip;
-            } else {
-                $this->ip = 'unknown';
+            if (null === $ip) {
+                $ip = self::normalizeIp($remoteAddr);
             }
+
+            $this->ip = $ip ?? 'unknown';
         }
 
         return $this->ip;
+    }
+
+    /**
+     * 读取受信任代理列表
+     *
+     * 通过 __TYPECHO_TRUSTED_PROXIES__ 配置, 支持 IP 或 CIDR, 逗号分隔.
+     *
+     * @return string[]
+     */
+    private static function getTrustedProxies(): array
+    {
+        static $trusted = null;
+
+        if (null !== $trusted) {
+            return $trusted;
+        }
+
+        $trusted = [];
+
+        if (defined('__TYPECHO_TRUSTED_PROXIES__') && is_string(__TYPECHO_TRUSTED_PROXIES__)) {
+            foreach (explode(',', __TYPECHO_TRUSTED_PROXIES__) as $item) {
+                $item = strtolower(trim($item));
+                if ('' !== $item) {
+                    $trusted[] = $item;
+                }
+            }
+        }
+
+        return $trusted;
+    }
+
+    /**
+     * 自右向左解析转发链, 返回第一个不在可信列表中的地址
+     *
+     * @param string $list
+     * @param string[] $trusted
+     * @return string|null
+     */
+    private static function firstUntrustedIp(string $list, array $trusted): ?string
+    {
+        $result = null;
+
+        foreach (array_reverse(explode(',', $list)) as $candidate) {
+            $ip = self::normalizeIp($candidate);
+
+            if (null === $ip) {
+                continue;
+            }
+
+            // 循环结束时保留的是最左侧地址, 用于整条链都是可信代理的情况
+            $result = $ip;
+
+            if (!self::isTrustedProxy($ip, $trusted)) {
+                return $ip;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * 规范化并校验 IP
+     *
+     * @param string $value
+     * @return string|null
+     */
+    private static function normalizeIp(string $value): ?string
+    {
+        $value = trim($value, " \t\n\r\0\x0B[]\"'");
+
+        if ('' === $value) {
+            return null;
+        }
+
+        // IPv4 可能携带端口 (1.2.3.4:5678), IPv6 的冒号不作处理
+        if (1 === substr_count($value, ':') && false !== strpos($value, '.')) {
+            $value = (string)strstr($value, ':', true);
+        }
+
+        return filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6)
+            ? $value
+            : null;
+    }
+
+    /**
+     * @param string $ip
+     * @param string[] $trusted
+     * @return bool
+     */
+    private static function isTrustedProxy(string $ip, array $trusted): bool
+    {
+        if (empty($trusted)) {
+            return false;
+        }
+
+        $ip = strtolower(trim($ip));
+
+        if (in_array($ip, $trusted, true)) {
+            return true;
+        }
+
+        foreach ($trusted as $cidr) {
+            if (false !== strpos($cidr, '/') && self::ipInCidr($ip, $cidr)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 判断 IP 是否落在 CIDR 网段内, 同时支持 IPv4 / IPv6
+     *
+     * @param string $ip
+     * @param string $cidr
+     * @return bool
+     */
+    private static function ipInCidr(string $ip, string $cidr): bool
+    {
+        $parts = explode('/', $cidr, 2);
+
+        if (2 !== count($parts)) {
+            return false;
+        }
+
+        [$subnet, $bits] = $parts;
+        $bits = (int)$bits;
+
+        if ($bits < 0 || $bits > 128) {
+            return false;
+        }
+
+        $isIpv4 = false !== filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
+            && false !== filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4);
+
+        if ($isIpv4) {
+            if ($bits > 32) {
+                return false;
+            }
+
+            if (0 === $bits) {
+                return true;
+            }
+
+            $ipLong = ip2long($ip);
+            $subnetLong = ip2long($subnet);
+
+            if (false === $ipLong || false === $subnetLong) {
+                return false;
+            }
+
+            $mask = -1 << (32 - $bits);
+
+            return ($ipLong & $mask) === ($subnetLong & $mask);
+        }
+
+        $isIpv6 = false !== filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
+            && false !== filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6);
+
+        if (!$isIpv6) {
+            return false;
+        }
+
+        $ipBin = inet_pton($ip);
+        $subnetBin = inet_pton($subnet);
+
+        if (false === $ipBin || false === $subnetBin || strlen($ipBin) !== strlen($subnetBin)) {
+            return false;
+        }
+
+        $fullBytes = intdiv($bits, 8);
+        $remainBits = $bits % 8;
+
+        if ($fullBytes > 0 && 0 !== strncmp($ipBin, $subnetBin, $fullBytes)) {
+            return false;
+        }
+
+        if ($remainBits > 0) {
+            $mask = chr(0xFF << (8 - $remainBits) & 0xFF);
+
+            if (($ipBin[$fullBytes] & $mask) !== ($subnetBin[$fullBytes] & $mask)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

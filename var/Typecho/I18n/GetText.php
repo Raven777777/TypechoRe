@@ -365,19 +365,372 @@ class GetText
      */
     private function selectString(int $n): int
     {
-        $string = $this->getPluralForms();
-        $string = str_replace('nplurals', "\$total", $string);
-        $string = str_replace("n", $n, $string);
-        $string = str_replace('plural', "\$plural", $string);
+        static $cache = [];
 
-        $total = 0;
-        $plural = 0;
+        $expr = $this->getPluralForms();
+        $key = $expr . '|' . $n;
 
-        eval("$string");
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+
+        $total = 2;
+        if (preg_match('/nplurals\s*=\s*(\d+)/i', $expr, $matches)) {
+            $total = max(1, (int)$matches[1]);
+        }
+
+        $pluralExpr = 'n != 1 ? 0 : 1';
+        if (preg_match('/(?<![\w])plural\s*=\s*([^;]*)/i', $expr, $matches)) {
+            $pluralExpr = trim($matches[1]);
+        }
+
+        $plural = $this->evalPluralExpression($pluralExpr, $n);
+
         if ($plural >= $total) {
             $plural = $total - 1;
         }
-        return $plural;
+
+        if ($plural < 0) {
+            $plural = 0;
+        }
+
+        return $cache[$key] = $plural;
+    }
+
+    /**
+     * 安全地求值 plural= 表达式
+     *
+     * 仅限整数/n/算术与比较运算, 不依赖 eval(), 因此即使 .mo 文件被篡改也不会执行任意代码.
+     *
+     * @param string $expr
+     * @param int $n
+     * @return int
+     */
+    private function evalPluralExpression(string $expr, int $n): int
+    {
+        $tokens = $this->tokenizePluralExpression($expr);
+
+        if (empty($tokens)) {
+            return 0;
+        }
+
+        $pos = 0;
+
+        try {
+            return (int)$this->parseTernary($tokens, $pos, $n);
+        } catch (\Throwable $e) {
+            // 表达式非法时退化为"非单数"形式, 不抛错影响页面渲染
+            return 0;
+        }
+    }
+
+    /**
+     * @return array
+     */
+    private function tokenizePluralExpression(string $expr): array
+    {
+        // 限制长度, 避免损坏的 .mo 文件带来额外的解析开销
+        if (strlen($expr) > 512) {
+            return [];
+        }
+
+        $tokens = [];
+        $length = strlen($expr);
+        $i = 0;
+
+        while ($i < $length) {
+            $char = $expr[$i];
+
+            if (ctype_space($char)) {
+                $i++;
+                continue;
+            }
+
+            if (ctype_digit($char)) {
+                $num = '';
+                while ($i < $length && ctype_digit($expr[$i])) {
+                    $num .= $expr[$i++];
+                }
+                $tokens[] = ['num', (int)$num];
+                continue;
+            }
+
+            if ('n' === $char || 'N' === $char) {
+                $tokens[] = ['var', 'n'];
+                $i++;
+                continue;
+            }
+
+            $two = substr($expr, $i, 2);
+            if (in_array($two, ['==', '!=', '<=', '>=', '&&', '||'], true)) {
+                $tokens[] = ['op', $two];
+                $i += 2;
+                continue;
+            }
+
+            if (in_array($char, ['?', ':', '(', ')', '+', '-', '*', '/', '%', '<', '>', '!'], true)) {
+                $tokens[] = ['op', $char];
+                $i++;
+                continue;
+            }
+
+            // 出现无法识别的字符时整体降级, 由调用方回退到默认复数形式
+            return [];
+        }
+
+        return $tokens;
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param string $op
+     * @return bool
+     */
+    private function matchOp(array $tokens, int $pos, string $op): bool
+    {
+        return isset($tokens[$pos]) && 'op' === $tokens[$pos][0] && $tokens[$pos][1] === $op;
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param int $n
+     * @return int
+     */
+    private function parseTernary(array $tokens, int &$pos, int $n): int
+    {
+        $cond = $this->parseOr($tokens, $pos, $n);
+
+        if ($this->matchOp($tokens, $pos, '?')) {
+            $pos++;
+            $yes = $this->parseTernary($tokens, $pos, $n);
+
+            if (!$this->matchOp($tokens, $pos, ':')) {
+                throw new \RuntimeException('Unexpected token, expected ":"');
+            }
+
+            $pos++;
+            $no = $this->parseTernary($tokens, $pos, $n);
+
+            return $cond ? $yes : $no;
+        }
+
+        return $cond;
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param int $n
+     * @return int
+     */
+    private function parseOr(array $tokens, int &$pos, int $n): int
+    {
+        $left = $this->parseAnd($tokens, $pos, $n);
+
+        while ($this->matchOp($tokens, $pos, '||')) {
+            $pos++;
+            $right = $this->parseAnd($tokens, $pos, $n);
+            $left = ($left || $right) ? 1 : 0;
+        }
+
+        return $left;
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param int $n
+     * @return int
+     */
+    private function parseAnd(array $tokens, int &$pos, int $n): int
+    {
+        $left = $this->parseEquality($tokens, $pos, $n);
+
+        while ($this->matchOp($tokens, $pos, '&&')) {
+            $pos++;
+            $right = $this->parseEquality($tokens, $pos, $n);
+            $left = ($left && $right) ? 1 : 0;
+        }
+
+        return $left;
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param int $n
+     * @return int
+     */
+    private function parseEquality(array $tokens, int &$pos, int $n): int
+    {
+        $left = $this->parseRelational($tokens, $pos, $n);
+
+        while (true) {
+            if ($this->matchOp($tokens, $pos, '==')) {
+                $pos++;
+                $left = ($left == $this->parseRelational($tokens, $pos, $n)) ? 1 : 0;
+            } elseif ($this->matchOp($tokens, $pos, '!=')) {
+                $pos++;
+                $left = ($left != $this->parseRelational($tokens, $pos, $n)) ? 1 : 0;
+            } else {
+                break;
+            }
+        }
+
+        return $left;
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param int $n
+     * @return int
+     */
+    private function parseRelational(array $tokens, int &$pos, int $n): int
+    {
+        $left = $this->parseAdditive($tokens, $pos, $n);
+
+        while (true) {
+            if ($this->matchOp($tokens, $pos, '<')) {
+                $pos++;
+                $left = ($left < $this->parseAdditive($tokens, $pos, $n)) ? 1 : 0;
+            } elseif ($this->matchOp($tokens, $pos, '>')) {
+                $pos++;
+                $left = ($left > $this->parseAdditive($tokens, $pos, $n)) ? 1 : 0;
+            } elseif ($this->matchOp($tokens, $pos, '<=')) {
+                $pos++;
+                $left = ($left <= $this->parseAdditive($tokens, $pos, $n)) ? 1 : 0;
+            } elseif ($this->matchOp($tokens, $pos, '>=')) {
+                $pos++;
+                $left = ($left >= $this->parseAdditive($tokens, $pos, $n)) ? 1 : 0;
+            } else {
+                break;
+            }
+        }
+
+        return $left;
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param int $n
+     * @return int
+     */
+    private function parseAdditive(array $tokens, int &$pos, int $n): int
+    {
+        $left = $this->parseMultiplicative($tokens, $pos, $n);
+
+        while (true) {
+            if ($this->matchOp($tokens, $pos, '+')) {
+                $pos++;
+                $left = $left + $this->parseMultiplicative($tokens, $pos, $n);
+            } elseif ($this->matchOp($tokens, $pos, '-')) {
+                $pos++;
+                $left = $left - $this->parseMultiplicative($tokens, $pos, $n);
+            } else {
+                break;
+            }
+        }
+
+        return $left;
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param int $n
+     * @return int
+     */
+    private function parseMultiplicative(array $tokens, int &$pos, int $n): int
+    {
+        $left = $this->parseUnary($tokens, $pos, $n);
+
+        while (true) {
+            if ($this->matchOp($tokens, $pos, '*')) {
+                $pos++;
+                $left = $left * $this->parseUnary($tokens, $pos, $n);
+            } elseif ($this->matchOp($tokens, $pos, '/')) {
+                $pos++;
+                $right = $this->parseUnary($tokens, $pos, $n);
+                $left = 0 === $right ? 0 : intdiv($left, $right);
+            } elseif ($this->matchOp($tokens, $pos, '%')) {
+                $pos++;
+                $right = $this->parseUnary($tokens, $pos, $n);
+                $left = 0 === $right ? 0 : $left % $right;
+            } else {
+                break;
+            }
+        }
+
+        return $left;
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param int $n
+     * @return int
+     */
+    private function parseUnary(array $tokens, int &$pos, int $n): int
+    {
+        if ($this->matchOp($tokens, $pos, '!')) {
+            $pos++;
+            return $this->parseUnary($tokens, $pos, $n) ? 0 : 1;
+        }
+
+        if ($this->matchOp($tokens, $pos, '-')) {
+            $pos++;
+            return -$this->parseUnary($tokens, $pos, $n);
+        }
+
+        if ($this->matchOp($tokens, $pos, '+')) {
+            $pos++;
+            return $this->parseUnary($tokens, $pos, $n);
+        }
+
+        return $this->parsePrimary($tokens, $pos, $n);
+    }
+
+    /**
+     * @param array $tokens
+     * @param int $pos
+     * @param int $n
+     * @return int
+     */
+    private function parsePrimary(array $tokens, int &$pos, int $n): int
+    {
+        if (!isset($tokens[$pos])) {
+            throw new \RuntimeException('Unexpected end of expression');
+        }
+
+        [$type, $value] = $tokens[$pos];
+
+        if ('num' === $type) {
+            $pos++;
+            return (int)$value;
+        }
+
+        if ('var' === $type) {
+            $pos++;
+            return $n;
+        }
+
+        if ('op' === $type && '(' === $value) {
+            $pos++;
+            $result = $this->parseTernary($tokens, $pos, $n);
+
+            if (!$this->matchOp($tokens, $pos, ')')) {
+                throw new \RuntimeException('Unexpected token, expected ")"');
+            }
+
+            $pos++;
+            return $result;
+        }
+
+        throw new \RuntimeException('Unexpected token');
     }
 
     /**

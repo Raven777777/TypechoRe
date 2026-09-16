@@ -1,0 +1,27 @@
+# 上传目录纵深防御: 即使攻击者绕过了扩展名白名单写入了脚本,
+# 也不会被当作 PHP 执行。
+
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>
+
+<FilesMatch "(?i)\.(php|php3|php4|php5|php7|php8|phtml|pht|phar|inc|shtml|cgi|pl|asp|aspx|jsp)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 上传目录不需要目录列表与索引
+Options -Indexes

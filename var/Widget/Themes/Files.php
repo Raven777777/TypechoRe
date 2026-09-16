@@ -138,8 +138,13 @@ class Files extends Base
      */
     public function currentContent(): string
     {
-        return htmlspecialchars(file_get_contents(Options::alloc()
-            ->themeFile($this->currentTheme, $this->currentFile)));
+        $file = Options::alloc()->themeFile($this->currentTheme, $this->currentFile);
+
+        if (!is_file($file) || !is_readable($file)) {
+            return '';
+        }
+
+        return htmlspecialchars((string)file_get_contents($file), ENT_QUOTES, 'UTF-8');
     }
 
     /**

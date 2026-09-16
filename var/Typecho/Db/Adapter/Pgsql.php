@@ -46,9 +46,15 @@ class Pgsql implements Adapter
             $dsn .= ' sslmode=require';
         }
 
+        // 强制 standard_conforming_strings=on, 使 quoteValue() 中把 ' 转义为 ''
+        // 的做法始终成立; 否则当服务端将其关闭时, 反斜杠会成为转义字符从而绕过引号转义
+        $options = ['-c standard_conforming_strings=on'];
+
         if ($config->charset) {
-            $dsn .= " options='--client_encoding={$config->charset}'";
+            $options[] = "--client_encoding={$config->charset}";
         }
+
+        $dsn .= " options='" . implode(' ', $options) . "'";
 
         if ($dbLink = @pg_connect($dsn)) {
             return $dbLink;

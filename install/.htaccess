@@ -1,0 +1,11 @@
+# 安装程序运行入口是根目录的 install.php
+# install/ 仅存放建表 SQL 与配置片段, 安装完成后不应再被访问
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>

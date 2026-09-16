@@ -69,10 +69,20 @@ class User extends Users
             $this->push($this->currentUser);
 
             // update last activated time
-            $this->db->query($this->db
-                ->update('table.users')
-                ->rows(['activated' => $this->options->time])
-                ->where('uid = ?', $this->currentUser['uid']));
+            // 该字段仅用于"最后活跃时间"展示, 无需每个请求都写库;
+            // 这里做节流, 避免后台/已登录访问时每个请求都产生一次 UPDATE
+            $interval = defined('__TYPECHO_ACTIVATED_INTERVAL__')
+                ? max(0, (int)__TYPECHO_ACTIVATED_INTERVAL__)
+                : 300;
+
+            $lastActivated = intval($this->currentUser['activated'] ?? 0);
+
+            if ($this->options->time - $lastActivated >= $interval) {
+                $this->db->query($this->db
+                    ->update('table.users')
+                    ->rows(['activated' => $this->options->time])
+                    ->where('uid = ?', $this->currentUser['uid']));
+            }
 
             // merge personal options
             $options = $this->personalOptions->toArray();
@@ -178,6 +188,9 @@ class User extends Users
         }
 
         if ($hashValidate) {
+            // 遗留哈希 ($P$ phpass / $T$ 自研 / md5) 校验通过后透明升级为 bcrypt/argon2
+            $this->upgradePasswordHash($user, $password);
+
             if (!$temporarily) {
                 $this->commitLogin($user, $expire);
             }
@@ -193,6 +206,39 @@ class User extends Users
 
         self::pluginHandle()->call('loginFail', $this, $name, $password, $temporarily, $expire);
         return false;
+    }
+
+    /**
+     * 登录成功后把遗留格式的密码哈希升级为当前推荐算法
+     *
+     * 只在校验通过时执行, 失败不会影响登录结果; 升级失败也静默忽略,
+     * 下次登录会再次尝试。
+     *
+     * @access private
+     * @param array $user 用户数据
+     * @param string $password 明文密码
+     * @return void
+     * @throws DbException
+     */
+    private function upgradePasswordHash(array &$user, string $password): void
+    {
+        if (!isset($user['password']) || !Common::hashNeedsRehash($user['password'])) {
+            return;
+        }
+
+        try {
+            $hash = Common::hashPassword($password);
+
+            $this->db->query($this->db
+                ->update('table.users')
+                ->rows(['password' => $hash])
+                ->where('uid = ?', $user['uid']));
+
+            $user['password'] = $hash;
+            $this->currentUser['password'] = $hash;
+        } catch (DbException $e) {
+            // 数据库不可用时保留旧哈希, 不影响本次登录
+        }
     }
 
     /**

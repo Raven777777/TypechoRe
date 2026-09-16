@@ -1,0 +1,53 @@
+# ============================================================
+# TypechoRe 部署加固 (Apache)
+#
+# 本文件只负责访问控制与安全响应头。
+# 若站点启用了「地址重写」, 重写规则由
+# 后台 -> 设置 -> 永久链接 自动生成, 请勿在此重复添加。
+# ============================================================
+
+# 禁止目录列表
+Options -Indexes
+
+# ---- 保护敏感文件 ----
+# 口令/数据库凭据文件永远不应通过 URL 访问。
+# 注意: 不要在这里屏蔽 install.php —— 它在检测到站点已安装后
+# 会自动跳转到首页, 屏蔽反而会让全新站点无法安装。
+<FilesMatch "(?i)^config\.inc\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<FilesMatch "(?i)\.(sql|bak|old|swp|log|dist)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# ---- 屏蔽版本库 / 环境变量等元数据 ----
+<IfModule mod_alias.c>
+    RedirectMatch 404 "(?i)(^|/)(\.git|\.svn|\.hg)(/|$)"
+    RedirectMatch 404 "(?i)(^|/)\.env(\.|$)"
+    RedirectMatch 404 "(?i)(^|/)(composer\.(json|lock)|phpunit\.xml)$"
+</IfModule>
+
+# ---- 安全响应头 ----
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    # 关闭旧版 XSS Auditor (已被现代浏览器移除, 显式置 0 避免误报拦截)
+    Header always set X-XSS-Protection "0"
+
+    # 全站 HTTPS 且证书可信后再开启 HSTS, 否则会导致站点短期不可访问
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>

@@ -600,9 +600,12 @@ class Sitemap extends Contents implements ActionInterface
      */
     private function flushOutput()
     {
+        // 只冲刷当前缓冲内容, 不结束缓冲区:
+        // ob_end_flush() 会关闭插件或框架开启的缓冲区, 导致后续的 gzip/回调失效
         if (ob_get_level() > 0) {
-            @ob_end_flush();
+            @ob_flush();
         }
+
         flush();
     }
 }

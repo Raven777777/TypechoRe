@@ -64,8 +64,15 @@ class Pgsql extends Pdo
     {
         $dsn = "pgsql:dbname={$config->database};host={$config->host};port={$config->port}";
 
+        // 与 pgsql 适配器保持一致: 固定 standard_conforming_strings, 保证引号转义语义确定
+        $dsn .= ";options='-c standard_conforming_strings=on'";
+
         if ($config->sslVerify) {
             $dsn .= ';sslmode=require';
+        }
+
+        if ($config->charset) {
+            $dsn .= ';client_encoding=' . $config->charset;
         }
 
         $pdo = new \PDO(

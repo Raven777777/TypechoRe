@@ -586,6 +586,27 @@ EOF;
         }
 
         /**
+         * HTML 转义, 用于把不可信内容输出到 HTML 文本/属性值中
+         *
+         * @access public
+         *
+         * @param mixed $val 需要转义的值
+         * @param int $flags htmlspecialchars 标志, 默认同时转义单双引号
+         *
+         * @return string
+         */
+        public static function escape($val, int $flags = ENT_QUOTES): string
+        {
+            if (is_scalar($val)) {
+                $val = (string)$val;
+            } else {
+                $val = '';
+            }
+
+            return htmlspecialchars($val, $flags, 'UTF-8', false);
+        }
+
+        /**
          * 处理XSS跨站攻击的过滤函数
          *
          * @param string|null $val 需要处理的字符串
@@ -760,12 +781,73 @@ EOF;
                 return false;
             }
 
+            // 现代算法 (bcrypt / argon2), 由 password_hash() 生成
+            if (self::isModernHash($to)) {
+                return password_verify($from, $to);
+            }
+
             if ('$T$' == substr($to, 0, 3)) {
                 $salt = substr($to, 3, 9);
                 return hash_equals($to, self::hash($from, $salt));
             } else {
                 return hash_equals($to, md5($from));
             }
+        }
+
+        /**
+         * 使用当前推荐算法生成密码哈希
+         *
+         * 生成的哈希可由 hashValidate() 校验, 且与旧算法 ($T$ / md5 / $P$) 兼容共存.
+         *
+         * @access public
+         *
+         * @param string $password 明文密码
+         *
+         * @return string
+         */
+        public static function hashPassword(string $password): string
+        {
+            return password_hash($password, PASSWORD_DEFAULT);
+        }
+
+        /**
+         * 判断给定哈希是否为 password_hash() 生成的现代算法
+         *
+         * 仅识别 password_get_info() 能解析的算法, 避免把 $T$ 等自有格式误判进来.
+         *
+         * @access public
+         *
+         * @param string $hash
+         *
+         * @return bool
+         */
+        public static function isModernHash(string $hash): bool
+        {
+            // PHP 8+ 中 algo 为字符串 (如 '2y' / 'argon2id'), PHP 7 中为整型常量,
+            // 未知格式返回 0 或 null, 因此统一按"空值"判断
+            $algo = password_get_info($hash)['algo'] ?? null;
+
+            return !(null === $algo || 0 === $algo || '' === $algo);
+        }
+
+        /**
+         * 判断旧哈希是否需要升级为现代算法
+         *
+         * 用于登录成功后透明地把遗留哈希替换为 bcrypt/argon2.
+         *
+         * @access public
+         *
+         * @param string $hash
+         *
+         * @return bool
+         */
+        public static function hashNeedsRehash(string $hash): bool
+        {
+            if (self::isModernHash($hash)) {
+                return password_needs_rehash($hash, PASSWORD_DEFAULT);
+            }
+
+            return true;
         }
 
         /**

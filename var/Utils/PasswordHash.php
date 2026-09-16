@@ -36,7 +36,8 @@ class PasswordHash
 
         $this->portable_hashes = $portable_hashes;
 
-        $this->random_state = microtime() . uniqid(rand(), true); // removed getmypid() for compability reasons
+        // 仅作为极端情况下 (random_bytes 不可用) 的熵补充, 不再作为唯一随机源
+        $this->random_state = microtime() . uniqid((string) random_int(0, mt_getrandmax()), true);
     }
 
     /**
@@ -91,9 +92,16 @@ class PasswordHash
      */
     private function getRandomBytes(int $count): string
     {
+        // 密码学安全随机源, 在所有平台上都可用 (Windows 上不存在 /dev/urandom)
+        try {
+            return random_bytes($count);
+        } catch (\Throwable $e) {
+            // 继续走下面的兼容分支
+        }
+
         $output = '';
         if (@is_readable('/dev/urandom') && ($fh = @fopen('/dev/urandom', 'rb'))) {
-            $output = fread($fh, $count);
+            $output = (string) fread($fh, $count);
             fclose($fh);
         }
 
@@ -101,9 +109,9 @@ class PasswordHash
             $output = '';
             for ($i = 0; $i < $count; $i += 16) {
                 $this->random_state =
-                    md5(microtime() . $this->random_state);
+                    hash('sha256', microtime() . $this->random_state . random_int(0, PHP_INT_MAX));
                 $output .=
-                    pack('H*', md5($this->random_state));
+                    pack('H*', hash('sha256', $this->random_state));
             }
             $output = substr($output, 0, $count);
         }
@@ -127,7 +135,8 @@ class PasswordHash
 # of entropy.
         $itoa64 = './ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
-        $output = '$2a$';
+        // $2a$ 存在已知的 8-bit 符号扩展缺陷 (pre-crypt_blowfish 1.1), 必须使用 $2y$
+        $output = '$2y$';
         $output .= chr(ord('0') + $this->iteration_count_log2 / 10);
         $output .= chr(ord('0') + $this->iteration_count_log2 % 10);
         $output .= '$';
@@ -288,7 +297,8 @@ class PasswordHash
             $hash = crypt($password, $stored_hash);
         }
 
-        return $hash == $stored_hash;
+        // 必须使用恒定时间比较, 否则可通过响应时间逐字节推断出正确哈希
+        return hash_equals($stored_hash, $hash);
     }
 }
 

@@ -311,11 +311,12 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
                 if ($highRes) {
                     $url2x = Common::gravatarUrl($this->mail, $size * 2, $rating, $default, $this->request->isSecure());
                     $url3x = Common::gravatarUrl($this->mail, $size * 3, $rating, $default, $this->request->isSecure());
-                    $srcset = ' srcset="' . $url2x . ' 2x, ' . $url3x . ' 3x"';
+                    $srcset = ' srcset="' . Common::escape($url2x) . ' 2x, ' . Common::escape($url3x) . ' 3x"';
                 }
 
-                echo '<img class="avatar" loading="lazy" src="' . $url . '"' . $srcset . ' alt="' .
-                    $this->author . '" width="' . $size . '" height="' . $size . '" />';
+                echo '<img class="avatar" loading="lazy" src="' . Common::escape($url) . '"'
+                    . $srcset . ' alt="' . Common::escape($this->author)
+                    . '" width="' . $size . '" height="' . $size . '" />';
             }
         }
     }

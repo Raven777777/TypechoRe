@@ -80,7 +80,9 @@ class Mysqli implements Adapter
                 $this->dbLink = $mysqli;
 
                 if ($config->charset) {
-                    $this->dbLink->query("SET NAMES '{$config->charset}'");
+                    // 必须使用 set_charset(): SET NAMES 不会让客户端 (real_escape_string)
+                    // 感知到字符集变更, 在 GBK/Big5 等多字节编码下会导致宽字节注入
+                    $this->dbLink->set_charset($config->charset);
                 }
             } catch (mysqli_sql_exception $e) {
                 throw new ConnectionException($e->getMessage(), $e->getCode());

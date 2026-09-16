@@ -153,8 +153,9 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
     public function gravatar(int $size = 40, string $rating = 'X', ?string $default = null, ?string $class = null)
     {
         $url = Common::gravatarUrl($this->mail, $size, $rating, $default, $this->request->isSecure());
-        echo '<img' . (empty($class) ? '' : ' class="' . $class . '"') . ' src="' . $url . '" alt="' .
-            $this->screenName . '" width="' . $size . '" height="' . $size . '" />';
+        echo '<img' . (empty($class) ? '' : ' class="' . Common::escape($class) . '"')
+            . ' src="' . Common::escape($url) . '" alt="' . Common::escape($this->screenName)
+            . '" width="' . $size . '" height="' . $size . '" loading="lazy" />';
     }
 
     /**
