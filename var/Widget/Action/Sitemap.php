@@ -131,6 +131,9 @@ class Sitemap extends Contents implements ActionInterface
      */
     public function render()
     {
+        // 不要手动冲刷输出缓冲: 响应头由 Common::init() 注册的
+        // ob_start 回调统一发送, 提前冲刷会让 header() 失效, 并且在
+        // PHP 8.5 的请求关闭阶段产生额外输出, 破坏 XML 文档结构
         $this->response->setContentType('application/xml');
 
         if ($this->isSitemapIndex) {
@@ -362,7 +365,6 @@ class Sitemap extends Contents implements ActionInterface
         }
 
         $this->openXml('urlset');
-        $written = 0;
 
         foreach ($urls as $url) {
             if (!is_array($url) || !isset($url['loc']) || !is_string($url['loc'])) {
@@ -394,14 +396,9 @@ class Sitemap extends Contents implements ActionInterface
             }
 
             echo '  </url>' . "\n";
-
-            if (++$written % 100 === 0) {
-                $this->flushOutput();
-            }
         }
 
         echo '</urlset>' . "\n";
-        $this->flushOutput();
     }
 
     /**
@@ -424,7 +421,6 @@ class Sitemap extends Contents implements ActionInterface
         }
 
         $this->openXml('sitemapindex');
-        $written = 0;
 
         foreach ($sitemaps as $sitemap) {
             if (!is_array($sitemap) || !isset($sitemap['loc']) || !is_string($sitemap['loc'])) {
@@ -446,14 +442,9 @@ class Sitemap extends Contents implements ActionInterface
             }
 
             echo '  </sitemap>' . "\n";
-
-            if (++$written % 100 === 0) {
-                $this->flushOutput();
-            }
         }
 
         echo '</sitemapindex>' . "\n";
-        $this->flushOutput();
     }
 
     /**
@@ -593,19 +584,5 @@ class Sitemap extends Contents implements ActionInterface
 
         $host = parse_url($url, PHP_URL_HOST);
         return is_string($host) && 0 === strcasecmp($host, $siteHost);
-    }
-
-    /**
-     * @return void
-     */
-    private function flushOutput()
-    {
-        // 只冲刷当前缓冲内容, 不结束缓冲区:
-        // ob_end_flush() 会关闭插件或框架开启的缓冲区, 导致后续的 gzip/回调失效
-        if (ob_get_level() > 0) {
-            @ob_flush();
-        }
-
-        flush();
     }
 }

@@ -183,6 +183,12 @@ class Response
             return;
         }
 
+        // 响应体已经开始输出时无法再发送头部, 直接跳过以避免
+        // "Cannot modify header information" 警告污染响应内容
+        if (headers_sent()) {
+            return;
+        }
+
         $sentHeaders = [];
         foreach (headers_list() as $header) {
             [$key] = explode(':', $header, 2);
