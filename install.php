@@ -82,6 +82,18 @@ function install_get_default_routers(): array
                 'widget' => '\Widget\Archive',
                 'action' => 'render',
             ],
+        'sitemap'            =>
+            [
+                'url'    => '/sitemap.xml',
+                'widget' => '\Widget\Action\Sitemap',
+                'action' => 'action',
+            ],
+        'sitemapPage'        =>
+            [
+                'url'    => '/sitemap-[page:digital].xml',
+                'widget' => '\Widget\Action\Sitemap',
+                'action' => 'action',
+            ],
         'archive'            =>
             [
                 'url'    => '/blog/',

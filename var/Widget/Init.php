@@ -10,7 +10,9 @@ use Typecho\I18n;
 use Typecho\Plugin;
 use Typecho\Response;
 use Typecho\Router;
+use Typecho\Router\Parser;
 use Typecho\Widget;
+use Widget\Action\Sitemap;
 
 if (!defined('__TYPECHO_ROOT_DIR__')) {
     exit;
@@ -99,7 +101,23 @@ class Init extends Widget
         }
 
         /** 初始化路由器 */
-        Router::setRoutes($options->routingTable);
+        $routingTable = $options->routingTable;
+        $addedRoutes = [];
+
+        if (empty($routingTable['sitemap'])) {
+            $routingTable['sitemap'] = Sitemap::route();
+            $addedRoutes['sitemap'] = $routingTable['sitemap'];
+        }
+
+        if (empty($routingTable['sitemapPage'])) {
+            $routingTable['sitemapPage'] = Sitemap::pageRoute();
+            $addedRoutes['sitemapPage'] = $routingTable['sitemapPage'];
+        }
+
+        if (isset($routingTable[0]) && $addedRoutes) {
+            $routingTable[0] += (new Parser($addedRoutes))->parse();
+        }
+        Router::setRoutes($routingTable);
 
         /** 初始化插件 */
         Plugin::init($options->plugins);
