@@ -17,16 +17,16 @@ class Message
     /**
      * @var string
      */
-    public string $messageType;  // methodCall / methodResponse / fault
+    public string $messageType = '';  // methodCall / methodResponse / fault
 
-    public int $faultCode;
+    public int $faultCode = 0;
 
-    public string $faultString;
+    public string $faultString = '';
 
     /**
      * @var string
      */
-    public string $methodName;
+    public string $methodName = '';
 
     /**
      * @var array

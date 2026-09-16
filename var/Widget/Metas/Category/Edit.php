@@ -335,7 +335,8 @@ class Edit extends Metas implements ActionInterface
         $deleteCount = 0;
 
         foreach ($categories as $category) {
-            $parent = $this->db->fetchObject($this->select()->where('mid = ?', $category))->parent;
+            $row = $this->db->fetchObject($this->select()->where('mid = ?', $category));
+            $parent = null === $row ? 0 : $row->parent;
 
             if ($this->delete($this->db->sql()->where('mid = ?', $category))) {
                 $this->db->query($this->db->delete('table.relationships')->where('mid = ?', $category));

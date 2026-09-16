@@ -68,7 +68,7 @@ class Value
             case 'base64':
                 return $this->data->getXml();
         }
-        return false;
+        return '';
     }
 
     /**

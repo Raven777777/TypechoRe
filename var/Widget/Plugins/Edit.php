@@ -170,7 +170,8 @@ class Edit extends Options implements ActionInterface
             } else {
                 foreach ($options as $option) {
                     $value = json_decode($option['value'], true);
-                    $value = array_merge($value, $settings);
+                    // 历史数据可能不是合法 JSON, 避免 array_merge(null, ...) 抛 TypeError
+                    $value = array_merge(is_array($value) ? $value : [], $settings);
 
                     $db->query($db->update('table.options')
                         ->rows(['value' => json_encode($value)])

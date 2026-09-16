@@ -190,7 +190,8 @@ class Edit extends Contents implements ActionInterface
         foreach ($pages as $page) {
             // 删除插件接口
             self::pluginHandle()->call('delete', $page, $this);
-            $parent = $this->db->fetchObject($this->select()->where('cid = ?', $page))->parent;
+            $row = $this->db->fetchObject($this->select()->where('cid = ?', $page));
+            $parent = null === $row ? 0 : $row->parent;
 
             if ($this->delete($this->db->sql()->where('cid = ?', $page))) {
                 /** 删除评论 */

@@ -168,7 +168,7 @@ namespace Typecho {
     class Common
     {
         /** 程序版本 */
-        public const VERSION = '1.3.0';
+        public const VERSION = '1.3.1';
 
         /** 程序名称 (Fork 版本) */
         public const SOFTWARE = 'TypechoRe';
@@ -377,6 +377,10 @@ EOF;
          */
         public static function fixHtml(?string $string): ?string
         {
+            if (null === $string) {
+                return null;
+            }
+
             //关闭自闭合标签
             $startPos = strrpos($string, "<");
 

@@ -741,6 +741,26 @@ class Options extends Base
     }
 
     /**
+     * 每页文章数目, 至少为 1 以避免除零错误
+     *
+     * @return int
+     */
+    protected function ___pageSize(): int
+    {
+        return max(1, intval($this->row['pageSize'] ?? 1));
+    }
+
+    /**
+     * 评论每页数目, 至少为 1 以避免除零错误
+     *
+     * @return int
+     */
+    protected function ___commentsPageSize(): int
+    {
+        return max(1, intval($this->row['commentsPageSize'] ?? 1));
+    }
+
+    /**
      * 允许上传的文件类型
      *
      * @return array

@@ -301,7 +301,11 @@ class Validate
             foreach ($rule as $params) {
                 $method = $params[0];
 
-                if ('required' != $method && 'confirm' != $method && 0 == strlen($data[$key] ?? '')) {
+                $isEmpty = is_array($data[$key] ?? null)
+                    ? 0 == count($data[$key])
+                    : 0 == strlen($data[$key] ?? '');
+
+                if ('required' != $method && 'confirm' != $method && $isEmpty) {
                     continue;
                 }
 

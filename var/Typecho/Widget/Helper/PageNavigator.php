@@ -71,6 +71,9 @@ abstract class PageNavigator
      */
     public function __construct(int $total, int $currentPage, int $pageSize, string $pageTemplate)
     {
+        // pageSize 为 0 会导致除零错误, 这里兜底保证至少为 1
+        $pageSize = max(1, $pageSize);
+
         $this->total = $total;
         $this->totalPage = ceil($total / $pageSize);
         $this->currentPage = $currentPage;
