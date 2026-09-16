@@ -111,8 +111,9 @@ class User extends Users
                     ->where('uid = ?', intval($cookieUid))
                     ->limit(1));
 
+                // cookie 中为 authCode 明文, 数据库中为其 bcrypt 摘要
                 $cookieAuthCode = Cookie::get('__typecho_authCode');
-                if ($user && Common::hashValidate($user['authCode'], $cookieAuthCode)) {
+                if ($user && Common::validateAuthCode($cookieAuthCode, $user['authCode'])) {
                     $this->currentUser = $user;
                     return ($this->hasLogin = true);
                 }
@@ -248,18 +249,19 @@ class User extends Users
      */
     public function commitLogin(&$user, int $expire = 0)
     {
-        $authCode = function_exists('openssl_random_pseudo_bytes') ?
-            bin2hex(openssl_random_pseudo_bytes(16)) : sha1(Common::randString(20));
-        $user['authCode'] = $authCode;
+        // 明文 authCode 只写入 cookie, 数据库保存标准 KDF (bcrypt) 摘要,
+        // 这样即使数据库泄露也无法反推出可用的登录凭证
+        $authCode = Common::generateAuthCode();
+        $user['authCode'] = Common::hashAuthCode($authCode);
 
         Cookie::set('__typecho_uid', $user['uid'], $expire);
-        Cookie::set('__typecho_authCode', Common::hash($authCode), $expire);
+        Cookie::set('__typecho_authCode', $authCode, $expire);
 
         //更新最后登录时间以及验证码
         $this->db->query($this->db
             ->update('table.users')
             ->expression('logged', 'activated')
-            ->rows(['authCode' => $authCode])
+            ->rows(['authCode' => $user['authCode']])
             ->where('uid = ?', $user['uid']));
     }
 

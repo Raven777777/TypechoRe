@@ -378,16 +378,16 @@ class Backup extends BaseOptions implements ActionInterface
      */
     private function reLogin(&$user)
     {
-        if (empty($user['authCode'])) {
-            $user['authCode'] = function_exists('openssl_random_pseudo_bytes') ?
-                bin2hex(openssl_random_pseudo_bytes(16)) : sha1(Common::randString(20));
-        }
+        // 备份文件里的 authCode 只是摘要, 无法还原明文,
+        // 因此统一签发一套新的会话凭证: 明文进 cookie, 摘要入库
+        $authCode = Common::generateAuthCode();
+        $user['authCode'] = Common::hashAuthCode($authCode);
 
         $user['activated'] = $this->options->time;
         $user['logged'] = $user['activated'];
 
         Cookie::set('__typecho_uid', $user['uid']);
-        Cookie::set('__typecho_authCode', Common::hash($user['authCode']));
+        Cookie::set('__typecho_authCode', $authCode);
         $this->login = true;
     }
 }

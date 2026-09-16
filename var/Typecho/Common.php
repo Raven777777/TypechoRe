@@ -851,7 +851,82 @@ EOF;
         }
 
         /**
+         * authCode (会话凭证) 哈希使用的 bcrypt cost
+         *
+         * 这里显式指定 bcrypt 而不是 PASSWORD_DEFAULT, 是为了保证哈希长度稳定在
+         * 60 字符以内以适配 users.authCode 的 varchar(64) 字段 (argon2 系列
+         * 输出会超过 64 字符而被截断). authCode 本身是 CSPRNG 生成的 256bit
+         * 随机串, 不存在口令那样的弱熵问题, 因此 bcrypt 的强度完全足够.
+         */
+        public const AUTHCODE_HASH_COST = 10;
+
+        /**
+         * 生成会话凭证 authCode 的明文
+         *
+         * 明文只在签发时写入 cookie, 服务端不保存, 数据库仅保存其 KDF 摘要.
+         *
+         * @access public
+         *
+         * @return string 64 位十六进制随机串 (256bit)
+         */
+        public static function generateAuthCode(): string
+        {
+            try {
+                return bin2hex(random_bytes(32));
+            } catch (\Exception $e) {
+                // CSPRNG 不可用时的退化方案, 混合多个不可预测源
+                return sha1(self::randString(64, true) . microtime(true) . uniqid('', true));
+            }
+        }
+
+        /**
+         * 计算 authCode 的存储摘要
+         *
+         * 使用标准 KDF (bcrypt) 替代原自研 hash() 算法. 数据库只保存摘要,
+         * 因此数据库泄露也无法直接伪造登录 cookie.
+         *
+         * @access public
+         *
+         * @param string $authCode authCode 明文
+         *
+         * @return string
+         */
+        public static function hashAuthCode(string $authCode): string
+        {
+            return password_hash($authCode, PASSWORD_BCRYPT, ['cost' => self::AUTHCODE_HASH_COST]);
+        }
+
+        /**
+         * 校验 authCode 明文与数据库中存储的摘要是否匹配
+         *
+         * password_verify() 内部即为恒定时间比较, 且对非法/未知格式的哈希
+         * 直接返回 false, 因此遗留的明文 authCode 不会被误判为通过.
+         *
+         * @access public
+         *
+         * @param string|null $authCode cookie 中的明文
+         * @param string|null $hash 数据库中存储的摘要
+         *
+         * @return bool
+         */
+        public static function validateAuthCode(?string $authCode, ?string $hash): bool
+        {
+            if (null === $authCode || null === $hash || '' === $authCode || '' === $hash) {
+                return false;
+            }
+
+            return password_verify($authCode, $hash);
+        }
+
+        /**
          * 对字符串进行hash加密
+         *
+         * 自研算法, 强度远低于标准 KDF, 已不参与任何新数据的生成.
+         * 仅保留用于校验历史遗留的 $T$ 格式密码, 请勿在新代码中调用.
+         *
+         * @deprecated 请使用 hashPassword() / hashAuthCode()
+         * @see Common::hashPassword()
+         * @see Common::hashAuthCode()
          *
          * @access public
          *
