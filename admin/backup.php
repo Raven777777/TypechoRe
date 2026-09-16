@@ -63,7 +63,7 @@ $backupFiles = \Widget\Backup::alloc()->listFiles();
                             <label class="typecho-label" for="backup-select-file"><?php _e('选择一个备份文件恢复数据'); ?></label>
                             <select tabindex="5" name="file" id="backup-select-file">
                                 <?php foreach ($backupFiles as $file): ?>
-                                    <option value="<?php echo $file; ?>"><?php echo $file; ?></option>
+                                    <option value="<?php echo htmlspecialchars($file, ENT_QUOTES); ?>"><?php echo htmlspecialchars($file); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </li>

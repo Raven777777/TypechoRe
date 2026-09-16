@@ -191,7 +191,8 @@ class Profile extends Users implements ActionInterface
 
         /** 取出数据 */
         $user = $this->request->from('mail', 'screenName', 'url');
-        $user['screenName'] = empty($user['screenName']) ? $user['name'] : $user['screenName'];
+        $user['screenName'] = empty($user['screenName'])
+            ? $this->request->get('name', '') : $user['screenName'];
 
         /** 更新数据 */
         $this->update($user, $this->db->sql()->where('uid = ?', $this->user->uid));

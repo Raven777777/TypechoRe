@@ -116,9 +116,12 @@ class GetText
 
         if ($this->enable_cache) {
             // Caching enabled, get translated string from cache
-            if (array_key_exists($string, $this->cache_translations)) {
+            if (isset($this->cache_translations[$string]) && is_string($this->cache_translations[$string])) {
+                // 命中缓存时同步回填查找结果, 供 GetTextMulti 判断是否继续回退
+                $num = 0;
                 return $this->cache_translations[$string];
             } else {
+                $num = -1;
                 return $string;
             }
         } else {
@@ -189,7 +192,9 @@ class GetText
      */
     public function __destruct()
     {
-        fclose($this->STREAM);
+        if (is_resource($this->STREAM)) {
+            fclose($this->STREAM);
+        }
     }
 
     /**

@@ -139,7 +139,7 @@ $isAllPosts = ('on' == $request->get('__typecho_all_posts') || 'on' == \Typecho\
                                     <td class="kit-hidden-mb"><input type="checkbox" value="<?php $posts->cid(); ?>"
                                                                      name="cid[]"/></td>
                                     <td class="kit-hidden-mb"><a
-                                            href="<?php $options->adminUrl('manage-comments.php?cid=' . ($posts->parentId ? $posts->parentId : $posts->cid)); ?>"
+                                            href="<?php $options->adminUrl('manage-comments.php?cid=' . ($posts->parent ? $posts->parent : $posts->cid)); ?>"
                                             class="balloon-button size-<?php echo \Typecho\Common::splitByCount($posts->commentsNum, 1, 10, 20, 50, 100); ?>"
                                             title="<?php $posts->commentsNum(); ?> <?php _e('评论'); ?>"><?php $posts->commentsNum(); ?></a>
                                     </td>
@@ -179,7 +179,7 @@ $isAllPosts = ('on' == $request->get('__typecho_all_posts') || 'on' == \Typecho\
                                             $options->adminUrl('manage-posts.php?category=' . $category['mid']
                                                 . (isset($request->uid) ? '&uid=' . $request->filter('encode')->uid : '')
                                                 . (isset($request->status) ? '&status=' . $request->filter('encode')->status : ''));
-                                            echo '">' . $category['name'] . '</a>'; ?><!--
+                                            echo '">' . htmlspecialchars($category['name']) . '</a>'; ?><!--
                                         --><?php endforeach; ?>
                                     </td>
                                     <td>

@@ -39,7 +39,7 @@ class Archive extends Contents
      *
      * @var string
      */
-    private string $themeFile;
+    private string $themeFile = '';
 
     /**
      * 风格目录
@@ -81,7 +81,7 @@ class Archive extends Contents
      *
      * @var integer
      */
-    private int $currentPage;
+    private int $currentPage = 1;
 
     /**
      * 生成分页的内容
@@ -169,7 +169,7 @@ class Archive extends Contents
      * @access private
      * @var string
      */
-    private string $archiveSlug;
+    private ?string $archiveSlug = null;
 
     /**
      * @param Config $parameter
@@ -212,8 +212,7 @@ class Archive extends Contents
     public function addArchiveTitle(string $archiveTitle)
     {
         $current = $this->getArchiveTitle();
-        $current[] = $archiveTitle;
-        $this->setArchiveTitle($current);
+        $this->setArchiveTitle(empty($current) ? $archiveTitle : $current . ' - ' . $archiveTitle);
     }
 
     /**
@@ -1510,7 +1509,10 @@ EOF;
         $src = parse_url($permalink);
         $target = parse_url($requestUrl);
 
-        if ($src['host'] != $target['host'] || urldecode($src['path']) != urldecode($target['path'])) {
+        if (
+            ($src['host'] ?? '') != ($target['host'] ?? '')
+            || urldecode($src['path'] ?? '') != urldecode($target['path'] ?? '')
+        ) {
             $this->response->redirect($permalink, true);
         }
     }

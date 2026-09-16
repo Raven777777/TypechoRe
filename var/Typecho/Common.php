@@ -442,6 +442,7 @@ EOF;
          */
         public static function stripTags(?string $html, ?string $allowableTags = null): string
         {
+            $html = $html ?? '';
             $normalizeTags = '';
             $allowableAttributes = [];
 
@@ -473,7 +474,7 @@ EOF;
                     $tag = strtolower($matches[1]);
 
                     foreach ($attrs as $key => $val) {
-                        if (in_array($key, $allowableAttributes[$tag])) {
+                        if (in_array($key, $allowableAttributes[$tag] ?? [])) {
                             $parsedAttrs[] = " {$key}" . (empty($val) ? '' : "={$val}");
                         }
                     }
@@ -481,7 +482,7 @@ EOF;
                     return '<' . $tag . implode('', $parsedAttrs) . '>';
                 },
                 $html
-            );
+            ) ?? $html;
         }
 
         /**
@@ -517,23 +518,17 @@ EOF;
                 return $default;
             }
 
-            mb_regex_encoding('UTF-8');
-            mb_ereg_search_init($str, "[\w" . preg_quote('_-') . "]+");
-            $result = mb_ereg_search();
-            $return = '';
-
-            if ($result) {
-                $regs = mb_ereg_search_getregs();
-                $pos = 0;
-                do {
-                    $return .= ($pos > 0 ? '-' : '') . $regs[0];
-                    $pos++;
-                } while ($regs = mb_ereg_search_regs());
+            /** 使用 PCRE 替代 mb_ereg_* 系列: 无进程内全局搜索状态, 且不依赖将被移除的 mbregex */
+            if (preg_match_all('/[\w\-_]+/u', $str, $matches)) {
+                $return = implode('-', $matches[0]);
+            } else {
+                $return = '';
             }
 
             $str = trim($return, '-_');
             $str = !strlen($str) ? $default : $str;
-            return substr($str, 0, $maxLength);
+            /** 按字符截断, 避免字节级截断产生非法 UTF-8 */
+            return mb_substr($str, 0, $maxLength, 'UTF-8');
         }
 
         /**
@@ -610,14 +605,28 @@ EOF;
             $search .= '1234567890!@#$%^&*()';
             $search .= '~`";:?+/={}[]-_|\'\\';
 
-            for ($i = 0; $i < strlen($search); $i++) {
-                // ;? matches the ;, which is optional
-                // 0{0,7} matches any padded zeros, which are optional and go up to 8 chars
+            /** 实体解码规则固定, 预编译并缓存, 避免每次调用重复拼接正则 */
+            static $hexEntityPatterns = null;
+            static $decEntityPatterns = null;
 
-                // &#x0040 @ search for the hex values
-                $val = preg_replace('/(&#[xX]0{0,8}' . dechex(ord($search[$i])) . ';?)/i', $search[$i], $val);
-                // &#00064 @ 0{0,7} matches '0' zero to seven times
-                $val = preg_replace('/(&#0{0,8}' . ord($search[$i]) . ';?)/', $search[$i], $val); // with a ;
+            if (null === $hexEntityPatterns) {
+                $hexEntityPatterns = [];
+                $decEntityPatterns = [];
+                $searchLength = strlen($search);
+
+                for ($i = 0; $i < $searchLength; $i++) {
+                    // &#x0040 @ search for the hex values
+                    $hexEntityPatterns[] = '/(&#[xX]0{0,8}' . dechex(ord($search[$i])) . ';?)/i';
+                    // &#00064 @ 0{0,7} matches '0' zero to seven times
+                    $decEntityPatterns[] = '/(&#0{0,8}' . ord($search[$i]) . ';?)/';
+                }
+            }
+
+            $searchLength = count($hexEntityPatterns);
+
+            for ($i = 0; $i < $searchLength; $i++) {
+                $val = preg_replace($hexEntityPatterns[$i], $search[$i], $val);
+                $val = preg_replace($decEntityPatterns[$i], $search[$i], $val);
             }
 
             // now the only remaining whitespace attacks are \t, \n, and \r
@@ -640,12 +649,19 @@ EOF;
             ];
             $ra = array_merge($ra1, $ra2);
 
-            $found = true; // keep replacing as long as the previous round replaced something
-            while ($found == true) {
-                $val_before = $val;
-                for ($i = 0; $i < sizeof($ra); $i++) {
+            /** 关键词列表固定, 预编译模式与替换串并缓存 */
+            static $raPatterns = null;
+            static $raReplacements = null;
+
+            if (null === $raPatterns) {
+                $raPatterns = [];
+                $raReplacements = [];
+
+                foreach ($ra as $word) {
                     $pattern = '/';
-                    for ($j = 0; $j < strlen($ra[$i]); $j++) {
+                    $wordLength = strlen($word);
+
+                    for ($j = 0; $j < $wordLength; $j++) {
                         if ($j > 0) {
                             $pattern .= '(';
                             $pattern .= '(&#[xX]0{0,8}([9ab]);)';
@@ -653,11 +669,24 @@ EOF;
                             $pattern .= '|(&#0{0,8}([9|10|13]);)';
                             $pattern .= ')*';
                         }
-                        $pattern .= $ra[$i][$j];
+
+                        $pattern .= $word[$j];
                     }
+
                     $pattern .= '/i';
-                    $replacement = substr($ra[$i], 0, 2) . '<x>' . substr($ra[$i], 2); // add in <> to nerf the tag
-                    $val = preg_replace($pattern, $replacement, $val); // filter out the hex tags
+                    $raPatterns[] = $pattern;
+                    // add in <> to nerf the tag
+                    $raReplacements[] = substr($word, 0, 2) . '<x>' . substr($word, 2);
+                }
+            }
+
+            $raCount = count($raPatterns);
+            $found = true; // keep replacing as long as the previous round replaced something
+            while ($found == true) {
+                $val_before = $val;
+
+                for ($i = 0; $i < $raCount; $i++) {
+                    $val = preg_replace($raPatterns[$i], $raReplacements[$i], $val); // filter out the hex tags
 
                     if ($val_before == $val) {
                         // no replacements were made, so exit the loop
@@ -1104,7 +1133,8 @@ EOF;
                 }
             }
 
-            $mimeTypes = [
+            /** 提升为静态变量, 避免每次调用重建约 310 项数组 */
+            static $mimeTypes = [
                 'ez'       => 'application/andrew-inset',
                 'csm'      => 'application/cu-seeme',
                 'cu'       => 'application/cu-seeme',
@@ -1544,9 +1574,16 @@ EOF;
          */
         public static function idnToUtf8(string $url): string
         {
-            if (function_exists('idn_to_utf8') && !empty($url)) {
+            if (!empty($url) && function_exists('idn_to_utf8')) {
                 $host = parse_url($url, PHP_URL_HOST);
-                $url = str_replace($host, idn_to_utf8($host), $url);
+
+                if (is_string($host) && '' !== $host) {
+                    $decoded = idn_to_utf8($host);
+
+                    if (is_string($decoded) && '' !== $decoded) {
+                        $url = str_replace($host, $decoded, $url);
+                    }
+                }
             }
 
             return $url;

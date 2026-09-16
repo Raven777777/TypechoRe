@@ -170,6 +170,16 @@ class Plugin
      */
     public static function parseInfo(string $pluginFile): array
     {
+        /** 同一请求内按文件内容版本缓存解析结果, 避免重复 token_get_all 全文件分词 */
+        static $cache = [];
+
+        $mtime = is_file($pluginFile) ? filemtime($pluginFile) : false;
+        $cacheKey = $pluginFile . ':' . ($mtime === false ? 0 : $mtime);
+
+        if (isset($cache[$cacheKey])) {
+            return $cache[$cacheKey];
+        }
+
         $tokens = token_get_all(file_get_contents($pluginFile));
         $isDoc = false;
         $isFunction = false;
@@ -303,7 +313,7 @@ class Plugin
             }
         }
 
-        return $info;
+        return $cache[$cacheKey] = $info;
     }
 
     /**
@@ -471,8 +481,7 @@ class Plugin
         $this->signal = true;
 
         foreach (self::$plugin['handles'][$componentKey] as $callback) {
-            $currentArgs = array_merge([$result], $args, [$result]);
-            $result = call_user_func_array($callback, $currentArgs);
+            $result = call_user_func_array($callback, array_merge([$result], $args, [$result]));
         }
 
         return $result;

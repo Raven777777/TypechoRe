@@ -173,14 +173,28 @@ class Validate
         $search .= '1234567890!@#$%^&*()';
         $search .= '~`";:?+/={}[]-_|\'\\';
 
-        for ($i = 0; $i < strlen($search); $i++) {
-            // ;? matches the ;, which is optional
-            // 0{0,7} matches any padded zeros, which are optional and go up to 8 chars
+        /** 实体解码规则固定, 预编译并缓存 */
+        static $hexEntityPatterns = null;
+        static $decEntityPatterns = null;
 
-            // &#x0040 @ search for the hex values
-            $str = preg_replace('/(&#[xX]0{0,8}' . dechex(ord($search[$i])) . ';?)/i', $search[$i], $str); // with a ;
-            // &#00064 @ 0{0,7} matches '0' zero to seven times
-            $str = preg_replace('/(&#0{0,8}' . ord($search[$i]) . ';?)/', $search[$i], $str); // with a ;
+        if (null === $hexEntityPatterns) {
+            $hexEntityPatterns = [];
+            $decEntityPatterns = [];
+            $searchLength = strlen($search);
+
+            for ($i = 0; $i < $searchLength; $i++) {
+                // &#x0040 @ search for the hex values
+                $hexEntityPatterns[] = '/(&#[xX]0{0,8}' . dechex(ord($search[$i])) . ';?)/i';
+                // &#00064 @ 0{0,7} matches '0' zero to seven times
+                $decEntityPatterns[] = '/(&#0{0,8}' . ord($search[$i]) . ';?)/';
+            }
+        }
+
+        $searchLength = count($hexEntityPatterns);
+
+        for ($i = 0; $i < $searchLength; $i++) {
+            $str = preg_replace($hexEntityPatterns[$i], $search[$i], $str);
+            $str = preg_replace($decEntityPatterns[$i], $search[$i], $str);
         }
 
         return !preg_match('/(\(|\)|\\\|"|<|>|[\x00-\x08]|[\x0b-\x0c]|[\x0e-\x19]|' . "\r|\n|\t" . ')/', $str);
@@ -281,8 +295,8 @@ class Validate
         // Cycle through the rules and test for errors
         foreach ($rules as $key => $rule) {
             $this->key = $key;
-            $data[$key] = (is_array($data[$key]) ? 0 == count($data[$key])
-                : 0 == strlen($data[$key] ?? '')) ? null : $data[$key];
+            $data[$key] = (is_array($data[$key] ?? null) ? 0 == count($data[$key])
+                : 0 == strlen($data[$key] ?? '')) ? null : ($data[$key] ?? null);
 
             foreach ($rule as $params) {
                 $method = $params[0];

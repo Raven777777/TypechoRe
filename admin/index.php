@@ -46,7 +46,6 @@ $stat = \Widget\Stat::alloc();
                             </li>
                         <?php endif; ?>
                     <?php endif; ?>
-                    <!--<li><a href="<?php $options->adminUrl('profile.php'); ?>"><?php _e('更新我的资料'); ?></a></li>-->
                 </ul>
             </div>
 

@@ -1904,7 +1904,7 @@ EOF;
     private function getPostExtended(Contents $content): array
     {
         //根据客户端显示来判断是否显示html代码
-        $agent = $this->request->getAgent();
+        $agent = (string) $this->request->getAgent();
 
         switch (true) {
             case false !== strpos($agent, 'wp-iphone'):   // wordpress iphone客户端

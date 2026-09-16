@@ -349,7 +349,7 @@ class Edit extends Contents implements ActionInterface
 
         if ($this->request->is('parent')) {
             $page = $this->db->fetchRow($this->select()
-                ->where('table.contents.type = ? OR table.contents.type', 'page', 'page_draft')
+                ->where('table.contents.type = ? OR table.contents.type = ?', 'page', 'page_draft')
                 ->where('table.contents.cid = ?', $this->request->filter('int')->get('parent')));
 
             if (!empty($page)) {

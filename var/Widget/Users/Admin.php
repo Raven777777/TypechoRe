@@ -100,7 +100,7 @@ class Admin extends Users
     protected function ___domainPath(): string
     {
         $parts = parse_url($this->url);
-        return $parts['host'] . ($parts['path'] ?? null);
+        return ($parts['host'] ?? '') . ($parts['path'] ?? '');
     }
 
     /**

@@ -26,11 +26,11 @@ class Related extends Metas
             ->where('table.relationships.cid = ?', $this->parameter->cid)
             ->where('table.metas.type = ?', 'category')), 'mid');
 
-        usort($ids, function ($a, $b) {
-            $orderA = array_search($a, $this->orders);
-            $orderB = array_search($b, $this->orders);
+        /** 预先建立 mid => order 索引, 避免比较器内 O(n) 查找 */
+        $orderMap = array_flip(array_values($this->orders));
 
-            return $orderA <=> $orderB;
+        usort($ids, function ($a, $b) use ($orderMap) {
+            return ($orderMap[$a] ?? PHP_INT_MAX) <=> ($orderMap[$b] ?? PHP_INT_MAX);
         });
 
         $this->pushAll($this->getRows($ids));

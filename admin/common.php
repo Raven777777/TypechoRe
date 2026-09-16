@@ -1,8 +1,4 @@
 <?php
-if (!defined('__DIR__')) {
-    define('__DIR__', dirname(__FILE__));
-}
-
 define('__TYPECHO_ADMIN__', true);
 
 /** 载入配置文件 */
@@ -31,7 +27,7 @@ $currentMenu = $menu->getCurrentMenu();
 
 if (!empty($currentMenu)) {
     $params = parse_url($currentMenu[2]);
-    $adminFile = basename($params['path']);
+    $adminFile = basename($params['path'] ?? '');
 
     if (!$user->logged && !\Typecho\Cookie::get('__typecho_first_run')) {
         if ('welcome.php' != $adminFile) {

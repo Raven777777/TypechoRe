@@ -45,8 +45,8 @@ class Rows extends Widget
         $this->activatedPlugins = $plugins['activated'];
 
         if (!empty($pluginDirs)) {
-            foreach ($pluginDirs as $key => $pluginDir) {
-                $parts = $this->getPlugin($pluginDir, $key);
+            foreach ($pluginDirs as $pluginDir) {
+                $parts = $this->getPlugin($pluginDir);
                 if (empty($parts)) {
                     continue;
                 }

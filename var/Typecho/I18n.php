@@ -104,13 +104,8 @@ class I18n
             return str_replace('%d', $hour, _n('一小时前', '%d小时前', $hour));
         }
 
-        /** 如果是昨天 */
-        if (
-            $between > 0
-            && $between < 172800
-            && (date('z', $from) + 1 == date('z', $now)                             // 在同一年的情况
-                || date('z', $from) + 1 == date('L') + 365 + date('z', $now))
-        ) {    // 跨年的情况
+        /** 如果是昨天 (直接比较日历日期, 修正闰年跨年判定失效) */
+        if ($between > 0 && $between < 172800 && date('Y-m-d', $from) == date('Y-m-d', $now - 86400)) {
             return _t('昨天 %s', date('H:i', $from));
         }
 
@@ -139,7 +134,13 @@ class I18n
      */
     public static function addLang(string $lang)
     {
-        self::$loaded->addFile($lang);
+        self::init();
+
+        if (isset(self::$loaded)) {
+            self::$loaded->addFile($lang);
+        } else {
+            self::$loaded = new GetTextMulti($lang);
+        }
     }
 
     /**

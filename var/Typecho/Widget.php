@@ -288,13 +288,16 @@ abstract class Widget
      */
     public function template(string $template): string
     {
-        return preg_replace_callback(
+        $result = preg_replace_callback(
             "/\{([_a-z0-9]+)\}/i",
             function (array $matches) {
-                return $this->{$matches[1]};
+                $value = $this->{$matches[1]};
+                return is_scalar($value) ? (string) $value : '';
             },
             $template
         );
+
+        return $result ?? $template;
     }
 
     /**

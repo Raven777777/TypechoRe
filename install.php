@@ -846,7 +846,7 @@ function install_step_2()
                         <p class="description"><?php _e('默认前缀是 "typecho_"'); ?></p>
                     </li>
                 </ul>
-                <?php require_once './install/' . $type . '.php'; ?>
+                <?php require_once __DIR__ . '/install/' . $type . '.php'; ?>
 
 
                 <ul class="typecho-option typecho-option-submit">

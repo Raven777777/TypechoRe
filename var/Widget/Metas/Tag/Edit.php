@@ -372,7 +372,7 @@ class Edit extends Metas implements ActionInterface
     {
         // 取出count为0的标签
         $tags = array_column($this->db->fetchAll($this->select('mid')
-            ->where('type = ? AND count = ?', 'tags', 0)), 'mid');
+            ->where('type = ? AND count = ?', 'tag', 0)), 'mid');
 
         foreach ($tags as $tag) {
             // 确认是否已经没有关联了

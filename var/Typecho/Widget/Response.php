@@ -239,6 +239,7 @@ class Response
 
             return $result;
         } else {
+            $message = (string) $message;
             return preg_match("/^[^<>]+$/is", $message) ? $message : '<![CDATA[' . $message . ']]>';
         }
     }

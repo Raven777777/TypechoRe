@@ -237,7 +237,8 @@ class Edit extends Users implements ActionInterface
 
         /** 取出数据 */
         $user = $this->request->from('mail', 'screenName', 'password', 'url', 'group');
-        $user['screenName'] = empty($user['screenName']) ? $user['name'] : $user['screenName'];
+        $user['screenName'] = empty($user['screenName'])
+            ? $this->request->get('name', '') : $user['screenName'];
         if (empty($user['password'])) {
             unset($user['password']);
         } else {

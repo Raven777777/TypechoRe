@@ -189,7 +189,11 @@ class Response
             $sentHeaders[] = strtolower(trim($key));
         }
 
-        header('HTTP/1.1 ' . $this->status . ' ' . self::HTTP_CODE[$this->status], true, $this->status);
+        header(
+            'HTTP/1.1 ' . $this->status . ' ' . (self::HTTP_CODE[$this->status] ?? 'Unknown'),
+            true,
+            $this->status
+        );
 
         // set header
         foreach ($this->headers as $name => $value) {

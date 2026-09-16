@@ -295,7 +295,7 @@ class Edit extends Metas implements ActionInterface
         if ($current['parent'] != $category['parent']) {
             $parent = $this->db->fetchRow($this->select()->where('mid = ?', $category['parent']));
 
-            if ($parent['mid'] == $category['mid']) {
+            if ($parent && $parent['mid'] == $category['mid']) {
                 $category['order'] = $parent['order'];
                 $this->update([
                     'parent' => $current['parent'],

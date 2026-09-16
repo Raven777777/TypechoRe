@@ -31,7 +31,7 @@ class Menu extends Base
      * 当前菜单标题
      * @var string
      */
-    public string $title;
+    public string $title = '';
 
     /**
      * 当前增加项目链接
@@ -65,14 +65,14 @@ class Menu extends Base
      *
      * @var string
      */
-    private string $currentUrl;
+    private string $currentUrl = '';
 
     /**
      * 当前菜单URL
      *
      * @var string
      */
-    private string $currentMenuUrl;
+    private string $currentMenuUrl = '';
 
     /**
      * 执行函数,初始化菜单
@@ -148,7 +148,9 @@ class Menu extends Base
             parse_str($currentUrlParts['query'], $currentUrlParams);
         }
 
-        if ('/' == $currentUrlParts['path'][strlen($currentUrlParts['path']) - 1]) {
+        $currentUrlParts['path'] = $currentUrlParts['path'] ?? '';
+
+        if ('' === $currentUrlParts['path'] || '/' == substr($currentUrlParts['path'], -1)) {
             $currentUrlParts['path'] .= 'index.php';
         }
 
@@ -189,7 +191,7 @@ class Menu extends Base
                 }
 
                 $validate = true;
-                if ($urlParts['path'] != $currentUrlParts['path']) {
+                if (($urlParts['path'] ?? '') != $currentUrlParts['path']) {
                     $validate = false;
                 } else {
                     foreach ($urlParams as $paramName => $paramValue) {
@@ -202,7 +204,7 @@ class Menu extends Base
 
                 if (
                     $validate
-                    && basename($urlParts['path']) == 'extending.php'
+                    && basename($urlParts['path'] ?? '') == 'extending.php'
                     && !empty($currentUrlParams['panel']) && !empty($urlParams['panel'])
                     && $urlParams['panel'] != $currentUrlParams['panel']
                 ) {

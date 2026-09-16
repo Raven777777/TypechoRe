@@ -39,8 +39,10 @@ include 'menu.php';
                                 </td>
                                 <td><?php $activatedPlugins->description(); ?></td>
                                 <td class="kit-hidden-mb"><?php $activatedPlugins->version(); ?></td>
-                                <td class="kit-hidden-mb"><?php echo empty($activatedPlugins->homepage) ? $activatedPlugins->author : '<a href="' . $activatedPlugins->homepage
-                                        . '">' . $activatedPlugins->author . '</a>'; ?></td>
+                                <td class="kit-hidden-mb"><?php echo empty($activatedPlugins->homepage)
+                                    ? htmlspecialchars($activatedPlugins->author)
+                                    : '<a href="' . htmlspecialchars($activatedPlugins->homepage) . '">'
+                                        . htmlspecialchars($activatedPlugins->author) . '</a>'; ?></td>
                                 <td>
                                     <?php if ($activatedPlugins->activate || $activatedPlugins->deactivate || $activatedPlugins->config || $activatedPlugins->personalConfig): ?>
                                         <?php if ($activatedPlugins->config): ?>
@@ -100,8 +102,10 @@ include 'menu.php';
                                     <td><?php $deactivatedPlugins->title(); ?></td>
                                     <td><?php $deactivatedPlugins->description(); ?></td>
                                     <td class="kit-hidden-mb"><?php $deactivatedPlugins->version(); ?></td>
-                                    <td class="kit-hidden-mb"><?php echo empty($deactivatedPlugins->homepage) ? $deactivatedPlugins->author : '<a href="' . $deactivatedPlugins->homepage
-                                            . '">' . $deactivatedPlugins->author . '</a>'; ?></td>
+                                    <td class="kit-hidden-mb"><?php echo empty($deactivatedPlugins->homepage)
+                                        ? htmlspecialchars($deactivatedPlugins->author)
+                                        : '<a href="' . htmlspecialchars($deactivatedPlugins->homepage) . '">'
+                                            . htmlspecialchars($deactivatedPlugins->author) . '</a>'; ?></td>
                                     <td>
                                         <a href="<?php $security->index('/action/plugins-edit?activate=' . $deactivatedPlugins->name); ?>"><?php _e('启用'); ?></a>
                                     </td>

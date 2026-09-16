@@ -34,6 +34,7 @@ include 'menu.php';
                         </tr>
                     <?php endif; ?>
                     <?php \Widget\Themes\Rows::alloc()->to($themes); ?>
+                    <?php $themeEditable = \Widget\Themes\Files::isWriteable(); ?>
                     <?php while ($themes->next()): ?>
                         <tr id="theme-<?php $themes->name(); ?>"
                             class="<?php if ($themes->activated && !$options->missingTheme): ?>current<?php endif; ?>">
@@ -45,10 +46,10 @@ include 'menu.php';
                                     <?php if ($themes->author): ?><?php _e('作者'); ?>: <?php if ($themes->homepage): ?><a href="<?php $themes->homepage() ?>"><?php endif; ?><?php $themes->author(); ?><?php if ($themes->homepage): ?></a><?php endif; ?> &nbsp;&nbsp;<?php endif; ?>
                                     <?php if ($themes->version): ?><?php _e('版本'); ?>: <?php $themes->version() ?><?php endif; ?>
                                 </cite>
-                                <p><?php echo nl2br($themes->description); ?></p>
+                                <p><?php echo nl2br(htmlspecialchars($themes->description)); ?></p>
                                 <?php if ($options->theme != $themes->name || $options->missingTheme): ?>
                                     <p>
-                                        <?php if (\Widget\Themes\Files::isWriteable()): ?>
+                                        <?php if ($themeEditable): ?>
                                             <a class="edit"
                                                href="<?php $options->adminUrl('theme-editor.php?theme=' . $themes->name); ?>"><?php _e('编辑'); ?></a> &nbsp;
                                         <?php endif; ?>

@@ -197,12 +197,22 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
             $result = '@' . $result;
         }
 
-        /** 判断是否在数据库中已经存在 */
+        /** 判断是否在数据库中已经存在 (一次性取回候选集合, 避免逐条 COUNT 查询) */
+        $taken = [];
+        $candidates = $this->db->fetchAll(
+            $this->db->select('slug')->from('table.contents')
+                ->where('slug = ? OR slug LIKE ?', $result, addcslashes($slug, '%_\\') . '-%')
+                ->where('cid <> ?', $cid)
+        );
+
+        foreach ($candidates as $candidate) {
+            if (isset($candidate['slug'])) {
+                $taken[(string) $candidate['slug']] = true;
+            }
+        }
+
         $count = 1;
-        while (
-            $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-                ->from('table.contents')->where('slug = ? AND cid <> ?', $result, $cid))->num > 0
-        ) {
+        while (isset($taken[$result])) {
             $result = $slug . '-' . $count;
             $count++;
         }

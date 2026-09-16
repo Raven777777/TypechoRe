@@ -121,7 +121,7 @@ class Form extends Layout
      */
     public function getInput(string $name)
     {
-        return $this->inputs[$name];
+        return $this->inputs[$name] ?? null;
     }
 
     /**

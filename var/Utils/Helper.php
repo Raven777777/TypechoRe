@@ -295,13 +295,15 @@ class Helper
         $panelTable = self::options()->panelTable;
         $panelTable['parent'] = empty($panelTable['parent']) ? [] : $panelTable['parent'];
 
-        if (false !== ($index = array_search($menuName, $panelTable['parent']))) {
+        $index = array_search($menuName, $panelTable['parent']);
+
+        if (false !== $index) {
             unset($panelTable['parent'][$index]);
         }
 
         self::setOption('panelTable', $panelTable);
 
-        return $index + 10;
+        return false === $index ? 0 : (int) $index + 10;
     }
 
     /**
