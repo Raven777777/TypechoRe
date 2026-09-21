@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="favicon.ico">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="keywords" content="typecho,typechore,theme,docs,文档,模板">
+  <meta name="description" content="TypechoRe Docs">
+  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <title>TypechoRe Docs</title>
+  <link rel="stylesheet" href="lib/vue.css">
+  <style>.sidebar-toggle {bottom: auto;top: 0;left: 300px;width: auto;}.close .sidebar-toggle {left: 0;}
+@media screen and (max-width: 768px){
+.sidebar-toggle {bottom: auto;top: 0;left: 0px;width: auto;}.close .sidebar-toggle {left: 300px;}
+}
+  </style>
+</head>
+<body>
+    <nav>
+    <a href="https://github.com/Raven777777/TypechoRe" target="_blank">TypechoRe</a>
+    <a href="https://github.com/typecho/typecho" target="_blank">Typecho</a>
+  </nav>
+  <div id="app">Load...</div>
+</body>
+  <script>
+    window.$docsify = {
+      name: 'TypechoRe',
+      homepage: 'index.md',
+      loadSidebar: 'sidebar.md',
+      subMaxLevel: 3,
+      auto2top: true,
+      formatUpdated: '{MM}/{DD} {HH}:{mm}',
+      alias: {
+        '/.*/sidebar.md':'sidebar.md'
+      },
+      search: {
+          noData: {
+              '/': '没有结果 :('
+          },
+          paths: 'auto',
+          placeholder: {
+              '/': '搜索'
+          }
+      },
+    }
+  </script>
+  <script src="lib/docsify.min.js"></script>
+  <script src="//unpkg.com/prismjs/components/prism-php.js"></script>
+  <script src="lib/search.min.js"></script>
+</html>

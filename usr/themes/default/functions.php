@@ -37,6 +37,49 @@ function themeConfig($form)
     );
 
     $form->addInput($sidebarBlock->multiMode());
+
+    /** 标签云 */
+    $showTagCloud = new \Typecho\Widget\Helper\Form\Element\Checkbox(
+        'showTagCloud',
+        ['1' => _t('在侧边栏显示标签云')],
+        [],
+        _t('标签云')
+    );
+    $form->addInput($showTagCloud->multiMode());
+
+    $tagCloudLimit = new \Typecho\Widget\Helper\Form\Element\Number(
+        'tagCloudLimit',
+        null,
+        0,
+        _t('显示数量'),
+        _t('最多显示多少个标签，0 表示全部')
+    );
+    $tagCloudLimit->setAttribute('style', 'float:left;width:33.33%;box-sizing:border-box;padding-right:12px;');
+    $form->addInput($tagCloudLimit);
+
+    $tagCloudMinSize = new \Typecho\Widget\Helper\Form\Element\Number(
+        'tagCloudMinSize',
+        null,
+        13,
+        _t('最小字号'),
+        _t('单位 px')
+    );
+    $tagCloudMinSize->setAttribute('style', 'float:left;width:33.33%;box-sizing:border-box;padding-right:12px;');
+    $form->addInput($tagCloudMinSize);
+
+    $tagCloudMaxSize = new \Typecho\Widget\Helper\Form\Element\Number(
+        'tagCloudMaxSize',
+        null,
+        24,
+        _t('最大字号'),
+        _t('单位 px，文章数越多字号越大')
+        . '<style>ul[id^="typecho-option-item-tagCloudLimit-"],'
+        . 'ul[id^="typecho-option-item-tagCloudMinSize-"],'
+        . 'ul[id^="typecho-option-item-tagCloudMaxSize-"]{margin-top:0;margin-bottom:0;}'
+        . '.typecho-option-submit{clear:both;}</style>'
+    );
+    $tagCloudMaxSize->setAttribute('style', 'float:left;width:33.33%;box-sizing:border-box;padding-right:12px;');
+    $form->addInput($tagCloudMaxSize);
 }
 
 function postMeta(
@@ -70,4 +113,125 @@ function postMeta(
         </ul>
     <?php endif; ?>
 <?php
+}
+
+/**
+ * 输出侧边栏标签云
+ *
+ * @param \Widget\Options $options
+ */
+function tagCloudRender(\Widget\Options $options)
+{
+    if (empty($options->showTagCloud)) {
+        return;
+    }
+
+    $limit = max(0, intval($options->tagCloudLimit));
+
+    $params = 'sort=mid&desc=0&ignoreZeroCount=1';
+    if ($limit > 0) {
+        $params .= '&limit=' . $limit;
+    }
+
+    $tags = \Widget\Metas\Tag\Cloud::alloc($params)->toArray(['name', 'count', 'permalink']);
+    if (empty($tags)) {
+        return;
+    }
+
+    $minSize = max(8, intval($options->tagCloudMinSize) ?: 13);
+    $maxSize = max($minSize, intval($options->tagCloudMaxSize) ?: 24);
+
+    /** 用对数压缩文章数差异，避免热门标签字号过大 */
+    $weights = array_map(function ($count) {
+        return log(1 + max(0, (int) $count));
+    }, array_column($tags, 'count'));
+
+    $minWeight = min($weights);
+    $maxWeight = max($weights);
+    $range = $maxWeight - $minWeight;
+
+    $items = [];
+    foreach ($tags as $index => $tag) {
+        $ratio = $range > 0 ? pow(($weights[$index] - $minWeight) / $range, 0.85) : 0.5;
+        $size = round($minSize + ($maxSize - $minSize) * $ratio, 1);
+        $name = htmlspecialchars($tag['name'], ENT_QUOTES, 'UTF-8');
+        $url = htmlspecialchars($tag['permalink'], ENT_QUOTES, 'UTF-8');
+
+        $items[] = '<a href="' . $url . '" draggable="false" style="font-size:' . $size . 'px" title="'
+            . $name . '（' . intval($tag['count']) . ' 篇文章）">' . $name . '</a>';
+    }
+
+    $itemsJson = json_encode(
+        $items,
+        JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        | JSON_INVALID_UTF8_SUBSTITUTE
+    );
+
+    if (false === $itemsJson) {
+        return;
+    }
+    $jsUrl = $options->themeUrl('js/TagCloud.min.js', $options->theme);
+    $wrapId = 'theme-tagcloud-wrap';
+    ?>
+    <section class="widget tagcloud-widget">
+        <h3 class="widget-title"><?php _e('标签云'); ?></h3>
+        <div class="tagcloud-wrap" id="<?php echo $wrapId; ?>"></div>
+    </section>
+    <style type="text/css">
+        .tagcloud-wrap { position: relative; width: 100%; height: 218px; margin: 0; overflow: hidden;
+            -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
+        .tagcloud-wrap .tagcloud { position: relative; width: 100%; height: 100%; }
+        .tagcloud-wrap .tagcloud--item { cursor: pointer; }
+        .tagcloud-wrap .tagcloud--item a { color: #3354AA; text-decoration: none; transition: color .2s ease-in-out;
+            -webkit-user-drag: none; user-drag: none; }
+        .tagcloud-wrap .tagcloud--item a:hover { color: #444; }
+    </style>
+    <script type="text/javascript" src="<?php echo htmlspecialchars($jsUrl, ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <script type="text/javascript">
+        (function () {
+            var wrap = document.getElementById('<?php echo $wrapId; ?>');
+            var items = <?php echo $itemsJson; ?>;
+            var instance = null;
+
+            if (!wrap || !items.length || !window.TagCloud) {
+                return;
+            }
+
+            function build() {
+                if (instance) {
+                    if (instance.pause) {
+                        instance.pause();
+                    }
+                    if (instance.destroy) {
+                        instance.destroy();
+                    }
+                }
+
+                var w = wrap.clientWidth;
+                var h = wrap.clientHeight;
+                var radius = Math.max(90, Math.min(260, Math.floor(Math.min(w, h) / 1.8)));
+
+                instance = window.TagCloud('#<?php echo $wrapId; ?>', items, {
+                    radius: radius,
+                    maxSpeed: 'slow',
+                    initSpeed: 'slow',
+                    direction: 135,
+                    keep: true,
+                    useHTML: true,
+                    useContainerInlineStyles: false,
+                    containerClass: 'tagcloud',
+                    itemClass: 'tagcloud--item'
+                });
+            }
+
+            build();
+
+            var timer = null;
+            window.addEventListener('resize', function () {
+                clearTimeout(timer);
+                timer = setTimeout(build, 200);
+            });
+        })();
+    </script>
+    <?php
 }

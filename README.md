@@ -1,24 +1,28 @@
-TypechoRe Blogging Platform
+TypechoRe 博客平台
 
-**TypechoRe** is an actively maintained Fork of [Typecho](https://github.com/typecho/typecho) — a PHP-based blogging software.
+**TypechoRe** 是 [Typecho](https://github.com/typecho/typecho) 的积极维护 Fork 版本 —— 一款基于 PHP 的博客程序。
 
-## Main Features
+## 主要特性
 
-* Multiple databases support (MariaDB, MySQL, SQLite, PostgreSQL)
-* Markdown Support
-* Plugin Support
-* Theme Support
-* Custom Fields
-* Custom Pages
+* 支持多种数据库（MariaDB、MySQL、SQLite、PostgreSQL）
+* Markdown 支持
+* 插件支持
+* 主题支持
+* 自定义字段
+* 自定义页面
 
-## Requirements
+## 环境要求
 
-* PHP 8.5 or higher
-* Database (MariaDB, MySQL, SQLite, PostgreSQL)
-  * MariaDB or MySQL 5.5.3 or higher
-  * SQLite 3.7.11 or higher
-  * PostgreSQL 9.1 or higher
+* PHP 8.5 或更高
+* 数据库（MariaDB、MySQL、SQLite、PostgreSQL）
+  * MariaDB 或 MySQL 5.5.3 或更高
+  * SQLite 3.7.11 或更高
+  * PostgreSQL 9.1 或更高
 
-## Contributing
+## 文档
 
-Report issues at https://github.com/Raven777777/MoeCounterRe/issues
+文档位于 [`docs/`](docs/)，来源：https://github.com/benzBrake/typecho-docs ，并已根据本仓库代码现状核验更新。
+
+## 反馈问题
+
+请在 https://github.com/Raven777777/TypechoRe/issues 提交 Issue。

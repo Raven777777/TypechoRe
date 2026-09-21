@@ -4,7 +4,7 @@
  *
  * @package Typecho Replica Theme
  * @author Typecho Team
- * @version 1.3.0
+ * @version 1.2
  * @link http://typecho.org
  */
 
