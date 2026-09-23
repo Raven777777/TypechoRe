@@ -170,6 +170,12 @@ function tagCloudRender(\Widget\Options $options)
     if (false === $itemsJson) {
         return;
     }
+
+    /** 标签集合指纹，用于跨页面恢复标签云状态时校验是否同一批标签 */
+    $signature = md5(implode('|', array_map(function ($tag) {
+        return $tag['name'] . ':' . $tag['count'];
+    }, $tags)));
+
     $jsUrl = $options->themeUrl('js/TagCloud.min.js', $options->theme);
     $wrapId = 'theme-tagcloud-wrap';
     ?>
@@ -177,28 +183,89 @@ function tagCloudRender(\Widget\Options $options)
         <h3 class="widget-title"><?php _e('标签云'); ?></h3>
         <div class="tagcloud-wrap" id="<?php echo $wrapId; ?>"></div>
     </section>
-    <style type="text/css">
-        .tagcloud-wrap { position: relative; width: 100%; height: 218px; margin: 0; overflow: hidden;
-            -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
-        .tagcloud-wrap .tagcloud { position: relative; width: 100%; height: 100%; }
-        .tagcloud-wrap .tagcloud--item { cursor: pointer; }
-        .tagcloud-wrap .tagcloud--item a { color: #3354AA; text-decoration: none; transition: color .2s ease-in-out;
-            -webkit-user-drag: none; user-drag: none; }
-        .tagcloud-wrap .tagcloud--item a:hover { color: #444; }
-    </style>
     <script type="text/javascript" src="<?php echo htmlspecialchars($jsUrl, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <script type="text/javascript">
         (function () {
             var wrap = document.getElementById('<?php echo $wrapId; ?>');
             var items = <?php echo $itemsJson; ?>;
+            var signature = <?php echo json_encode($signature); ?>;
+            var STORAGE_KEY = 'typecho-tagcloud-state';
             var instance = null;
 
             if (!wrap || !items.length || !window.TagCloud) {
                 return;
             }
 
+            function readState() {
+                try {
+                    var raw = window.sessionStorage.getItem(STORAGE_KEY);
+                    if (!raw) {
+                        return null;
+                    }
+                    var state = JSON.parse(raw);
+                    if (!state || state.signature !== signature) {
+                        return null;
+                    }
+                    if (!state.items || state.items.length !== items.length) {
+                        return null;
+                    }
+                    return state;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function writeState() {
+                if (!instance || !instance.items) {
+                    return;
+                }
+                var state = {
+                    signature: signature,
+                    items: instance.items.map(function (item) {
+                        return [item.x, item.y, item.z];
+                    }),
+                    mouseX: instance.mouseX,
+                    mouseY: instance.mouseY
+                };
+                try {
+                    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                } catch (e) {
+                }
+            }
+
+            function restore(state) {
+                if (!state) {
+                    return;
+                }
+                instance.items.forEach(function (item, i) {
+                    var pos = state.items[i];
+                    if (!pos) {
+                        return;
+                    }
+                    item.x = pos[0];
+                    item.y = pos[1];
+                    item.z = pos[2];
+                });
+                if (typeof state.mouseX === 'number') {
+                    instance.mouseX = state.mouseX;
+                }
+                if (typeof state.mouseY === 'number') {
+                    instance.mouseY = state.mouseY;
+                }
+            }
+
             function build() {
+                var w = wrap.clientWidth;
+                var h = wrap.clientHeight;
+                var radius = Math.max(90, Math.min(260, Math.floor(Math.min(w, h) / 1.8)));
+
+                /** 半径未变化时无需重建，避免重复注册动画帧与鼠标事件 */
+                if (instance && instance.radius === radius) {
+                    return;
+                }
+
                 if (instance) {
+                    writeState();
                     if (instance.pause) {
                         instance.pause();
                     }
@@ -206,10 +273,6 @@ function tagCloudRender(\Widget\Options $options)
                         instance.destroy();
                     }
                 }
-
-                var w = wrap.clientWidth;
-                var h = wrap.clientHeight;
-                var radius = Math.max(90, Math.min(260, Math.floor(Math.min(w, h) / 1.8)));
 
                 instance = window.TagCloud('#<?php echo $wrapId; ?>', items, {
                     radius: radius,
@@ -222,9 +285,22 @@ function tagCloudRender(\Widget\Options $options)
                     containerClass: 'tagcloud',
                     itemClass: 'tagcloud--item'
                 });
+
+                restore(readState());
+                if (instance && instance._next) {
+                    instance._next();
+                }
             }
 
             build();
+
+            window.setInterval(writeState, 1000);
+            window.addEventListener('pagehide', writeState);
+            document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'hidden') {
+                    writeState();
+                }
+            });
 
             var timer = null;
             window.addEventListener('resize', function () {

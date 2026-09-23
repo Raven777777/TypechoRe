@@ -150,3 +150,18 @@ CREATE TABLE `typecho_users` (
   UNIQUE KEY `name` (`name`),
   UNIQUE KEY `mail` (`mail`)
 ) ENGINE=%engine%  DEFAULT CHARSET=%charset%;
+
+CREATE TABLE `typecho_passkeys` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `uid` int(10) unsigned NOT NULL,
+  `credential_id` varchar(512) NOT NULL,
+  `public_key` text NOT NULL,
+  `sign_count` int(10) unsigned NOT NULL default '0',
+  `transports` varchar(255) NOT NULL default '',
+  `name` varchar(100) NOT NULL,
+  `created` int(10) unsigned NOT NULL,
+  `last_used` int(10) unsigned NOT NULL default '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `credential_id` (`credential_id`),
+  KEY `uid` (`uid`)
+) ENGINE=%engine% DEFAULT CHARSET=%charset%;

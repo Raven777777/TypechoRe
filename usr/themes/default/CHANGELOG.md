@@ -2,6 +2,28 @@
 
 本主题基于 Typecho 默认主题（Typecho Replica Theme）修改，以下仅记录本 Fork 的改动。
 
+## 1.3.1（2026-09-22）
+
+### 修复
+
+- 标签云在页面刷新或跳转后从初始朝向重新开始，出现跳闪、不连贯：改为将每个标签的 3D 坐标与鼠标偏移写入 `sessionStorage`，初始化时同步恢复后再绘制，使同一标签页内的旋转保持连续。
+  - 以「标签名 + 文章数」的 md5 作为指纹，仅在同一批标签时才恢复，避免标签变化后位置错乱。
+- 标签云长标签文本被容器尺寸裁切：`.tagcloud-wrap` 改为 `overflow: visible`，并为标签项设置 `white-space: nowrap`，长文本不再被截断。
+
+### 优化
+
+- 标签云仅在容器半径变化时才重建，避免窗口缩放时反复重建（原库 `destroy()` 不回收动画帧与 `window` 鼠标监听，会累积泄漏）。
+- 移除标签云多余的 `beforeunload` 监听（`pagehide` 与 `visibilitychange` 已覆盖），避免影响 bfcache。
+- 标签云样式由 `functions.php` 内联 `<style>` 迁移至 `style.css`，便于浏览器缓存。
+- `style.css`：删除重复的 `.post-content { line-height: 1.5; }` 与空的 `@media (min-width: 992px) {}`。
+- `index.php`：简化 `if` 条件中多余的括号。
+
+### 变更
+
+- `functions.php`：`tagCloudRender()` 增加标签云状态持久化脚本，并移除内联样式。
+- `style.css`：新增 `/* Tag cloud */` 样式段。
+- `index.php`：版本号更新为 `1.3.1`。
+
 ## 1.3.0（2026-09-21）
 
 ### 新增

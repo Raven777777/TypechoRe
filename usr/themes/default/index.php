@@ -4,7 +4,7 @@
  *
  * @package Typecho Replica Theme
  * @author Typecho Team
- * @version 1.3.0
+ * @version 1.3.1
  * @link http://typecho.org
  */
 
@@ -13,7 +13,7 @@ $this->need('header.php');
 ?>
 
 <div class="col-mb-12 col-8" id="main" role="main">
-    <?php if (!($this->is('index')) && !($this->is('post'))): ?>
+    <?php if (!$this->is('index') && !$this->is('post')): ?>
     <h3 class="archive-title"><?php $this->archiveTitle([
             'category' => _t('分类 %s 下的文章'),
             'search'   => _t('包含关键字 %s 的文章'),

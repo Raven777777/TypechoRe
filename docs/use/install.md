@@ -8,6 +8,19 @@
 - `curl` 扩展为可选，仅在需要程序主动发起外部 HTTP 请求（如远程插件/升级检查等）时使用
 
 > 安装向导会自动检测上述环境依赖，不符合时会在页面顶部给出提示。
+>
+> 使用 Passkey/WebAuthn 还需要 `openssl`、`mbstring`、`sodium` 和 `session` 扩展。Passkey 需要 HTTPS（`localhost` 除外）。
+
+### 数据库兼容性
+
+TypechoRe 是独立于原版 Typecho 的 Fork。由于 TypechoRe 修改了密码与 authCode 存储方式、增加了 `typecho_passkeys` 表，并调整了部分核心行为，TypechoRe 数据库不再保证与原版 Typecho 相通。
+
+请注意：
+
+- 不要让原版 Typecho 和 TypechoRe 同时连接同一个生产数据库
+- 使用 TypechoRe 前先备份原数据库
+- 数据库迁移后不要直接用原版 Typecho 回滚运行
+- Passkey 私钥不会进入数据库，数据库只保存 credential ID 和公钥
 
 ### 下载最新版
 请访问 https://github.com/Raven777777/TypechoRe/releases 获得最新的稳定版本，并下载。

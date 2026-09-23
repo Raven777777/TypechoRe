@@ -128,3 +128,17 @@ CREATE TABLE "typecho_users" (  "uid" INT NOT NULL DEFAULT nextval('typecho_user
   UNIQUE ("name"),
   UNIQUE ("mail")
 );
+
+CREATE SEQUENCE "typecho_passkeys_seq";
+CREATE TABLE "typecho_passkeys" (
+  "id" INT NOT NULL DEFAULT nextval('typecho_passkeys_seq'),
+  "uid" INT NOT NULL,
+  "credential_id" VARCHAR(512) NOT NULL UNIQUE,
+  "public_key" TEXT NOT NULL,
+  "sign_count" INT NOT NULL DEFAULT 0,
+  "transports" VARCHAR(255) NOT NULL DEFAULT '',
+  "name" VARCHAR(100) NOT NULL,
+  "created" INT NOT NULL,
+  "last_used" INT NOT NULL DEFAULT 0,
+  PRIMARY KEY ("id")
+);

@@ -85,3 +85,16 @@ CREATE TABLE typecho_users ( "uid" INTEGER NOT NULL PRIMARY KEY,
 
 CREATE UNIQUE INDEX typecho_users_name ON typecho_users ("name");
 CREATE UNIQUE INDEX typecho_users_mail ON typecho_users ("mail");
+
+CREATE TABLE typecho_passkeys (
+"id" INTEGER PRIMARY KEY AUTOINCREMENT,
+"uid" INTEGER NOT NULL,
+"credential_id" varchar(512) NOT NULL UNIQUE,
+"public_key" text NOT NULL,
+"sign_count" int(10) NOT NULL DEFAULT 0,
+"transports" varchar(255) NOT NULL DEFAULT '',
+"name" varchar(100) NOT NULL,
+"created" int(10) NOT NULL,
+"last_used" int(10) NOT NULL DEFAULT 0
+);
+CREATE INDEX typecho_passkeys_uid ON typecho_passkeys ("uid");

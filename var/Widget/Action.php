@@ -44,7 +44,8 @@ class Action extends Widget
         'themes-edit'              => '\Widget\Themes\Edit',
         'users-edit'               => '\Widget\Users\Edit',
         'users-profile'            => '\Widget\Users\Profile',
-        'backup'                   => '\Widget\Backup'
+        'backup'                   => '\Widget\Backup',
+        'passkey'                  => '\Widget\Passkey'
     ];
 
     /**

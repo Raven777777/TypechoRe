@@ -206,9 +206,6 @@ textarea {
   padding-left: 0;
   border: none;
 }
-.post-content {
-  line-height: 1.5;
-}
 .post .tags {
   clear: both;
 }
@@ -357,6 +354,38 @@ textarea {
   margin-left: 15px;
 }
 
+/* Tag cloud */
+.tagcloud-wrap {
+  position: relative;
+  width: 100%;
+  height: 218px;
+  margin: 0;
+  overflow: visible;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+.tagcloud-wrap .tagcloud {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.tagcloud-wrap .tagcloud--item {
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tagcloud-wrap .tagcloud--item a {
+  color: #3354AA;
+  text-decoration: none;
+  transition: color .2s ease-in-out;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+.tagcloud-wrap .tagcloud--item a:hover {
+  color: #444;
+}
+
 
 /* ------------------
  * Footer 
@@ -448,10 +477,6 @@ img.alignright {
   .post-meta {
     text-align: center;
   }
-}
-
-@media (min-width: 992px) {
-
 }
 
 @media (min-width: 1200px) {

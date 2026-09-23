@@ -1453,10 +1453,12 @@ EOF;
         //不依赖js的父级评论
         $reply = $this->request->filter('int')->get('replyTo');
         if ($reply && $this->is('single')) {
-            $commentUrl .= '?parent=' . $reply;
+            $commentUrl .= (false === strpos($commentUrl, '?') ? '?' : '&') . 'parent=' . $reply;
         }
 
-        return $commentUrl;
+        // 评论接口启用 Security::protect() 时必须携带 CSRF token。
+        // 将 token 放在表单 action 中，避免普通主题提交评论时被静默退回。
+        return $this->security->getTokenUrl($commentUrl);
     }
 
     /**

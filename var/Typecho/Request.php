@@ -405,14 +405,6 @@ class Request
                 // XFF 形如 "client, proxy1, proxy2": 自右向左跳过可信代理,
                 // 第一个不可信地址才是真实客户端
                 $ip = self::firstUntrustedIp($forwarded, $trusted);
-            } elseif (empty($trusted)) {
-                // 未配置可信代理: 保持原有行为 (取最左侧), 但跳过非法片段
-                foreach (explode(',', $forwarded) as $candidate) {
-                    $ip = self::normalizeIp($candidate);
-                    if (null !== $ip) {
-                        break;
-                    }
-                }
             }
 
             if (null === $ip) {
