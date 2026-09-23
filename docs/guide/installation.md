@@ -41,7 +41,7 @@ TypechoRe 是独立于原版 Typecho 的 Fork。由于 TypechoRe 修改了密码
 
 ### 访问你的blog地址
 上传完毕后使用浏览器直接访问安装目录即可看到`TypechoRe`的安装程序。恭喜，你的服务器可以完美支持`TypechoRe`，点击进入下一步。
-![typecho](../img/700x618.png)
+![typecho](../../img/700x618.png)
 
 ### 填写配置信息
 按照程序安装向导的要求填写相关服务器参数和初始化设置信息，完成后点击下一步。

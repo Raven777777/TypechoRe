@@ -17,7 +17,7 @@
 ### 1. 文件结构
 
 ```
-usr/plugins/TagToText
+usr/plugins/tag-to-text
         |
         |—— Plugin.php    插件核心文件（单文件，无额外静态资源）
 ```
@@ -38,7 +38,7 @@ class Plugin implements PluginInterface
 4. 进入「撰写文章」页面，标签输入框下方即出现「选择标签」按钮与面板。
 
 > 若修改设置后未生效，可先禁用再重新启用一次（会重建配置数据），或参见
-> [插件配置保存的那些坑](/plugins/插件配置保存的那些坑)。
+> [插件配置保存的那些坑](/plugins/config-persistence)。
 
 ## 三、配置项说明
 
@@ -131,7 +131,7 @@ input.trigger('change');                            // 通知表单：内容已�
 **Q：设置里勾选了却保存不住？**
 
 这是本分支 `Typecho\Request::get()` 的类型匹配规则导致的（多选框提交的是数组，而默认值由当前保存值推导）。插件已通过 `configHandle()` 自行接管写入来规避，详见
-[插件配置保存的那些坑](/plugins/插件配置保存的那些坑)。
+[插件配置保存的那些坑](/plugins/config-persistence)。
 
 **Q：可以改样式吗？**
 
