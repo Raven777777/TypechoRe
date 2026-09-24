@@ -3,6 +3,7 @@
   * [程序安装](/guide/installation)
   * [部署与恢复](/guide/deployment)
   * [Passkey / WebAuthn](/guide/passkey)
+  * [标签速选面板](/guide/tag-picker)
   * [常见问题](/guide/faq)
   * [代码质量与 PHP 8.5](/guide/quality)
 * [主题文档](/)
@@ -36,5 +37,4 @@
   * [插件基本结构](/plugins/plugin-structure)
   * [Hello World 插件](/plugins/hello-world)
   * [插件接口与 Hooks](/plugins/hooks)
-  * [标签速选 TagToText](/plugins/tag-to-text)
   * [插件配置保存](/plugins/config-persistence)

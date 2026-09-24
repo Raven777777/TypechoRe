@@ -147,7 +147,6 @@ SQLite 适配器已经完成实际测试，包括安装、文章、评论、上�
 - `var/Widget/Upload.php`
 - `var/Widget/Feedback.php`
 - `var/Widget/Action/Sitemap.php`
-- `usr/plugins/tag-to-text/Plugin.php`
 - `usr/plugins/ItWasBadXD/Plugin.php`
 
 未发现明显的任意命令执行、动态 PHP 执行、无保护的危险反序列化或任意扩展名上传问题。

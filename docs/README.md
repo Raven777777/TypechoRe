@@ -8,7 +8,7 @@
 
 ```text
 docs/
-├── guide/       安装、部署、Passkey、质量检查
+├── guide/       安装、部署、Passkey、标签速选、质量检查
 ├── themes/      主题和模板扩展（README.md 为入口）
 ├── api/         API、模板函数和数据库参考
 ├── plugins/     插件开发与项目插件说明
