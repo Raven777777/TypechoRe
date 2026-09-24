@@ -61,8 +61,44 @@ include 'menu.php';
                 </form>
 
             </div>
-            <div class="col-mb-12 col-tb-4" role="form">
+            <div class="col-mb-12 col-tb-4" role="complementary">
                 <?php \Widget\Metas\Tag\Edit::alloc()->form()->render(); ?>
+
+                <section class="typecho-option tag-picker-settings">
+                    <form method="post" name="tag-picker-settings"
+                          action="<?php $security->index('/action/tag-picker'); ?>">
+                        <?php $tagPicker = \Widget\Options\TagPicker::config(); ?>
+                        <ul>
+                            <li class="typecho-option">
+                                <label class="typecho-label"><?php _e('速选面板设置'); ?></label>
+                            </li>
+                            <li class="typecho-option">
+                                <label class="typecho-label"><?php _e('排序方式'); ?></label>
+                                <select name="sort">
+                                    <option value="count"<?php if ('count' == $tagPicker['sort']): ?> selected<?php endif; ?>><?php _e('按文章数量（由多到少）'); ?></option>
+                                    <option value="name"<?php if ('name' == $tagPicker['sort']): ?> selected<?php endif; ?>><?php _e('按标签名称'); ?></option>
+                                </select>
+                            </li>
+                            <li class="typecho-option">
+                                <label class="typecho-label"><?php _e('载入的标签数量'); ?></label>
+                                <input type="number" name="limit" value="<?php echo $tagPicker['limit']; ?>"
+                                       class="text-s num" min="0" max="1000"/>
+                                <p class="description"><?php _e('填写 0 表示载入全部标签'); ?></p>
+                            </li>
+                            <li class="typecho-option">
+                                <label><input type="checkbox" name="ignoreZeroCount[]" value="1"
+                                    <?php if ($tagPicker['ignoreZeroCount']): ?>checked<?php endif; ?>/> <?php _e('隐藏没有被任何文章使用的标签'); ?></label>
+                            </li>
+                            <li class="typecho-option">
+                                <label><input type="checkbox" name="showCount[]" value="1"
+                                    <?php if ($tagPicker['showCount']): ?>checked<?php endif; ?>/> <?php _e('在标签后面显示关联的文章数量'); ?></label>
+                            </li>
+                            <li class="typecho-option">
+                                <button type="submit" class="btn primary"><?php _e('保存设置'); ?></button>
+                            </li>
+                        </ul>
+                    </form>
+                </section>
             </div>
         </div>
     </div>

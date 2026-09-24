@@ -40,6 +40,7 @@ class Action extends Widget
         'options-general'          => '\Widget\Options\General',
         'options-permalink'        => '\Widget\Options\Permalink',
         'options-reading'          => '\Widget\Options\Reading',
+        'tag-picker'               => '\Widget\Options\TagPicker',
         'plugins-edit'             => '\Widget\Plugins\Edit',
         'themes-edit'              => '\Widget\Themes\Edit',
         'users-edit'               => '\Widget\Users\Edit',

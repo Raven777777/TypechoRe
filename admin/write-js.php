@@ -1,9 +1,7 @@
 <?php if(!defined('__TYPECHO_ADMIN__')) exit; ?>
 <?php \Typecho\Plugin::factory('admin/write-js.php')->call('write'); ?>
-<?php \Widget\Metas\Tag\Cloud::alloc('sort=count&desc=1&limit=200')->to($tags); ?>
 
 <script src="<?php $options->adminStaticUrl('js', 'timepicker.js'); ?>"></script>
-<script src="<?php $options->adminStaticUrl('js', 'tokeninput.js'); ?>"></script>
 <script>
 $(document).ready(function() {
     // 日期时间控件
@@ -41,72 +39,166 @@ $(document).ready(function() {
     // text 自动拉伸
     Typecho.editorResize('text', '<?php $security->index('/action/ajax?do=editorResize'); ?>');
 
-    // tag autocomplete 提示
-    const tags = $('#tags'), tagsPre = [];
-    
-    if (tags.length > 0) {
-        const items = tags.val().split(',');
-        for (let i = 0; i < items.length; i ++) {
-            const tag = items[i];
+    // 标签速选面板
+    const picker = $('#tag-picker');
 
-            if (!tag) {
-                continue;
-            }
+    if (picker.length > 0) {
+        const hidden = $('#tags'),
+            search = $('#tag-search'),
+            cloud = $('.tag-picker-cloud', picker),
+            emptyText = '<?php _e('没有匹配的标签, 回车创建'); ?>';
 
-            tagsPre.push({
-                id      :   tag,
-                tags    :   tag
+        const sanitize = function (v) {
+            // 逗号是隐藏字段的分隔符, 名称内不允许出现; 同时剥离 HTML 特殊字符
+            return String(v).replace(/[,，]/g, '').replace(/[<>&"']/g, '').replace(/^\s+|\s+$/g, '');
+        };
+
+        const current = function () {
+            return (hidden.val() || '').split(/[,，]/).map(function (s) {
+                return s.replace(/^\s+|\s+$/g, '');
+            }).filter(function (s) {
+                return s;
             });
-        }
+        };
 
-        tags.tokenInput(<?php 
-        $data = array();
-        while ($tags->next()) {
-            $data[] = array(
-                'id'    =>  $tags->name,
-                'tags'  =>  $tags->name
-            );
-        }
-        echo json_encode($data);
-        ?>, {
-            propertyToSearch:   'tags',
-            tokenValue      :   'tags',
-            searchDelay     :   0,
-            preventDuplicates   :   true,
-            animateDropdown :   false,
-            hintText        :   '<?php _e('请输入标签名'); ?>',
-            noResultsText   :   '<?php _e('此标签不存在, 按回车创建'); ?>',
-            prePopulate     :   tagsPre,
+        const render = function () {
+            const items = current();
 
-            onResult        :   function (result, query, val) {
-                // remove special chars
-                val = val.replace(/<|>|&|"|'/g, '');
+            cloud.children('.tag-picker-item').each(function () {
+                $(this).toggleClass('tag-picker-active', $.inArray($(this).attr('data-name'), items) > -1);
+            });
+        };
 
-                if (!query) {
-                    return result;
+        const add = function (name) {
+            const items = current();
+            if ($.inArray(name, items) < 0) {
+                items.push(name);
+                hidden.val(items.join(','));
+                ensureCloudItem(name);
+                render();
+            }
+        };
+
+        const remove = function (name) {
+            const items = $.grep(current(), function (n) {
+                return n !== name;
+            });
+            hidden.val(items.join(','));
+            render();
+        };
+
+        const ensureCloudItem = function (name) {
+            if (cloud.children('.tag-picker-item[data-name="' + $.escapeSelector(name) + '"]').length < 1) {
+                const item = $('<button type="button" class="tag-picker-item tag-picker-new"></button>')
+                    .attr('data-name', name).text(name);
+                const empty = $('.tag-picker-empty', cloud);
+
+                if (empty.length > 0) {
+                    empty.before(item);
+                } else {
+                    cloud.append(item);
+                }
+            }
+        };
+
+        const filter = function () {
+            const key = (search.val() || '').toLowerCase(),
+                empty = $('.tag-picker-empty', picker);
+            let shown = 0;
+
+            cloud.children('.tag-picker-item').each(function () {
+                const match = !key || $(this).attr('data-name').toLowerCase().indexOf(key) > -1;
+
+                $(this).toggle(match);
+                if (match) shown++;
+            });
+
+            if (empty.length < 1) {
+                cloud.append($('<span class="tag-picker-empty"></span>').text(emptyText));
+            }
+
+            empty.toggle(shown < 1);
+        };
+
+        const toggle = function (name) {
+            if ($.inArray(name, current()) > -1) {
+                remove(name);
+            } else {
+                add(name);
+            }
+        };
+
+        cloud.on('click', '.tag-picker-item', function (e) {
+            e.preventDefault();
+            toggle($(this).attr('data-name'));
+        });
+
+        $('#tag-clear').click(function (e) {
+            e.preventDefault();
+            hidden.val('');
+            render();
+        });
+
+        search.on('input', filter).on('keydown', function (e) {
+            // 中文输入法组合中的回车是确认候选词, 不应触发选签/新建
+            if (e.originalEvent && e.originalEvent.isComposing) {
+                return;
+            }
+
+            if (13 === e.keyCode || 188 === e.keyCode) {
+                e.preventDefault();
+
+                // 输入中含逗号时视为批量提交
+                const names = search.val().split(/[,，]/).map(function (v) {
+                    return sanitize(v);
+                }).filter(function (v) {
+                    return v;
+                });
+
+                if (names.length > 1) {
+                    names.forEach(add);
+                    search.val('');
+                    filter();
+                    return;
                 }
 
-                if (!result) {
-                    result = [];
+                const exact = cloud.children(
+                    '.tag-picker-item[data-name="' + $.escapeSelector(names[0] || '\u0000') + '"]:visible');
+
+                if (exact.length > 0) {
+                    toggle(exact.attr('data-name'));
+                } else {
+                    const first = cloud.children('.tag-picker-item:visible').first();
+
+                    if (first.length > 0 && !search.val()) {
+                        toggle(first.attr('data-name'));
+                    } else {
+                        const name = sanitize(search.val());
+                        if (name) {
+                            add(name);
+                        }
+                    }
                 }
 
-                if (!result[0] || result[0]['id'] !== query) {
-                    result.unshift({
-                        id      :   val,
-                        tags    :   val
-                    });
+                search.val('');
+                filter();
+            } else if (8 === e.keyCode && !search.val()) {
+                const items = current();
+                if (items.length > 0) {
+                    remove(items[items.length - 1]);
                 }
-
-                return result.slice(0, 5);
+            } else if (27 === e.keyCode) {
+                search.val('');
+                filter();
             }
         });
 
-        // tag autocomplete 提示宽度设置
-        $('#token-input-tags').focus(function() {
-            const t = $('.token-input-dropdown'),
-                offset = t.outerWidth() - t.width();
-            t.width($('.token-input-list').outerWidth() - offset);
-        });
+        if (cloud.children('.tag-picker-empty').length < 1) {
+            cloud.append($('<span class="tag-picker-empty"></span>').text(emptyText));
+        }
+
+        render();
+        filter();
     }
 
     // 缩略名自适应宽度

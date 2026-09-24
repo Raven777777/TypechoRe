@@ -86,6 +86,11 @@ usr/plugins/Sticky/Plugin.php
 class "Sticky_Plugin" not found
 ```
 
+注意：`TagToText` 插件自 TypechoRe 起已整合进核心
+（撰写页标签速选面板，设置在「管理 → 标签」右侧栏）。
+升级前请先在后台停用并删除该插件，否则会出现插件记录
+指向不存在目录的错误。
+
 恢复数据库或更换代码包后，应检查激活插件和实际插件目录是否一致。
 
 ## 数据库兼容性警告

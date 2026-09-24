@@ -111,9 +111,32 @@ $post = \Widget\Contents\Post\Edit::alloc()->prepare();
                     </section>
 
                     <section class="typecho-post-option">
-                        <label for="token-input-tags" class="typecho-label"><?php _e('标签'); ?></label>
-                        <p><input id="tags" name="tags" type="text" value="<?php $post->have() ? $post->tags(',', false) : ''; ?>"
-                                  class="w-100 text"/></p>
+                        <label for="tag-search" class="typecho-label"><?php _e('标签'); ?></label>
+                        <?php
+                        $tagPicker = \Widget\Options\TagPicker::config();
+                        $tagCloud = \Widget\Metas\Tag\Cloud::alloc(
+                            'sort=' . $tagPicker['sort']
+                            . '&desc=' . ('count' == $tagPicker['sort'] ? 1 : 0)
+                            . '&limit=' . $tagPicker['limit']
+                            . '&ignoreZeroCount=' . $tagPicker['ignoreZeroCount']
+                        );
+                        ?>
+                        <div id="tag-picker" class="tag-picker" data-show-count="<?php echo $tagPicker['showCount']; ?>">
+                            <input id="tags" name="tags" type="hidden"
+                                   value="<?php echo htmlspecialchars($post->have() ? implode(',', array_column($post->tags, 'name')) : '', ENT_QUOTES); ?>"/>
+                            <div class="tag-picker-bar">
+                                <input type="text" id="tag-search" class="tag-picker-input" autocomplete="off"
+                                       placeholder="<?php _e('搜索或输入新标签, 回车确认'); ?>"/>
+                                <button type="button" id="tag-clear" class="tag-picker-clear"><?php _e('清空'); ?></button>
+                            </div>
+                            <div class="tag-picker-cloud">
+                                <?php while ($tagCloud->next()): ?>
+                                    <button type="button" class="tag-picker-item"
+                                            data-name="<?php echo htmlspecialchars($tagCloud->name, ENT_QUOTES); ?>"><?php echo htmlspecialchars($tagCloud->name, ENT_QUOTES); ?><?php if ($tagPicker['showCount']): ?><span
+                                            class="tag-picker-num"><?php $tagCloud->count(); ?></span><?php endif; ?></button>
+                                <?php endwhile; ?>
+                            </div>
+                        </div>
                     </section>
 
                     <?php \Typecho\Plugin::factory('admin/write-post.php')->call('option', $post); ?>
