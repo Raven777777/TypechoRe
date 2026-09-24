@@ -1,2 +1,15 @@
 php-8.5.10
 php-docs
+
+# 数据库凭据 (含密钥路径等敏感配置, 安装时生成)
+config.inc.php
+
+# SQLite 数据库文件 (含用户哈希与全部内容, 安装时生成)
+usr/*.db
+
+# 运行日志
+*.log
+
+# 系统与编辑器杂项
+Thumbs.db
+.DS_Store
