@@ -122,37 +122,45 @@ ALTER TABLE "typecho_users" ALTER COLUMN "authCode" TYPE varchar(128);
 
 执行后重新登录一次，所有会话凭证即切换为新格式。
 
-## SQLite 数据库文件保护
+## 敏感文件保护
 
-SQLite 数据库文件默认位于 `usr/` (web 根目录内), 文件名由安装器生成为
-128 位随机串, 但文件名保密不作为安全边界。务必在 Web 服务器层拒绝静态
-服务 `.db` 文件:
+### 为什么需要
 
-**Nginx:**
+`config.inc.php` 含数据库路径与站点密钥, SQLite 数据库文件含全部用户
+数据。两者的正常防线不同:
+
+- `config.inc.php` 依赖 PHP 正确执行且无输出; 一旦 PHP handler 配置
+  事故 (如 FPM 未启动、扩展名误映射), 会被当作静态文件原样返回
+- SQLite 数据库文件名虽为 128 位随机串, 但文件名保密不作为安全边界
+
+两者都应在 Web 服务器层硬拒绝, 不依赖 PHP 行为或文件名保密。
+
+### Nginx
 
 ```nginx
-# server {} 或 http {} 块内
-location ~* \.(db|sql)$ {
-    deny all;
-}
+# server {} 块内
+location = /config.inc.php { deny all; }
+location ~* \.(db|sql)$    { deny all; }
 ```
 
-**Apache:**
+### Apache
 
 ```apache
 # .htaccess 或 vhost 配置
-<FilesMatch "\.(db|sql)$">
+<FilesMatch "(config\.inc\.php|\.(db|sql))$">
     Require all denied
 </FilesMatch>
 ```
 
-**IIS:**
+### IIS
 
-发布包自带的 `web.config` 已包含 `.db` / `.sql` 扩展名拒绝规则,
-无需额外配置。
+发布包自带的 `web.config` 已包含 `.db` / `.sql` 扩展名拒绝规则与
+`config.inc.php` URL 序列拒绝, 无需额外配置。
 
-根治方案是将数据库文件移出 web 根目录 (修改 `config.inc.php` 中的
-`file` 路径), 但部分主机环境对上层目录没有写权限, 因此默认保持
+### 根治方案
+
+将数据库文件移出 web 根目录 (修改 `config.inc.php` 中的 `file` 路径)
+是根治方案, 但部分主机环境对上层目录没有写权限, 因此默认保持
 `usr/` 内随机名 + 服务器层拒绝的组合方案。
 
 ## SQLite 数据库检查

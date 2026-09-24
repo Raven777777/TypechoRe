@@ -1,0 +1,87 @@
+# 搜索引擎欢迎抓取; AI 训练爬虫全部禁止
+
+# 站内私有路径 (对一切爬虫生效)
+User-agent: *
+Disallow: /admin/
+Disallow: /install/
+Disallow: /config.inc.php
+Disallow: /var/
+
+# OpenAI (GPT 训练)
+User-agent: GPTBot
+Disallow: /
+
+# OpenAI 网站爬取 (ChatGPT 检索/训练)
+User-agent: OAI-SearchBot
+Disallow: /
+
+# Common Crawl (AI 训练语料主要来源)
+User-agent: CCBot
+Disallow: /
+
+# Anthropic (Claude 训练)
+User-agent: ClaudeBot
+Disallow: /
+
+# Anthropic 沙盒/评估
+User-agent: Claude-User
+Disallow: /
+
+# Google (Gemini 训练)
+User-agent: Google-Extended
+Disallow: /
+
+# Google 其他 AI 用途 (NotebookLM 等)
+User-agent: Google-Extended-Other
+Disallow: /
+
+# Apple (Apple Intelligence 训练)
+User-agent: Applebot-Extended
+Disallow: /
+
+# Meta (Llama 训练)
+User-agent: meta-externalagent
+Disallow: /
+
+# Meta 历史训练爬虫
+User-agent: FacebookBot
+Disallow: /
+
+# Amazon (Alexa/AWS 训练)
+User-agent: Amazonbot
+Disallow: /
+
+# ByteDance (字节跳动 AI 训练)
+User-agent: Bytespider
+Disallow: /
+
+# Perplexity (AI 搜索索引)
+User-agent: PerplexityBot
+Disallow: /
+
+# Perplexity 网页浏览
+User-agent: Perplexity-User
+Disallow: /
+
+# You.com
+User-agent: YouBot
+Disallow: /
+
+# Cohere
+User-agent: cohere-ai
+Disallow: /
+
+# Diffbot (知识图谱/训练)
+User-agent: Diffbot
+Disallow: /
+
+# Omgili (论坛语料, 常被 AI 训练采用)
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: Omgili
+Disallow: /
+
+# Hive (图像语料)
+User-agent: ImagesiftBot
+Disallow: /
