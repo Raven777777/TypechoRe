@@ -145,7 +145,7 @@ CREATE TABLE `typecho_users` (
   `activated` int(10) unsigned default '0',
   `logged` int(10) unsigned default '0',
   `group` varchar(16) default 'visitor',
-  `authCode` varchar(64) default NULL,
+  `authCode` varchar(128) default NULL,
   PRIMARY KEY  (`uid`),
   UNIQUE KEY `name` (`name`),
   UNIQUE KEY `mail` (`mail`)

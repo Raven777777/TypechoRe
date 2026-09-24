@@ -91,7 +91,8 @@ class Client
         }
 
         try {
-            $client->setHeader('Content-Type', 'text/xml')
+            $client->setSafeHost(true)
+                ->setHeader('Content-Type', 'text/xml')
                 ->setHeader('User-Agent', self::DEFAULT_USERAGENT)
                 ->setData($xml)
                 ->send($this->url);

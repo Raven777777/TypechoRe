@@ -85,6 +85,7 @@ class Service extends BaseOptions implements ActionInterface
 
                 if ($spider) {
                     $spider->setTimeout(10)
+                        ->setSafeHost(true)
                         ->send($url);
 
                     if (!($xmlrpcUrl = $spider->getResponseHeader('x-pingback'))) {
@@ -127,6 +128,7 @@ class Service extends BaseOptions implements ActionInterface
                 if ($client) {
                     try {
                         $client->setTimeout(5)
+                            ->setSafeHost(true)
                             ->setData([
                                 'blog_name' => $this->options->title . ' &raquo ' . $title,
                                 'url' => $permalink,

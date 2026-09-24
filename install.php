@@ -345,6 +345,27 @@ function install_get_db_type(string $driver): string
  *
  * @return array
  */
+/**
+ * 生成 SQLite 数据库随机文件名
+ *
+ * 128 位 [0-9a-zA-Z] 随机串 (CSPRNG), 使 web 根目录内的数据库文件
+ * 无法被猜解或枚举。文件名不作为安全边界, 仅作为纵深防御。
+ *
+ * @return string
+ */
+function install_random_db_name(): string
+{
+    $charset = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $max = strlen($charset) - 1;
+    $name = '';
+
+    for ($i = 0; $i < 128; $i++) {
+        $name .= $charset[random_int(0, $max)];
+    }
+
+    return $name;
+}
+
 function install_get_db_drivers(): array
 {
     $drivers = [];
@@ -959,7 +980,7 @@ function install_step_2_perform()
             'dbSslVerify' => 'off',
         ],
         'SQLite' => [
-            'dbFile' => __TYPECHO_ROOT_DIR__ . '/usr/' . uniqid() . '.db'
+            'dbFile' => __TYPECHO_ROOT_DIR__ . '/usr/' . install_random_db_name() . '.db'
         ]
     ];
 

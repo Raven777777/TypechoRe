@@ -9,6 +9,7 @@ use Typecho\Router;
 use Typecho\Validate;
 use Typecho\Widget\Exception;
 use Widget\Base\Comments;
+use Widget\Notice;
 
 if (!defined('__TYPECHO_ROOT_DIR__')) {
     exit;
@@ -253,7 +254,10 @@ class Feedback extends Comments implements ActionInterface
         if ($error = $validator->run($comment)) {
             /** 记录文字 */
             Cookie::set('__typecho_remember_text', $comment['text']);
-            throw new Exception(implode("\n", $error));
+
+            /** 表单验证失败属于正常用户输入错误, 回到表单页展示提示而非 500 */
+            Notice::alloc()->set(implode("\n", $error));
+            $this->response->goBack();
         }
 
         /** 生成过滤器 */

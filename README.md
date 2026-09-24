@@ -1,4 +1,6 @@
-TypechoRe 博客平台
+# TypechoRe 博客平台 
+
+**设计哲学：安全，简约，必要功能**
 
 **TypechoRe** 是 [Typecho](https://github.com/typecho/typecho) 的积极维护 Fork 版本 —— 一款基于 PHP 的博客程序。
 
@@ -14,6 +16,7 @@ TypechoRe 博客平台
 * 自定义字段
 * 自定义页面
 
+
 ## 环境要求
 
 * PHP 8.5 或更高
@@ -25,7 +28,6 @@ TypechoRe 博客平台
   * SQLite 3.7.11 或更高
   * PostgreSQL 9.1 或更高
 
-项目附带的 `php-8.5.10/` 目录是 Windows 本地测试运行时，不建议直接用于生产环境。启用扩展时请复制或创建 `php.ini`，并根据实际数据库启用 `pdo_mysql`、`pdo_pgsql`、`pdo_sqlite`、`mysqli`、`pgsql` 或 `sqlite3`。
 
 ## 质量检查
 

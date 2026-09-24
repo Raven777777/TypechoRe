@@ -101,7 +101,9 @@ $(document).ready(function () {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(responseData(credential))
+                    body: JSON.stringify(Object.assign(responseData(credential), {
+                        remember: $('#remember').is(':checked') ? 1 : 0
+                    }))
                 });
             })
             .then(function (response) { return response.json(); })

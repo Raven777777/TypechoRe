@@ -198,6 +198,35 @@ namespace Typecho {
         }
 
         /**
+         * 统一的会话启动入口
+         *
+         * 在 session_start() 之前设置 cookie 属性 (HttpOnly/SameSite/secure),
+         * 避免 PHPSESSID 裸露。session 中保存 passkey challenge 等敏感状态。
+         *
+         * @access public
+         * @return void
+         */
+        public static function startSession(): void
+        {
+            if (PHP_SESSION_NONE !== session_status()) {
+                return;
+            }
+
+            $secure = (!empty($_SERVER['HTTPS']) && 'off' !== strtolower($_SERVER['HTTPS']))
+                || 0 === stripos($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '', 'https');
+
+            session_set_cookie_params([
+                'lifetime' => 0,
+                'path'     => '/',
+                'secure'   => $secure,
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]);
+
+            @session_start();
+        }
+
+        /**
          * 程序初始化方法
          *
          * @access public
@@ -207,6 +236,12 @@ namespace Typecho {
         {
             // init response
             Response::getInstance()->enableAutoSendHeaders(false);
+
+            // 安全响应头, 与 Web 服务器类型解耦 (web.config 仅覆盖 IIS)
+            header_remove('X-Powered-By');
+            header('X-Frame-Options: SAMEORIGIN');
+            header('X-Content-Type-Options: nosniff');
+            header('Referrer-Policy: strict-origin-when-cross-origin');
 
             ob_start(function ($content) {
                 Response::getInstance()->sendHeaders();
@@ -770,32 +805,25 @@ EOF;
         }
 
         /**
-         * 判断hash值是否相等
+         * 校验密码
+         *
+         * 仅支持 password_hash() 生成的现代哈希 (当前为 bcrypt cost 12),
+         * 不再兼容任何遗留格式 ($P$ phpass / $T$ 自研 / md5)。
          *
          * @access public
          *
-         * @param string|null $from 源字符串
-         * @param string|null $to 目标字符串
+         * @param string|null $from 明文密码
+         * @param string|null $to 存储的哈希
          *
          * @return boolean
          */
         public static function hashValidate(?string $from, ?string $to): bool
         {
-            if (!isset($from) || !isset($to)) {
+            if (!isset($from) || !isset($to) || '' === $to) {
                 return false;
             }
 
-            // 现代算法 (bcrypt / argon2), 由 password_hash() 生成
-            if (self::isModernHash($to)) {
-                return password_verify($from, $to);
-            }
-
-            if ('$T$' == substr($to, 0, 3)) {
-                $salt = substr($to, 3, 9);
-                return hash_equals($to, self::hash($from, $salt));
-            } else {
-                return hash_equals($to, md5($from));
-            }
+            return password_verify($from, $to);
         }
 
         /**
@@ -811,83 +839,43 @@ EOF;
          */
         public static function hashPassword(string $password): string
         {
-            return password_hash($password, PASSWORD_DEFAULT);
+            return password_hash($password, PASSWORD_BCRYPT, ['cost' => self::PASSWORD_HASH_COST]);
         }
 
         /**
-         * 判断给定哈希是否为 password_hash() 生成的现代算法
+         * 密码哈希使用的 bcrypt cost
          *
-         * 仅识别 password_get_info() 能解析的算法, 避免把 $T$ 等自有格式误判进来.
-         *
-         * @access public
-         *
-         * @param string $hash
-         *
-         * @return bool
+         * bcrypt 输出格式固定为 60 字符, 安全性由 cost 决定而非长度;
+         * cost 12 在现代硬件上将离线单次尝试成本提升至约 250ms,
+         * 与数据库泄露场景下的抗爆破需求匹配。
          */
-        public static function isModernHash(string $hash): bool
-        {
-            // PHP 8+ 中 algo 为字符串 (如 '2y' / 'argon2id'), PHP 7 中为整型常量,
-            // 未知格式返回 0 或 null, 因此统一按"空值"判断
-            $algo = password_get_info($hash)['algo'] ?? null;
-
-            return !(null === $algo || 0 === $algo || '' === $algo);
-        }
-
-        /**
-         * 判断旧哈希是否需要升级为现代算法
-         *
-         * 用于登录成功后透明地把遗留哈希替换为 bcrypt/argon2.
-         *
-         * @access public
-         *
-         * @param string $hash
-         *
-         * @return bool
-         */
-        public static function hashNeedsRehash(string $hash): bool
-        {
-            if (self::isModernHash($hash)) {
-                return password_needs_rehash($hash, PASSWORD_DEFAULT);
-            }
-
-            return true;
-        }
-
-        /**
-         * authCode (会话凭证) 哈希使用的 bcrypt cost
-         *
-         * 这里显式指定 bcrypt 而不是 PASSWORD_DEFAULT, 是为了保证哈希长度稳定在
-         * 60 字符以内以适配 users.authCode 的 varchar(64) 字段 (argon2 系列
-         * 输出会超过 64 字符而被截断). authCode 本身是 CSPRNG 生成的 256bit
-         * 随机串, 不存在口令那样的弱熵问题, 因此 bcrypt 的强度完全足够.
-         */
-        public const AUTHCODE_HASH_COST = 10;
+        public const PASSWORD_HASH_COST = 12;
 
         /**
          * 生成会话凭证 authCode 的明文
          *
-         * 明文只在签发时写入 cookie, 服务端不保存, 数据库仅保存其 KDF 摘要.
+         * 明文只在签发时写入 cookie, 服务端不保存, 数据库仅保存其摘要.
          *
          * @access public
          *
-         * @return string 64 位十六进制随机串 (256bit)
+         * @return string 128 位十六进制随机串 (512bit)
          */
         public static function generateAuthCode(): string
         {
             try {
-                return bin2hex(random_bytes(32));
+                return bin2hex(random_bytes(64));
             } catch (\Exception $e) {
                 // CSPRNG 不可用时的退化方案, 混合多个不可预测源
-                return sha1(self::randString(64, true) . microtime(true) . uniqid('', true));
+                return hash('sha512', self::randString(64, true) . microtime(true) . uniqid('', true));
             }
         }
 
         /**
          * 计算 authCode 的存储摘要
          *
-         * 使用标准 KDF (bcrypt) 替代原自研 hash() 算法. 数据库只保存摘要,
-         * 因此数据库泄露也无法直接伪造登录 cookie.
+         * authCode 明文为 512bit CSPRNG 输出, 不存在弱熵问题, 无需 KDF,
+         * 直接 SHA-512 得到固定 128 位十六进制摘要, 适配 users.authCode 的
+         * varchar(128) 字段。
          *
          * @access public
          *
@@ -897,14 +885,14 @@ EOF;
          */
         public static function hashAuthCode(string $authCode): string
         {
-            return password_hash($authCode, PASSWORD_BCRYPT, ['cost' => self::AUTHCODE_HASH_COST]);
+            return hash('sha512', $authCode);
         }
 
         /**
          * 校验 authCode 明文与数据库中存储的摘要是否匹配
          *
-         * password_verify() 内部即为恒定时间比较, 且对非法/未知格式的哈希
-         * 直接返回 false, 因此遗留的明文 authCode 不会被误判为通过.
+         * 摘要为 128 位十六进制 SHA-512 (hash_equals 恒定时间比较)。
+         * authCode 每次登录都会重新签发, 无历史格式兼容负担。
          *
          * @access public
          *
@@ -919,58 +907,11 @@ EOF;
                 return false;
             }
 
-            return password_verify($authCode, $hash);
-        }
-
-        /**
-         * 对字符串进行hash加密
-         *
-         * 自研算法, 强度远低于标准 KDF, 已不参与任何新数据的生成.
-         * 仅保留用于校验历史遗留的 $T$ 格式密码, 请勿在新代码中调用.
-         *
-         * @deprecated 请使用 hashPassword() / hashAuthCode()
-         * @see Common::hashPassword()
-         * @see Common::hashAuthCode()
-         *
-         * @access public
-         *
-         * @param string|null $string 需要hash的字符串
-         * @param string|null $salt 扰码
-         *
-         * @return string
-         */
-        public static function hash(?string $string, ?string $salt = null): string
-        {
-            if (!isset($string)) {
-                return '';
+            if (128 !== strlen($hash)) {
+                return false;
             }
 
-            /** 生成随机字符串 */
-            $salt = empty($salt) ? self::randString(9) : $salt;
-            $length = strlen($string);
-
-            if ($length == 0) {
-                return '';
-            }
-
-            $hash = '';
-            $last = ord($string[$length - 1]);
-            $pos = 0;
-
-            /** 判断扰码长度 */
-            if (strlen($salt) != 9) {
-                /** 如果不是9直接返回 */
-                return '';
-            }
-
-            while ($pos < $length) {
-                $asc = ord($string[$pos]);
-                $last = ($last * ord($salt[($last % $asc) % 9]) + $asc) % 95 + 32;
-                $hash .= chr($last);
-                $pos++;
-            }
-
-            return '$T$' . $salt . md5($hash);
+            return hash_equals($hash, hash('sha512', $authCode));
         }
 
         /**

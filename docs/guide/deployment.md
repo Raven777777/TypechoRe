@@ -94,8 +94,7 @@ TypechoRe 已经不是与原版 Typecho 完全相通的数据库分支。
 
 TypechoRe 修改了：
 
-- 密码哈希和登录后的透明升级
-- authCode 存储方式
+- 密码哈希与 authCode 存储方式 (仅支持 bcrypt cost 12 / SHA-512, 不兼容旧格式)
 - Passkey 数据表
 - CSRF 和 Session 行为
 - 部分数据库和请求处理逻辑
@@ -106,6 +105,55 @@ TypechoRe 修改了：
 - 不要用原版 Typecho 直接回滚运行 TypechoRe 数据库
 - 数据库迁移前必须备份
 - 数据库备份和网站代码应保持版本对应
+
+### 从旧版本升级 authCode 列宽
+
+authCode 摘要为 128 位十六进制（SHA-512），旧安装的 `users.authCode` 列宽
+为 varchar(64)。SQLite 不受影响（TEXT 亲和性不强制列宽）；MySQL / PgSQL
+存量安装需手动执行：
+
+```sql
+-- MySQL
+ALTER TABLE `typecho_users` MODIFY `authCode` varchar(128) default NULL;
+
+-- PostgreSQL
+ALTER TABLE "typecho_users" ALTER COLUMN "authCode" TYPE varchar(128);
+```
+
+执行后重新登录一次，所有会话凭证即切换为新格式。
+
+## SQLite 数据库文件保护
+
+SQLite 数据库文件默认位于 `usr/` (web 根目录内), 文件名由安装器生成为
+128 位随机串, 但文件名保密不作为安全边界。务必在 Web 服务器层拒绝静态
+服务 `.db` 文件:
+
+**Nginx:**
+
+```nginx
+# server {} 或 http {} 块内
+location ~* \.(db|sql)$ {
+    deny all;
+}
+```
+
+**Apache:**
+
+```apache
+# .htaccess 或 vhost 配置
+<FilesMatch "\.(db|sql)$">
+    Require all denied
+</FilesMatch>
+```
+
+**IIS:**
+
+发布包自带的 `web.config` 已包含 `.db` / `.sql` 扩展名拒绝规则,
+无需额外配置。
+
+根治方案是将数据库文件移出 web 根目录 (修改 `config.inc.php` 中的
+`file` 路径), 但部分主机环境对上层目录没有写权限, 因此默认保持
+`usr/` 内随机名 + 服务器层拒绝的组合方案。
 
 ## SQLite 数据库检查
 

@@ -17,5 +17,20 @@
 </footer><!-- end #footer -->
 
 <?php $this->footer(); ?>
+<script>
+(function () {
+    // 读取 Notice 组件写入的 __typecho_notice cookie (JSON 数组), 在评论区显示后清除
+    var m = document.cookie.match(/(?:^|;\s*)([^;]*__typecho_notice)=([^;]*)/);
+    if (!m) return;
+    var box = document.getElementById('notice-box');
+    if (!box) return;
+    try {
+        var list = JSON.parse(decodeURIComponent(m[2]));
+        box.textContent = list.join('\n');
+        box.hidden = false;
+    } catch (e) { return; }
+    document.cookie = m[1] + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+})();
+</script>
 </body>
 </html>

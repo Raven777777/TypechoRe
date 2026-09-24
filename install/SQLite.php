@@ -1,5 +1,8 @@
 <?php if(!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
-<?php $defaultDir = __TYPECHO_ROOT_DIR__ . '/usr/' . uniqid() . '.db'; ?>
+<?php
+// 128 位 [0-9a-zA-Z] 随机文件名 (CSPRNG), 防止猜解或枚举 web 根目录内的数据库文件
+$defaultDir = __TYPECHO_ROOT_DIR__ . '/usr/' . install_random_db_name() . '.db';
+?>
 <ul class="typecho-option">
     <li>
         <label class="typecho-label" for="dbFile"><?php _e('数据库文件路径'); ?></label>

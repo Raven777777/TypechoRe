@@ -73,7 +73,6 @@ class Init extends Widget
             'Widget_Interface_Do'         => '\Widget\ActionInterface',
             'Widget_Do'                   => '\Widget\Action',
             'AutoP'                       => '\Utils\AutoP',
-            'PasswordHash'                => '\Utils\PasswordHash',
             'Markdown'                    => '\Utils\Markdown',
             'HyperDown'                   => '\Utils\HyperDown',
             'Helper'                      => '\Utils\Helper',
@@ -131,7 +130,7 @@ class Init extends Widget
 
         /** 开始会话, 减小负载只针对后台打开session支持 */
         if ($options->installed && User::alloc()->hasLogin()) {
-            @session_start();
+            Common::startSession();
         }
     }
 }

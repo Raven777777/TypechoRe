@@ -27,9 +27,7 @@ class Passkey extends BaseOptions implements ActionInterface
 
     public function action()
     {
-        if (PHP_SESSION_NONE === session_status()) {
-            session_start();
-        }
+        Common::startSession();
         $this->ensureTable();
         $method = (string) $this->request->get('do', 'get-options');
 
@@ -173,7 +171,11 @@ class Passkey extends BaseOptions implements ActionInterface
         ])->where('id = ?', $row['id']));
 
         unset($_SESSION[self::SESSION_KEY]);
-        $this->user->simpleLogin((int) $row['uid'], false);
+
+        // 与密码登录行为对齐: 勾选「下次自动登录」时写入持久化 Cookie (30 天),
+        // 否则 expire=0 使用会话 Cookie, 重启浏览器后需重新登录
+        $expire = !empty($data['remember']) ? 30 * 24 * 3600 : 0;
+        $this->user->simpleLogin((int) $row['uid'], false, $expire);
         $this->json(['success' => true, 'redirect' => $this->options->adminUrl]);
     }
 

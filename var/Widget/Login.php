@@ -82,7 +82,7 @@ class Login extends Users implements ActionInterface
 
             Cookie::set('__typecho_remember_name', $this->request->get('name'));
             Notice::alloc()->set(_t('用户名或密码无效'), 'error');
-            $this->response->goBack('?referer=' . urlencode($this->request->get('referer')));
+            $this->response->goBack('?referer=' . urlencode((string) $this->request->get('referer', '')));
         }
 
         self::pluginHandle()->call(

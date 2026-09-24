@@ -16,6 +16,7 @@
                 <?php $comments->cancelReply(); ?>
             </div>
 
+            <div id="notice-box" class="notice-box" hidden></div>
             <h3 id="response"><?php _e('添加新评论'); ?></h3>
             <form method="post" action="<?php $this->commentUrl() ?>" id="comment-form" role="form">
                 <?php if ($this->user->hasLogin()): ?>

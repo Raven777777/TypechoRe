@@ -6,7 +6,6 @@ use Typecho\Common;
 use Typecho\Cookie;
 use Typecho\Db\Exception as DbException;
 use Typecho\Widget;
-use Utils\PasswordHash;
 use Widget\Base\Users;
 
 if (!defined('__TYPECHO_ROOT_DIR__')) {
@@ -111,7 +110,7 @@ class User extends Users
                     ->where('uid = ?', intval($cookieUid))
                     ->limit(1));
 
-                // cookie 中为 authCode 明文, 数据库中为其 bcrypt 摘要
+                // cookie 中为 authCode 明文, 数据库中为其 SHA-512 摘要
                 $cookieAuthCode = Cookie::get('__typecho_authCode');
                 if ($user && Common::validateAuthCode($cookieAuthCode, $user['authCode'])) {
                     $this->currentUser = $user;
@@ -180,18 +179,10 @@ class User extends Users
 
         $hashValidate = self::pluginHandle()->trigger($hashPluggable)->call('hashValidate', $password, $user['password']);
         if (!$hashPluggable) {
-            if ('$P$' == substr($user['password'], 0, 3)) {
-                $hasher = new PasswordHash(8, true);
-                $hashValidate = $hasher->checkPassword($password, $user['password']);
-            } else {
-                $hashValidate = Common::hashValidate($password, $user['password']);
-            }
+            $hashValidate = Common::hashValidate($password, $user['password']);
         }
 
         if ($hashValidate) {
-            // 遗留哈希 ($P$ phpass / $T$ 自研 / md5) 校验通过后透明升级为 bcrypt/argon2
-            $this->upgradePasswordHash($user, $password);
-
             if (!$temporarily) {
                 $this->commitLogin($user, $expire);
             }
@@ -210,46 +201,17 @@ class User extends Users
     }
 
     /**
-     * 登录成功后把遗留格式的密码哈希升级为当前推荐算法
-     *
-     * 只在校验通过时执行, 失败不会影响登录结果; 升级失败也静默忽略,
-     * 下次登录会再次尝试。
+     * 登录成功后把会话凭证写入 cookie 并更新数据库
      *
      * @access private
      * @param array $user 用户数据
-     * @param string $password 明文密码
+     * @param int $expire 过期时间
      * @return void
      * @throws DbException
      */
-    private function upgradePasswordHash(array &$user, string $password): void
+    private function commitLogin(&$user, int $expire = 0): void
     {
-        if (!isset($user['password']) || !Common::hashNeedsRehash($user['password'])) {
-            return;
-        }
-
-        try {
-            $hash = Common::hashPassword($password);
-
-            $this->db->query($this->db
-                ->update('table.users')
-                ->rows(['password' => $hash])
-                ->where('uid = ?', $user['uid']));
-
-            $user['password'] = $hash;
-            $this->currentUser['password'] = $hash;
-        } catch (DbException $e) {
-            // 数据库不可用时保留旧哈希, 不影响本次登录
-        }
-    }
-
-    /**
-     * @param $user
-     * @param int $expire
-     * @throws DbException
-     */
-    public function commitLogin(&$user, int $expire = 0)
-    {
-        // 明文 authCode 只写入 cookie, 数据库保存标准 KDF (bcrypt) 摘要,
+        // 明文 authCode 只写入 cookie, 数据库保存 SHA-512 摘要,
         // 这样即使数据库泄露也无法反推出可用的登录凭证
         $authCode = Common::generateAuthCode();
         $user['authCode'] = Common::hashAuthCode($authCode);
