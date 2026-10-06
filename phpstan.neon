@@ -1,0 +1,17 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 0
+    phpVersion: 80500
+    paths:
+        - admin
+        - install
+        - var
+        - index.php
+        - install.php
+    bootstrapFiles:
+        - tools/phpstan-bootstrap.php
+    excludePaths:
+        analyse:
+            - var/lbuchs/**

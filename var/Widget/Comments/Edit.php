@@ -280,10 +280,9 @@ class Edit extends Comments implements ActionInterface
     /**
      * 编辑评论
      *
-     * @return bool
      * @throws Exception
      */
-    public function editComment(): bool
+    public function editComment(): void
     {
         $coid = $this->request->filter('int')->get('coid');
         $commentSelect = $this->db->fetchRow($this->select()

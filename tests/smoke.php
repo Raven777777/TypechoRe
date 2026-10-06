@@ -29,6 +29,7 @@ function check(bool $condition, string $message): void
 }
 
 require_once ROOT . '/var/Typecho/Common.php';
+check(class_exists(\Widget\Comments\Ping::class), 'Ping class failed to load');
 
 check(\Typecho\Common::hashValidate('password', \Typecho\Common::hashPassword('password')), 'password hash validation failed');
 $authCodeHash = \Typecho\Common::hashAuthCode('auth-token');

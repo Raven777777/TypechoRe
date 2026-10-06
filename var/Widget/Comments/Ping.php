@@ -5,6 +5,7 @@ namespace Widget\Comments;
 use Typecho\Config;
 use Typecho\Db\Exception;
 use Widget\Base\Comments;
+use Widget\Base\Contents;
 
 if (!defined('__TYPECHO_ROOT_DIR__')) {
     exit;
@@ -137,13 +138,10 @@ class Ping extends Comments
         <?php
     }
 
-    /**
-     * 重载内容获取
-     *
-     * @return array|null
-     */
-    protected function ___parentContent(): ?array
+    protected function ___parentContent(): Contents
     {
-        return $this->parameter->parentContent;
+        return $this->parameter->parentContent instanceof Contents
+            ? $this->parameter->parentContent
+            : parent::___parentContent();
     }
 }

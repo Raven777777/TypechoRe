@@ -31,13 +31,21 @@
 
 ## 质量检查
 
-项目使用 PHP 8.5 进行过语法、运行时和基础回归测试：
+运行完整检查（PHP 语法、基础回归测试、PHPStan、Semgrep）：
+
+```powershell
+.\tools\quality.ps1
+```
+
+脚本首次运行会将 PHPStan 和 Semgrep 安装到被 Git 忽略的 `.tools/` 目录；本地默认使用项目内的 `php-8.5.10/php.exe`，也可通过 `PHP_EXE` 指定 PHP。GitHub Actions 会在 push 和 pull request 时运行相同检查。检查说明见 [`docs/guide/quality.md`](docs/guide/quality.md)。
+
+仅运行基础回归测试：
 
 ```bash
 php-8.5.10/php.exe tests/smoke.php
 ```
 
-测试覆盖密码哈希、authCode、CSRF/IP 基础行为、HTML 转义和 SQLite 读写。完整检查结果与已知限制见 [`docs/quality.md`](docs/quality.md)。
+测试覆盖密码哈希、authCode、CSRF/IP 基础行为、HTML 转义和 SQLite 读写。完整检查结果与已知限制见 [`docs/guide/quality.md`](docs/guide/quality.md)。
 
 ## Passkey 登录
 
@@ -53,7 +61,7 @@ Passkey 需要 HTTPS（`localhost` 除外），并且浏览器访问域名必须
 
 * [部署与恢复](docs/deployment.md)
 * [Passkey / WebAuthn](docs/passkey.md)
-* [代码质量与 PHP 8.5 检查报告](docs/quality.md)
+* [代码质量与 PHP 8.5 检查报告](docs/guide/quality.md)
 
 ## 反馈问题
 

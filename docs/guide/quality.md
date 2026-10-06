@@ -151,11 +151,19 @@ SQLite 适配器已经完成实际测试，包括安装、文章、评论、上�
 
 未发现明显的任意命令执行、动态 PHP 执行、无保护的危险反序列化或任意扩展名上传问题。
 
+### PHPStan 与 Semgrep
+
+完整检查使用 `tools/quality.ps1`，GitHub Actions 在 push 和 pull request 时运行同一工作流。首次运行会把 PHPStan 2.3.0 PHAR 和 Semgrep 1.179.0 安装到 Git 忽略的 `.tools/` 目录；Semgrep 使用 `p/php` 与 `p/security-audit` 规则。
+
+当前 Semgrep 检查覆盖 237 个受 Git 跟踪的 PHP 文件，未报告问题。PHPStan 的 6 条既有告警保存在 baseline（3 处文件尾空白、`new static()` 风险提示及两个由插件/主题提供的可选函数）；baseline 之外的新问题会让检查失败。Larastan 面向 Laravel，本项目不是 Laravel，因此未安装或启用。
+
+静态分析还发现并修复了两处问题：`Widget\Comments\Ping` 的 `parentContent` 覆盖与父类返回类型不兼容，会在类加载时触发 PHP 致命错误；`editComment()` 实际不返回值，却声明为 `bool`，现改为 `void`。
+
 ## 最终部署注意事项
 
 - MySQL 和 PostgreSQL 仍需在对应服务可用后进行连接回归测试。
 - 默认主题的 TagCloud 使用了第三方库的 `_next()` 内部方法，后续升级 TagCloud 时需要重新验证。
-- 项目当前没有 PHPUnit、PHPStan 或 Psalm 配置，基础回归测试目前使用 `tests/smoke.php`。
+- 项目没有 PHPUnit/Psalm；基础回归测试继续使用 `tests/smoke.php`，PHPStan 与 Semgrep 的运行方式见上文。
 - `php-8.5.10/php.ini` 只适合作为本地测试配置，不应直接作为生产配置。
 - 生产环境应关闭 `__TYPECHO_DEBUG__` 和 `display_errors`。
 - 部署完成后应删除安装压缩包，并确认数据库文件不能通过 Web 直接下载。
