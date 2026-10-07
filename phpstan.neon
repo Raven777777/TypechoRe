@@ -4,11 +4,11 @@ includes:
 parameters:
     level: 0
     phpVersion: 80500
+    # index.php only loads the generated, Git-ignored config.inc.php; it is still syntax-checked.
     paths:
         - admin
         - install
         - var
-        - index.php
         - install.php
     bootstrapFiles:
         - tools/phpstan-bootstrap.php
