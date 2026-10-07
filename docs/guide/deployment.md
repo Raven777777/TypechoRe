@@ -2,17 +2,15 @@
 
 ## 发布包内容
 
-生产环境至少需要：
+构建用于网站根目录的代码 ZIP（需要 Python 3.9+，无额外依赖）：
 
-```text
-admin/
-install/
-usr/
-var/
-index.php
-install.php
-config.inc.php
+```bash
+python tools/build_release.py
 ```
+
+输出为 `dist/TypechoRe-<版本>.zip`，解压后文件直接位于网站根目录。发布包包含 `admin/`、`install/`、`usr/`、`var/` 及入口文件；不会包含本地 `config.inc.php`、数据库、日志、备份、缓存或用户上传文件。
+
+生产站点还需要 `config.inc.php` 和数据库，但它们属于站点数据，不放进代码包：首次安装由安装向导生成；升级时保留服务器原有配置、数据库和上传文件，先备份再覆盖代码。
 
 SQLite 数据库建议放在：
 
@@ -48,6 +46,27 @@ Reflection
 ```
 
 Passkey 额外依赖 `openssl`、`mbstring`、`sodium` 和 `session`。
+
+### Nginx 登录限速
+
+登录失败的延迟只是补充措施，不能替代限速。若使用 Nginx，在 `http {}` 中配置按客户端 IP 计数的 zone：
+
+```nginx
+map $request_uri $typechore_login_key {
+    default "";
+    ~*(?:/index\.php)?/action/login(?:\?|$) $binary_remote_addr;
+}
+limit_req_zone $typechore_login_key zone=typechore_login:10m rate=10r/m;
+```
+
+在现有处理 Typecho PHP/front-controller 请求的 `location` 中添加（不要另建一个会覆盖现有 PHP handler 的 `location`）：
+
+```nginx
+limit_req zone=typechore_login burst=5 nodelay;
+limit_req_status 429;
+```
+
+按访客共享出口 IP 的情况调整阈值。限速配置需部署到 Nginx 并重载后才生效。
 
 ## 部署流程
 

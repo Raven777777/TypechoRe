@@ -28,7 +28,6 @@ class Passkey extends BaseOptions implements ActionInterface
     public function action()
     {
         Common::startSession();
-        $this->ensureTable();
         $method = (string) $this->request->get('do', 'get-options');
 
         try {
@@ -36,11 +35,13 @@ class Passkey extends BaseOptions implements ActionInterface
                 case 'create-options':
                     $this->requireAdmin();
                     $this->security->protect();
+                    $this->ensureTable();
                     $this->createOptions();
                     return;
                 case 'process-create':
                     $this->requireAdmin();
                     $this->security->protect();
+                    $this->ensureTable();
                     $this->processCreate();
                     return;
                 case 'process-get':
@@ -49,10 +50,12 @@ class Passkey extends BaseOptions implements ActionInterface
                 case 'delete':
                     $this->requireAdmin();
                     $this->security->protect();
+                    $this->ensureTable();
                     $this->deletePasskey();
                     return;
                 case 'list':
                     $this->requireAdmin();
+                    $this->ensureTable();
                     $this->listPasskeys();
                     return;
                 case 'get-options':

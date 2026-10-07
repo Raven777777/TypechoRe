@@ -197,6 +197,29 @@ namespace Typecho {
                 . str_replace('//', '/', ltrim($path, '/'));
         }
 
+        public static function isSameOrigin(?string $source, ?string $target): bool
+        {
+            $source = null === $source ? false : parse_url($source);
+            $target = null === $target ? false : parse_url($target);
+            if (
+                !is_array($source) || !is_array($target)
+                || empty($source['scheme']) || empty($source['host'])
+                || empty($target['scheme']) || empty($target['host'])
+            ) {
+                return false;
+            }
+
+            $sourceScheme = strtolower($source['scheme']);
+            $targetScheme = strtolower($target['scheme']);
+            if (!in_array($sourceScheme, ['http', 'https'], true) || $sourceScheme !== $targetScheme) {
+                return false;
+            }
+
+            $sourcePort = $source['port'] ?? ('https' === $sourceScheme ? 443 : 80);
+            $targetPort = $target['port'] ?? ('https' === $targetScheme ? 443 : 80);
+            return strtolower($source['host']) === strtolower($target['host']) && $sourcePort === $targetPort;
+        }
+
         /**
          * 统一的会话启动入口
          *

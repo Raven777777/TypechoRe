@@ -2,6 +2,7 @@
 
 namespace Widget;
 
+use Typecho\Common;
 use Typecho\Cookie;
 use Typecho\Validate;
 use Widget\Base\Users;
@@ -28,7 +29,14 @@ class Login extends Users implements ActionInterface
      */
     public function action()
     {
-        // protect
+        $origin = $this->request->getServer('HTTP_ORIGIN') ?: $this->request->getReferer();
+        if (
+            !Common::isSameOrigin($origin, $this->options->rootUrl)
+            && !Common::isSameOrigin($origin, $this->options->adminUrl)
+        ) {
+            throw new \Typecho\Widget\Exception(_t('登录请求来源无效'), 403);
+        }
+
         $this->security->protect();
 
         /** 如果已经登录 */

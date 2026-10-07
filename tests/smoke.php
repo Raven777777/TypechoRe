@@ -30,6 +30,10 @@ function check(bool $condition, string $message): void
 
 require_once ROOT . '/var/Typecho/Common.php';
 check(class_exists(\Widget\Comments\Ping::class), 'Ping class failed to load');
+check(\Typecho\Common::isSameOrigin('https://example.test/admin/login.php', 'https://example.test'), 'same-origin check failed');
+check(\Typecho\Common::isSameOrigin('https://example.test:443/', 'https://example.test'), 'default HTTPS port check failed');
+check(!\Typecho\Common::isSameOrigin('https://not-example.test/', 'https://example.test'), 'lookalike host passed same-origin check');
+check(!\Typecho\Common::isSameOrigin('https://example.test:444/', 'https://example.test'), 'different port passed same-origin check');
 
 check(\Typecho\Common::hashValidate('password', \Typecho\Common::hashPassword('password')), 'password hash validation failed');
 $authCodeHash = \Typecho\Common::hashAuthCode('auth-token');
@@ -49,6 +53,12 @@ unset($_SERVER['HTTP_X_FORWARDED_FOR']);
 $webauthn = new \lbuchs\WebAuthn\WebAuthn('TypechoRe', 'localhost', ['none'], true);
 $passkeyArgs = $webauthn->getCreateArgs('1', 'admin', 'Admin', 60, 'required', 'required');
 check(isset($passkeyArgs->publicKey->challenge, $passkeyArgs->publicKey->user->id), 'WebAuthn create options failed');
+$originCheck = new ReflectionMethod($webauthn, '_checkOrigin');
+check($originCheck->invoke($webauthn, 'https://localhost'), 'valid WebAuthn origin rejected');
+$rpWebAuthn = new \lbuchs\WebAuthn\WebAuthn('TypechoRe', 'example.test', ['none'], true);
+$originCheck = new ReflectionMethod($rpWebAuthn, '_checkOrigin');
+check($originCheck->invoke($rpWebAuthn, 'https://sub.example.test'), 'valid RP subdomain origin rejected');
+check(!$originCheck->invoke($rpWebAuthn, 'https://not-example.test'), 'lookalike RP origin accepted');
 
 $dbFile = tempnam(sys_get_temp_dir(), 'typechore-');
 check(false !== $dbFile, 'could not create temporary SQLite file');

@@ -59,8 +59,8 @@ Passkey 需要 HTTPS（`localhost` 除外），并且浏览器访问域名必须
 
 重点文档：
 
-* [部署与恢复](docs/deployment.md)
-* [Passkey / WebAuthn](docs/passkey.md)
+* [部署与恢复及生产包构建](docs/guide/deployment.md)
+* [Passkey / WebAuthn](docs/guide/passkey.md)
 * [代码质量与 PHP 8.5 检查报告](docs/guide/quality.md)
 
 ## 反馈问题

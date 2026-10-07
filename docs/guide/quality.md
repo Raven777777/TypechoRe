@@ -153,9 +153,11 @@ SQLite 适配器已经完成实际测试，包括安装、文章、评论、上�
 
 ### PHPStan 与 Semgrep
 
-完整检查使用 `tools/quality.ps1`，GitHub Actions 在 push 和 pull request 时运行同一工作流。首次运行会把 PHPStan 2.3.0 PHAR 和 Semgrep 1.179.0 安装到 Git 忽略的 `.tools/` 目录；Semgrep 使用 `p/php` 与 `p/security-audit` 规则。
+完整检查使用 `tools/quality.ps1`，GitHub Actions 在 push 和 pull request 时运行同一工作流。首次运行会把 PHPStan 2.3.0 PHAR 和 Semgrep 1.179.0 安装到 Git 忽略的 `.tools/` 目录；Semgrep 使用 `p/php`、`p/security-audit`、`p/owasp-top-ten` 和 `p/secrets` 规则。
 
-当前 Semgrep 检查覆盖 237 个受 Git 跟踪的 PHP 文件，未报告问题。PHPStan 的 6 条既有告警保存在 baseline（3 处文件尾空白、`new static()` 风险提示及两个由插件/主题提供的可选函数）；baseline 之外的新问题会让检查失败。Larastan 面向 Laravel，本项目不是 Laravel，因此未安装或启用。
+本地可用 `SEMGREP_APP_TOKEN` 登录以启用 Semgrep Pro 规则；CI 通过 GitHub Actions secret `SEMGREP_APP_TOKEN` 读取令牌，令牌不要写入仓库。未配置 secret 时仍运行可公开获取的规则。
+
+当前 Semgrep 检查覆盖 237 个受 Git 跟踪的 PHP 文件，运行 92 条适用规则，未报告问题。PHPStan 的 6 条既有告警保存在 baseline（3 处文件尾空白、`new static()` 风险提示及两个由插件/主题提供的可选函数）；baseline 之外的新问题会让检查失败。Larastan 面向 Laravel，本项目不是 Laravel，因此未安装或启用。
 
 静态分析还发现并修复了两处问题：`Widget\Comments\Ping` 的 `parentContent` 覆盖与父类返回类型不兼容，会在类加载时触发 PHP 致命错误；`editComment()` 实际不返回值，却声明为 `bool`，现改为 `void`。
 

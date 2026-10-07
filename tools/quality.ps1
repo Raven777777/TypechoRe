@@ -54,7 +54,7 @@ try {
     & $php $phpstan analyse --configuration=phpstan.neon --no-progress
     if ($LASTEXITCODE -ne 0) { throw 'PHPStan failed.' }
 
-    & $semgrep scan --config=p/php --config=p/security-audit --include=*.php --metrics=off --error admin install var usr tests index.php install.php
+    & $semgrep scan --config=p/php --config=p/security-audit --config=p/owasp-top-ten --config=p/secrets --include=*.php --metrics=off --error admin install var usr tests index.php install.php
     if ($LASTEXITCODE -ne 0) { throw 'Semgrep failed or reported findings.' }
 } finally {
     Pop-Location

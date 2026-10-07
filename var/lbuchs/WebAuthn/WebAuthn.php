@@ -631,11 +631,18 @@ class WebAuthn {
 
         // extract host from origin
         $host = \parse_url($origin, PHP_URL_HOST);
-        $host = \trim($host, '.');
+        if (!\is_string($host)) {
+            return false;
+        }
 
-        // The RP ID must be equal to the origin's effective domain, or a registrable
-        // domain suffix of the origin's effective domain.
-        return \preg_match('/' . \preg_quote($this->_rpId) . '$/i', $host) === 1;
+        $host = \strtolower(\rtrim($host, '.'));
+        $rpId = \strtolower(\rtrim($this->_rpId, '.'));
+        if ('' === $rpId) {
+            return false;
+        }
+
+        // RP IDs must match the host or a dot-delimited parent domain.
+        return $host === $rpId || \str_ends_with($host, '.' . $rpId);
     }
 
     /**
