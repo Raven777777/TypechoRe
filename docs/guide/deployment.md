@@ -36,6 +36,7 @@ SQLite 所在目录必须允许 PHP-FPM 创建数据库锁文件、临时文件�
 
 ```text
 mbstring
+fileinfo
 openssl
 sodium
 session
@@ -46,6 +47,35 @@ Reflection
 ```
 
 Passkey 额外依赖 `openssl`、`mbstring`、`sodium` 和 `session`。
+
+建议的 php.ini 生产配置：
+
+```ini
+; OPcache: PHP 8.5 已内置, 不要再写 zend_extension=php_opcache.dll
+opcache.enable=1
+opcache.memory_consumption=192
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=20000
+opcache.validate_timestamps=0 ; 发布包部署时关闭 stat 检查
+opcache.jit=tracing
+opcache.jit_buffer_size=64M
+
+session.use_strict_mode=1
+session.use_only_cookies=1
+session.cookie_httponly=1
+session.cookie_samesite=Lax
+
+expose_php=Off
+display_errors=Off
+zend.assertions=-1
+```
+
+`fileinfo` 用于基于文件内容做 MIME 嗅探（`Typecho\Common::mimeContentType()` 会优先使用
+`mime_content_type()`/`finfo`），缺失时会退化为扩展名映射。`sodium` 用于 WebAuthn
+Ed25519 公钥签名验证；部分 OpenSSL 构建（例如 Windows 发行包）不提供 `ed25519`
+曲线，此时没有 `sodium` 将无法验证 EdDSA 类型的 Passkey。
+
+`opcache.validate_timestamps=0` 只适用于通过发布包整包覆盖部署的场景；若直接在服务器上改代码，请保持默认值 `1`。
 
 ### Nginx 登录限速
 

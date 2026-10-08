@@ -2,7 +2,7 @@
 
 > TypechoRe 与原版 Typecho 使用的数据库不再保证兼容。请在迁移前备份数据库，不要让两个程序同时连接同一个生产数据库。
 
-代码质量与 PHP 8.5 检查结果见 [代码质量与 PHP 8.5 检查报告](guide/quality.md)。部署和数据恢复见 [部署与恢复](guide/deployment.md)，Passkey 使用见 [Passkey / WebAuthn](guide/passkey.md)。
+代码质量、PHP 8.5 弃用项检查与现代化迁移清单见 [代码质量与 PHP 8.5 检查报告](guide/quality.md)。部署、PHP 生产配置和数据恢复见 [部署与恢复](guide/deployment.md)，Passkey 使用见 [Passkey / WebAuthn](guide/passkey.md)。
 
 ## 目录结构
 

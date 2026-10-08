@@ -9,6 +9,7 @@
 * 安全加固：路径穿越 / SSRF / 反序列化 / CSRF 增强、Cookie 安全属性、SQLite 并发优化等
 * 移除对官方服务器的外网请求（如后台 `do=feed`、`do=checkVersion`）
 * 独立命名 `TypechoRe`，在安全、Passkey、数据库和运行时行为上独立于上游
+* PHP 8.5 现代化：`#[\Override]` 全量覆盖、HMAC 短时 token、`curl_share_init_persistent` 连接复用、备份 v2（SHA-256）、`sodium`/`fileinfo` 支持等
 
 > **数据库兼容性警告**：TypechoRe 已修改密码/authCode 存储方式并增加 Passkey 表，不再保证与原版 Typecho 数据库完全相通。请不要让两个程序连接同一个生产数据库。
 
@@ -26,4 +27,4 @@
 
 **最近维护时间**
 
-2026年9月23日
+2026年10月9日

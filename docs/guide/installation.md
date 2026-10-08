@@ -5,7 +5,7 @@
   - SQLite 3.7.11 以上
   - PostgreSQL 9.1 以上
 - 必需的 PHP 扩展：`mbstring`、`json`、`Reflection`，以及至少一种数据库扩展（`mysqli`、`sqlite3`、`pgsql`、`pdo_mysql`、`pdo_sqlite`、`pdo_pgsql`）
-- `curl` 扩展为可选，仅在需要程序主动发起外部 HTTP 请求（如远程插件/升级检查等）时使用
+- 推荐扩展：`fileinfo`（基于内容的 MIME 探测，缺失时退化为扩展名映射）、`curl`（远程 HTTP 请求）
 
 > 安装向导会自动检测上述环境依赖，不符合时会在页面顶部给出提示。
 >

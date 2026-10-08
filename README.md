@@ -21,8 +21,9 @@
 
 * PHP 8.5 或更高
 * 必需扩展：`mbstring`、`json`、`Reflection`，以及至少一种数据库扩展
-* 可选扩展：`curl`（远程 HTTP 请求）、`gd`（图片处理）、`zip`
+* 推荐扩展：`fileinfo`（基于内容的 MIME 探测）、`curl`（远程 HTTP 请求）、`gd`（图片处理）、`zip`
 * Passkey/WebAuthn：需要 `openssl`、`mbstring`、`sodium`、`session`，以及当前使用的数据库扩展
+* 生产环境建议启用 OPcache（PHP 8.5 已内置），并参考 [`docs/guide/deployment.md`](docs/guide/deployment.md) 配置 `session.use_strict_mode` 等选项
 * 数据库（MariaDB、MySQL、SQLite、PostgreSQL）
   * MariaDB 或 MySQL 5.5.3 或更高
   * SQLite 3.7.11 或更高

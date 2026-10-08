@@ -18,16 +18,16 @@
 
 项目内约 237 个 PHP 文件全部通过 PHP 8.5 语法检查，没有发现语法错误。
 
-针对 PHP 8.5 文档检查了以下兼容性风险，当前代码没有命中：
+针对 PHP 8.5 文档检查了以下兼容性风险：
 
-- `curl_close()` 和 `curl_share_close()`
-- `imagedestroy()`
-- `finfo_close()`
-- `DATE_RFC7231`
-- `__sleep()` 和 `__wakeup()`
-- 反引号执行操作符
-- 非规范类型转换
+- `curl_close()` 和 `curl_share_close()`：原先 `var/lbuchs/WebAuthn/WebAuthn.php` 的
+  `queryFidoMetaDataService()` 使用 `curl_close()`，该功能在 TypechoRe 中未使用（仅保留
+  `none` 自签名），已整体删除
+- `imagedestroy()`、`finfo_close()`、`DATE_RFC7231`、`__sleep()` 和 `__wakeup()`、反引号、
+  非规范类型转换、`PDO::MYSQL_*` 常量、`ReflectionMethod::setAccessible()`：全部无命中
 - PHP 8.5 新增的弃用写法
+
+`var/lbuchs/**` 已不再从 PHPStan 扫描中排除，WebAuthn 相关代码现在同样受静态检查覆盖。
 
 ### 自动化基础测试
 
@@ -50,11 +50,17 @@ PASS: PHP 8.5 smoke tests
 - authCode 生成和验证
 - 非法 authCode 拒绝
 - HTML 转义
-- UTF-8 slug 生成
+- UTF-8 slug 生成（含全角空格 `mb_trim`）
 - 私有地址 SSRF 检查
 - 未配置可信代理时拒绝伪造的 `X-Forwarded-For`
+- HMAC-SHA256 短时 token 生成/校验/拒绝伪造值
+- `json_validate()`、`array_first()`/`array_last()` 可用性
+- `Typecho\Config` 的 `Iterator`/`ArrayAccess` 原生 `mixed` 返回类型
+- `fileinfo` 内容嗅探 MIME
+- 备份缓冲 v2（SHA-256）与 v1（MD5）双向兼容
 - SQLite 建表、插入、查询和读取
 - WebAuthn Passkey 注册参数生成
+- 全量类加载（覆盖 167 个类），任一 `#[\Override]` 签名漂移或类链接错误都会在此失败
 
 ### JavaScript
 
@@ -99,6 +105,54 @@ Passkey 需要 `openssl`、`mbstring`、`sodium`、`session` 和数据库扩展�
 - 后台登出
 
 Sitemap 大数据测试中，第一子 Sitemap 返回 1000 条 URL，第二子 Sitemap 返回剩余 URL，XML 输出有效。
+
+本版本已在生产站点完成部署验证（2026-10-09），暂未发现回归问题。
+
+## PHP 8.5 现代化迁移
+
+本项目已完成一轮底层与库层面的 PHP 8.5 迁移，不改变前台行为：
+
+### 弃用项与死代码清理
+
+- 删除 `var/lbuchs/WebAuthn/WebAuthn.php` 中未使用且命中 PHP 8.5 弃用的
+  `queryFidoMetaDataService()`（含 `curl_close()`）
+- 删除 SQLite 2 兼容分支（`SQLiteTrait::$isSQLite2`、`filterCountQuery()`），
+  SQLite 2 早已不被 PDO/SQLite3 支持
+- `Pdo\Mysql` 不再回退到已弃用的 `PDO::MYSQL_*` 常量
+- 安装向导移除 MyISAM 选项，统一使用 InnoDB + utf8mb4
+- `AttestationObject` 移除已不随包分发的 attestation 格式引用
+
+### PHP 8.5+ 特性采用
+
+- 239 个方法标注 `#[\Override]`（构造函数除外，PHP 对构造器不强制签名兼容，
+  加该属性会触发类链接期致命错误），可防住历史上出现过的父类签名漂移
+- `#[\SensitiveParameter]` 保护密码参数不进异常堆栈
+- `#[\Deprecated]` 标记 `Json`、`isAvailableClass()`、`arrayFlatten()`、`isAppEngine()`
+- `#[\NoDiscard]` 标记 `escape()`、`hashPassword()`、`generateAuthCode()`、`hashAuthCode()`、`timeToken()`
+- `json_validate()`、`array_first()`、`str_contains()`/`str_starts_with()`、`mb_trim()`
+- `Typecho\Config` 的 `Iterator`/`ArrayAccess` 改用原生 `mixed` 返回类型，
+  不再依赖 `#[\ReturnTypeWillChange]`
+
+### 安全与性能
+
+- 短时 token 由 `sha1` + `==` 升级为 HMAC-SHA256 + `hash_equals()`
+- 登录成功后 `session_regenerate_id(true)`，防止会话固定
+- `Common::startSession()` 强制 `session.use_strict_mode=1`
+- `Http\Client` 使用 PHP 8.5 `curl_share_init_persistent()` 跨请求复用连接，
+  移除 `CURLOPT_FRESH_CONNECT`，优先 HTTP/2，并限制仅允许 http/https 协议
+- 备份文件新增 v2 格式（SHA-256 校验和），导入保持对 v1（MD5）的兼容
+- 数据库连接全面使用 PHP 8.4+ 的 `Pdo\Mysql`/`Pdo\Sqlite`/`Pdo\Pgsql` 驱动子类
+- 新装站点的 `defaultAllowPing` 与 `allowXmlRpc` 默认关闭（旧站点不受影响，
+  历史数据中的选项值保持不变）
+
+### 未采用的项及原因
+
+- 全量 `declare(strict_types=1)`：现有代码有 359 处宽松比较，强制模式可能在
+  未覆盖到的主题/插件调用路径上产生 `TypeError`，收益不足以抵消回归风险
+- `enum` 替换 `Db::READ/WRITE` 等常量：这些常量是公开插件 API，且 `READ|WRITE`
+  是位掩码，枚举无法直接表达
+- 重构 Widget 魔术属性为属性钩子、替换 DB/HTTP/Markdown/i18n 为第三方库：
+  会引入 vendor 依赖或破坏插件生态，与项目“自包含、安全、简约”的设计目标冲突
 
 ## 已修复的问题
 
@@ -157,9 +211,9 @@ SQLite 适配器已经完成实际测试，包括安装、文章、评论、上�
 
 本地可用 `SEMGREP_APP_TOKEN` 登录以启用 Semgrep Pro 规则；CI 通过 GitHub Actions secret `SEMGREP_APP_TOKEN` 读取令牌，令牌不要写入仓库。未配置 secret 时仍运行可公开获取的规则。
 
-当前 Semgrep 检查覆盖 237 个受 Git 跟踪的 PHP 文件，运行 92 条适用规则，未报告问题。PHPStan 的 6 条既有告警保存在 baseline（3 处文件尾空白、`new static()` 风险提示及两个由插件/主题提供的可选函数）；baseline 之外的新问题会让检查失败。Larastan 面向 Laravel，本项目不是 Laravel，因此未安装或启用。
+当前 Semgrep 检查覆盖所有受 Git 跟踪的 PHP 文件（含 `var/lbuchs/**`），未报告问题。PHPStan 的既有告警保存在 baseline（3 处文件尾空白、`new static()` 风险提示及两个由插件/主题提供的可选函数）；baseline 之外的新问题会让检查失败。Larastan 面向 Laravel，本项目不是 Laravel，因此未安装或启用。
 
-静态分析还发现并修复了两处问题：`Widget\Comments\Ping` 的 `parentContent` 覆盖与父类返回类型不兼容，会在类加载时触发 PHP 致命错误；`editComment()` 实际不返回值，却声明为 `bool`，现改为 `void`。
+静态分析还发现并修复了三处问题：`Widget\Comments\Ping` 的 `parentContent` 覆盖与父类返回类型不兼容，会在类加载时触发 PHP 致命错误；`editComment()` 实际不返回值，却声明为 `bool`，现改为 `void`；`Widget\Users\EditTrait::getPageOffset()` 声明返回 `int` 但 `ceil()` 返回 `float`，现改为 `intdiv()` 向上取整。
 
 ## 最终部署注意事项
 

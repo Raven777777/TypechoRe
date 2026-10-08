@@ -21,6 +21,10 @@ sodium
 session
 ```
 
+`openssl` 用于验证 ES256/RS256 公钥签名；`sodium` 用于验证 Ed25519（EdDSA）签名。
+部分 OpenSSL 构建不提供 `ed25519` 曲线（例如 Windows 官方发行包），此时未启用
+`sodium` 会导致 EdDSA 类型的 Passkey 登录失败，建议始终启用 `sodium`。
+
 同时需要 TypechoRe 正在使用的数据库扩展。例如 SQLite 使用：
 
 ```text
