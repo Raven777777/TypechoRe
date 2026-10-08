@@ -211,6 +211,8 @@ SQLite 适配器已经完成实际测试，包括安装、文章、评论、上�
 
 本地可用 `SEMGREP_APP_TOKEN` 登录以启用 Semgrep Pro 规则；CI 通过 GitHub Actions secret `SEMGREP_APP_TOKEN` 读取令牌，令牌不要写入仓库。未配置 secret 时仍运行可公开获取的规则。
 
+若令牌已过期或无效，semgrep.dev 会返回 HTTP 401 导致规则无法下载。`tools/quality.ps1` 会打印警告并自动去掉令牌重跑一次（仅公共规则），避免 CI 因 Secret 失效而误报失败；轮换 Secret 后 Pro 规则自动恢复。
+
 当前 Semgrep 检查覆盖所有受 Git 跟踪的 PHP 文件（含 `var/lbuchs/**`），未报告问题。PHPStan 的既有告警保存在 baseline（3 处文件尾空白、`new static()` 风险提示及两个由插件/主题提供的可选函数）；baseline 之外的新问题会让检查失败。Larastan 面向 Laravel，本项目不是 Laravel，因此未安装或启用。
 
 静态分析还发现并修复了三处问题：`Widget\Comments\Ping` 的 `parentContent` 覆盖与父类返回类型不兼容，会在类加载时触发 PHP 致命错误；`editComment()` 实际不返回值，却声明为 `bool`，现改为 `void`；`Widget\Users\EditTrait::getPageOffset()` 声明返回 `int` 但 `ceil()` 返回 `float`，现改为 `intdiv()` 向上取整。

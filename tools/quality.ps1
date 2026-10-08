@@ -54,8 +54,44 @@ try {
     & $php $phpstan analyse --configuration=phpstan.neon --no-progress
     if ($LASTEXITCODE -ne 0) { throw 'PHPStan failed.' }
 
-    & $semgrep scan --config=p/php --config=p/security-audit --config=p/owasp-top-ten --config=p/secrets --include=*.php --metrics=off --error admin install var usr tests index.php install.php
-    if ($LASTEXITCODE -ne 0) { throw 'Semgrep failed or reported findings.' }
+    $semgrepArgs = @(
+        'scan',
+        '--config=p/php',
+        '--config=p/security-audit',
+        '--config=p/owasp-top-ten',
+        '--config=p/secrets',
+        '--include=*.php',
+        '--metrics=off',
+        '--error',
+        'admin', 'install', 'var', 'usr', 'tests', 'index.php', 'install.php'
+    )
+
+    # 捕获输出时临时关闭 Stop 偏好: 原生命令的 stderr 重定向会产生 ErrorRecord,
+    # 在 $ErrorActionPreference='Stop' 下会直接中断脚本。
+    $semgrepErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $semgrepOutput = & $semgrep @semgrepArgs 2>&1
+    $semgrepExit = $LASTEXITCODE
+    $ErrorActionPreference = $semgrepErrorAction
+
+    $semgrepOutput | ForEach-Object { Write-Host $_ }
+
+    if ($semgrepExit -ne 0) {
+        # SEMGREP_APP_TOKEN 过期/无效时 semgrep.dev 返回 401, 规则无法下载;
+        # 此时降级为公共规则重跑一次, 而不是让整个质量门禁误报失败。
+        $registryRejected = $env:SEMGREP_APP_TOKEN -and (($semgrepOutput | Out-String) -match 'HTTP 40[13]|invalid configuration file found')
+        if ($registryRejected) {
+            Write-Warning 'Semgrep registry rejected SEMGREP_APP_TOKEN (expired or invalid); retrying with public rules only. Rotate the token to re-enable Pro rules.'
+            Remove-Item Env:SEMGREP_APP_TOKEN -ErrorAction SilentlyContinue
+            $ErrorActionPreference = 'Continue'
+            & $semgrep @semgrepArgs
+            $semgrepExit = $LASTEXITCODE
+            $ErrorActionPreference = $semgrepErrorAction
+            if ($semgrepExit -ne 0) { throw 'Semgrep failed or reported findings.' }
+        } else {
+            throw 'Semgrep failed or reported findings.'
+        }
+    }
 } finally {
     Pop-Location
 }
