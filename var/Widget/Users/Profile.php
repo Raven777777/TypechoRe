@@ -31,6 +31,7 @@ class Profile extends Users implements ActionInterface
     /**
      * 执行函数
      */
+    #[\Override]
     public function execute()
     {
         /** 注册用户以上权限 */
@@ -447,6 +448,7 @@ class Profile extends Users implements ActionInterface
      * @access public
      * @return void
      */
+    #[\Override]
     public function action()
     {
         $this->security->protect();

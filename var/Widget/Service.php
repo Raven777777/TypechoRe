@@ -295,6 +295,7 @@ class Service extends BaseOptions implements ActionInterface
     /**
      * 异步请求入口
      */
+    #[\Override]
     public function action()
     {
         $this->on($this->request->isPost() && $this->request->is('do=ping'))->sendPingHandle();

@@ -25,6 +25,7 @@ class SQLite extends Pdo
      * @access public
      * @return boolean
      */
+    #[\Override]
     public static function isAvailable(): bool
     {
         return parent::isAvailable() && in_array('sqlite', \PDO::getAvailableDrivers());
@@ -37,18 +38,16 @@ class SQLite extends Pdo
      * @access public
      * @return \PDO
      */
+    #[\Override]
     public function init(Config $config): \PDO
     {
-        $pdo = new \PDO("sqlite:{$config->file}");
+        $pdo = new \Pdo\Sqlite("sqlite:{$config->file}");
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 5);
-        $this->isSQLite2 = version_compare($pdo->getAttribute(\PDO::ATTR_SERVER_VERSION), '3.0.0', '<');
 
         /** 并发加固: 非零 busy_timeout + WAL 模式, 读写不再互斥, 消除 "database is locked" */
-        if (!$this->isSQLite2) {
-            $pdo->exec('PRAGMA journal_mode = WAL;');
-            $pdo->exec('PRAGMA synchronous = NORMAL;');
-        }
+        $pdo->exec('PRAGMA journal_mode = WAL;');
+        $pdo->exec('PRAGMA synchronous = NORMAL;');
         $pdo->exec('PRAGMA busy_timeout = 5000;');
 
         return $pdo;
@@ -60,6 +59,7 @@ class SQLite extends Pdo
      * @param \PDOStatement $resource 查询的资源数据
      * @return \stdClass|null
      */
+    #[\Override]
     public function fetchObject($resource): ?\stdClass
     {
         $result = $this->fetch($resource);
@@ -72,6 +72,7 @@ class SQLite extends Pdo
      * @param \PDOStatement $resource 查询返回资源标识
      * @return array|null
      */
+    #[\Override]
     public function fetch($resource): ?array
     {
         $result = parent::fetch($resource);
@@ -84,6 +85,7 @@ class SQLite extends Pdo
      * @param \PDOStatement $resource 查询的资源数据
      * @return array
      */
+    #[\Override]
     public function fetchAll($resource): array
     {
         return array_map([$this, 'filterColumnName'], parent::fetchAll($resource));

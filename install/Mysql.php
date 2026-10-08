@@ -56,16 +56,6 @@
 
     <ul class="typecho-option">
         <li>
-            <label class="typecho-label" for="dbEngine"><?php _e('数据库引擎'); ?></label>
-            <select name="dbEngine" id="dbEngine">
-                <option value="InnoDB">InnoDB</option>
-                <option value="MyISAM">MyISAM</option>
-            </select>
-        </li>
-    </ul>
-
-    <ul class="typecho-option">
-        <li>
             <label class="typecho-label" for="dbSslCa"><?php _e('数据库 SSL 证书'); ?></label>
             <input type="text" class="text" name="dbSslCa" id="dbSslCa"/>
             <p class="description"><?php _e('如果您的数据库启用了 SSL，请填写 CA 证书路径，否则请留空'); ?></p>

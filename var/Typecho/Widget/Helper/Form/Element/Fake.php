@@ -49,6 +49,7 @@ class Fake extends Element
      * @param array|null $options 选择项
      * @return Layout|null
      */
+    #[\Override]
     public function input(?string $name = null, ?array $options = null): ?Layout
     {
         $input = new Layout('input');
@@ -61,6 +62,7 @@ class Fake extends Element
      *
      * @param mixed $value 表单项默认值
      */
+    #[\Override]
     protected function inputValue($value)
     {
         $this->input->setAttribute('value', $value);

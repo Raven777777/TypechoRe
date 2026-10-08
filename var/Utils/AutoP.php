@@ -43,16 +43,16 @@ class AutoP
 
         switch (true) {
             /** 用br处理换行 */
-            case false !== strpos(
+            case str_contains(
                 '|li|dd|dt|td|p|a|span|cite|strong|sup|sub|small|del|u|i|b|ins|h1|h2|h3|h4|h5|h6|',
                 $tagMatch
             ):
                 $text = nl2br(trim($text));
                 break;
             /** 用段落处理换行 */
-            case false !== strpos('|div|blockquote|form|', $tagMatch):
+            case str_contains('|div|blockquote|form|', $tagMatch):
                 $text = $this->cutByBlock($text);
-                if (false !== strpos($text, '</p><p>')) {
+                if (str_contains($text, '</p><p>')) {
                     $text = $this->fixParagraph($text);
                 }
                 break;
@@ -61,7 +61,7 @@ class AutoP
         }
 
         /** 没有段落能力的标签 */
-        if (false !== strpos('|a|span|font|code|cite|strong|sup|sub|small|del|u|i|b|', $tagMatch)) {
+        if (str_contains('|a|span|font|code|cite|strong|sup|sub|small|del|u|i|b|', $tagMatch)) {
             $key = '<b' . $matches[2] . '/>';
         } else {
             $key = '<p' . $matches[2] . '/>';

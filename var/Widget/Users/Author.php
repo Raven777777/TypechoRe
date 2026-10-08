@@ -25,6 +25,7 @@ class Author extends Users
      *
      * @throws Exception
      */
+    #[\Override]
     public function execute()
     {
         if (isset($this->parameter->uid)) {

@@ -25,6 +25,7 @@ class SQLite implements Adapter
      * @access public
      * @return boolean
      */
+    #[\Override]
     public static function isAvailable(): bool
     {
         return extension_loaded('sqlite3');
@@ -37,18 +38,16 @@ class SQLite implements Adapter
      * @return \SQLite3
      * @throws ConnectionException
      */
+    #[\Override]
     public function connect(Config $config): \SQLite3
     {
         try {
             $dbHandle = new \SQLite3($config->file);
-            $this->isSQLite2 = version_compare(\SQLite3::version()['versionString'], '3.0.0', '<');
 
             /** 并发加固: 非零 busy_timeout + WAL 模式, 读写不再互斥, 消除 "database is locked" */
             $dbHandle->busyTimeout(5000);
-            if (!$this->isSQLite2) {
-                $dbHandle->exec('PRAGMA journal_mode = WAL;');
-                $dbHandle->exec('PRAGMA synchronous = NORMAL;');
-            }
+            $dbHandle->exec('PRAGMA journal_mode = WAL;');
+            $dbHandle->exec('PRAGMA synchronous = NORMAL;');
         } catch (\Exception $e) {
             throw new ConnectionException($e->getMessage(), $e->getCode());
         }
@@ -62,6 +61,7 @@ class SQLite implements Adapter
      * @param mixed $handle
      * @return string
      */
+    #[\Override]
     public function getVersion($handle): string
     {
         return \SQLite3::version()['versionString'];
@@ -78,6 +78,7 @@ class SQLite implements Adapter
      * @return \SQLite3Result
      * @throws SQLException
      */
+    #[\Override]
     public function query(
         string $query,
         $handle,
@@ -112,6 +113,7 @@ class SQLite implements Adapter
      * @param \SQLite3Result $resource 查询的资源数据
      * @return \stdClass|null
      */
+    #[\Override]
     public function fetchObject($resource): ?\stdClass
     {
         $result = $this->fetch($resource);
@@ -124,6 +126,7 @@ class SQLite implements Adapter
      * @param \SQLite3Result $resource 查询返回资源标识
      * @return array|null
      */
+    #[\Override]
     public function fetch($resource): ?array
     {
         $result = $resource->fetchArray(SQLITE3_ASSOC);
@@ -136,6 +139,7 @@ class SQLite implements Adapter
      * @param \SQLite3Result $resource 查询的资源数据
      * @return array
      */
+    #[\Override]
     public function fetchAll($resource): array
     {
         $result = [];
@@ -153,6 +157,7 @@ class SQLite implements Adapter
      * @param mixed $string 需要转义的字符串
      * @return string
      */
+    #[\Override]
     public function quoteValue($string): string
     {
         return '\'' . str_replace('\'', '\'\'', $string) . '\'';
@@ -165,6 +170,7 @@ class SQLite implements Adapter
      * @param \SQLite3 $handle 连接对象
      * @return integer
      */
+    #[\Override]
     public function affectedRows($resource, $handle): int
     {
         return $handle->changes();
@@ -177,6 +183,7 @@ class SQLite implements Adapter
      * @param \SQLite3 $handle 连接对象
      * @return integer
      */
+    #[\Override]
     public function lastInsertId($resource, $handle): int
     {
         return $handle->lastInsertRowID();

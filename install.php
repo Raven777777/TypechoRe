@@ -285,7 +285,7 @@ function install_get_default_options(): array
             'defaultCategory' => 1,
             'allowRegister' => 0,
             'defaultAllowComment' => 1,
-            'defaultAllowPing' => 1,
+            'defaultAllowPing' => 0,
             'defaultAllowFeed' => 1,
             'pageSize' => 5,
             'postsListSize' => 10,
@@ -321,7 +321,7 @@ function install_get_default_options(): array
             'attachmentTypes' => '@image@',
             'secret' => \Typecho\Common::randString(32, true),
             'installed' => 0,
-            'allowXmlRpc' => 2
+            'allowXmlRpc' => 0
         ];
     }
 
@@ -966,7 +966,6 @@ function install_step_2_perform()
             'dbPassword' => null,
             'dbCharset' => 'utf8mb4',
             'dbDatabase' => null,
-            'dbEngine' => 'InnoDB',
             'dbSslCa' => null,
             'dbSslVerify' => 'off',
         ],
@@ -994,7 +993,6 @@ function install_step_2_perform()
             'dbDatabase' => $request->getServer('TYPECHO_DB_DATABASE'),
             'dbFile' => $request->getServer('TYPECHO_DB_FILE'),
             'dbDsn' => $request->getServer('TYPECHO_DB_DSN'),
-            'dbEngine' => $request->getServer('TYPECHO_DB_ENGINE'),
             'dbPrefix' => $request->getServer('TYPECHO_DB_PREFIX', 'typecho_'),
             'dbAdapter' => $request->getServer('TYPECHO_DB_ADAPTER', install_get_current_db_driver()),
             'dbNext' => $request->getServer('TYPECHO_DB_NEXT', 'none'),
@@ -1011,7 +1009,6 @@ function install_step_2_perform()
             'dbDatabase',
             'dbFile',
             'dbDsn',
-            'dbEngine',
             'dbPrefix',
             'dbAdapter',
             'dbNext',
@@ -1052,8 +1049,6 @@ function install_step_2_perform()
                 ->addRule('dbCharset', 'required', _t('确认您的配置'))
                 ->addRule('dbCharset', 'enum', _t('确认您的配置'), ['utf8', 'utf8mb4'])
                 ->addRule('dbDatabase', 'required', _t('确认您的配置'))
-                ->addRule('dbEngine', 'required', _t('确认您的配置'))
-                ->addRule('dbEngine', 'enum', _t('确认您的配置'), ['InnoDB', 'MyISAM'])
                 ->addRule('dbSslCa', 'file_exists', _t('确认您的配置'))
                 ->addRule('dbSslVerify', 'enum', _t('确认您的配置'), ['on', 'off'])
                 ->run($config);
@@ -1097,7 +1092,7 @@ function install_step_2_perform()
 
     // intval port number
     if (isset($dbConfig['port'])) {
-        if (strpos($dbConfig['host'], '/') !== false && $type == 'Mysql') {
+        if (str_contains($dbConfig['host'], '/') && $type == 'Mysql') {
             $dbConfig['port'] = null;
         } else {
             $dbConfig['port'] = intval($dbConfig['port']);
@@ -1185,9 +1180,8 @@ function install_step_2_perform()
             $scripts = str_replace('%charset%', $dbConfig['charset'], $scripts);
         }
 
-        if (isset($dbConfig['engine'])) {
-            $scripts = str_replace('%engine%', $dbConfig['engine'], $scripts);
-        }
+        /** MySQL 5.5.3+ 仅支持 InnoDB + utf8mb4, MyISAM 已于 2026 弃用 (不支持事务/外键/crash-safe) */
+        $scripts = str_replace('%engine%', 'InnoDB', $scripts);
 
         $scripts = explode(';', $scripts);
         foreach ($scripts as $script) {

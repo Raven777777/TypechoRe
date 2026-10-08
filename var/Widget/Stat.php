@@ -82,6 +82,7 @@ class Stat extends Base
     /**
      * @param int $components
      */
+    #[\Override]
     protected function initComponents(int &$components)
     {
         $components = self::INIT_USER;

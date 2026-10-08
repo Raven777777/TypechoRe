@@ -16,6 +16,7 @@ class CommentPage extends Base implements ActionInterface
      *
      * @throws Exception
      */
+    #[\Override]
     public function action()
     {
         $page = abs($this->request->filter('int')->get('commentPage'));

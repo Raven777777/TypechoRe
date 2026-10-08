@@ -30,6 +30,7 @@ class Box extends PageNavigator
      * @param array $template
      * @return void
      */
+    #[\Override]
     public function render(
         string $prevWord = 'PREV',
         string $nextWord = 'NEXT',

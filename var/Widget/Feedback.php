@@ -61,6 +61,7 @@ class Feedback extends Comments implements ActionInterface
      *
      * @throws \Exception
      */
+    #[\Override]
     public function action()
     {
         /** 回调方法 */

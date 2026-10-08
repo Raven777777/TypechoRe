@@ -25,6 +25,7 @@ class Url extends Element
      * @param string $value
      * @return string
      */
+    #[\Override]
     protected function filterValue(string $value): string
     {
         return htmlspecialchars(Common::idnToUtf8($value));

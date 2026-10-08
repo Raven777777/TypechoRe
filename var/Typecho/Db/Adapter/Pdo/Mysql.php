@@ -25,6 +25,7 @@ class Mysql extends Pdo
      * @access public
      * @return boolean
      */
+    #[\Override]
     public static function isAvailable(): bool
     {
         return parent::isAvailable() && in_array('mysql', \PDO::getAvailableDrivers());
@@ -37,6 +38,7 @@ class Mysql extends Pdo
      * @param string $string
      * @return string
      */
+    #[\Override]
     public function quoteColumn(string $string): string
     {
         return '`' . $string . '`';
@@ -49,24 +51,16 @@ class Mysql extends Pdo
      * @access public
      * @return \PDO
      */
+    #[\Override]
     public function init(Config $config): \PDO
     {
-        $isModernPdoMysql = class_exists('\Pdo\Mysql');
-        $sslCaAttr = $isModernPdoMysql ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA;
-        $sslVerifyAttr = $isModernPdoMysql
-            ? \Pdo\Mysql::ATTR_SSL_VERIFY_SERVER_CERT
-            : \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT;
-        $useBufferedQueryAttr = $isModernPdoMysql
-            ? \Pdo\Mysql::ATTR_USE_BUFFERED_QUERY
-            : \PDO::MYSQL_ATTR_USE_BUFFERED_QUERY;
-
         $options = [];
         if (!empty($config->sslCa)) {
-            $options[$sslCaAttr] = $config->sslCa;
+            $options[\Pdo\Mysql::ATTR_SSL_CA] = $config->sslCa;
 
             if (isset($config->sslVerify)) {
                 // FIXME: https://github.com/php/php-src/issues/8577
-                $options[$sslVerifyAttr] = $config->sslVerify;
+                $options[\Pdo\Mysql::ATTR_SSL_VERIFY_SERVER_CERT] = $config->sslVerify;
             }
         }
 
@@ -76,18 +70,18 @@ class Mysql extends Pdo
 
         $dsn = !empty($config->dsn)
             ? $config->dsn
-            : (strpos($config->host, '/') !== false
+            : (str_contains($config->host, '/')
                 ? "mysql:dbname={$config->database};unix_socket={$config->host}{$charset}"
                 : "mysql:dbname={$config->database};host={$config->host};port={$config->port}{$charset}");
 
-        $pdo = new \PDO(
+        $pdo = new \Pdo\Mysql(
             $dsn,
             $config->user,
             $config->password,
             $options
         );
 
-        $pdo->setAttribute($useBufferedQueryAttr, true);
+        $pdo->setAttribute(\Pdo\Mysql::ATTR_USE_BUFFERED_QUERY, true);
 
         if ($config->charset) {
             $pdo->exec("SET NAMES '{$config->charset}'");
@@ -102,6 +96,7 @@ class Mysql extends Pdo
      * @param mixed $string 需要转义的字符串
      * @return string
      */
+    #[\Override]
     public function quoteValue($string): string
     {
         return '\'' . str_replace(['\'', '\\'], ['\'\'', '\\\\'], $string) . '\'';

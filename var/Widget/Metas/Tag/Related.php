@@ -16,6 +16,7 @@ class Related extends Metas
     /**
      * @return void
      */
+    #[\Override]
     public function execute()
     {
         $this->db->fetchAll($this->select()

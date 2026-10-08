@@ -91,6 +91,7 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
      * @access public
      * @return void
      */
+    #[\Override]
     public function rewind(): void
     {
         reset($this->currentConfig);
@@ -102,8 +103,8 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
      * @access public
      * @return mixed
      */
-    #[\ReturnTypeWillChange]
-    public function current()
+    #[\Override]
+    public function current(): mixed
     {
         return current($this->currentConfig);
     }
@@ -114,6 +115,7 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
      * @access public
      * @return void
      */
+    #[\Override]
     public function next(): void
     {
         next($this->currentConfig);
@@ -125,8 +127,8 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
      * @access public
      * @return mixed
      */
-    #[\ReturnTypeWillChange]
-    public function key()
+    #[\Override]
+    public function key(): mixed
     {
         return key($this->currentConfig);
     }
@@ -137,6 +139,7 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
      * @access public
      * @return boolean
      */
+    #[\Override]
     public function valid(): bool
     {
         return false !== $this->current();
@@ -198,6 +201,7 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
      * @access public
      * @return string
      */
+    #[\Override]
     public function __toString(): string
     {
         return json_encode($this->currentConfig);
@@ -215,6 +219,7 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
      * @param mixed $offset
      * @return bool
      */
+    #[\Override]
     public function offsetExists($offset): bool
     {
         return isset($this->currentConfig[$offset]);
@@ -224,8 +229,8 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
      * @param mixed $offset
      * @return mixed
      */
-    #[\ReturnTypeWillChange]
-    public function offsetGet($offset)
+    #[\Override]
+    public function offsetGet($offset): mixed
     {
         return $this->currentConfig[$offset] ?? null;
     }
@@ -234,6 +239,7 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
      * @param mixed $offset
      * @param mixed $value
      */
+    #[\Override]
     public function offsetSet($offset, $value): void
     {
         $this->currentConfig[$offset] = $value;
@@ -242,6 +248,7 @@ class Config extends \stdClass implements \Iterator, \ArrayAccess
     /**
      * @param mixed $offset
      */
+    #[\Override]
     public function offsetUnset($offset): void
     {
         unset($this->currentConfig[$offset]);

@@ -27,6 +27,7 @@ class Classic extends PageNavigator
      * @param string $nextWord 下一页文字
      * @return void
      */
+    #[\Override]
     public function render(string $prevWord = 'PREV', string $nextWord = 'NEXT')
     {
         $this->prev($prevWord);

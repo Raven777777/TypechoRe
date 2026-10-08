@@ -26,6 +26,7 @@ class Related extends Contents
      * @return void
      * @throws Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->parameter->setDefault('parentId=0&limit=0');

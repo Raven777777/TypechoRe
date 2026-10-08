@@ -25,6 +25,7 @@ class Rows extends Widget
     /**
      * 执行函数
      */
+    #[\Override]
     public function execute()
     {
         $themes = $this->getThemes();

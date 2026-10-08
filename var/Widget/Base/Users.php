@@ -39,6 +39,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
     /**
      * @return string 获取主键
      */
+    #[\Override]
     public function getPrimaryKey(): string
     {
         return 'uid';
@@ -50,6 +51,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
      * @param array $value 每行的值
      * @return array
      */
+    #[\Override]
     public function push(array $value): array
     {
         $value = $this->filter($value);
@@ -62,6 +64,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
      * @param array $row 需要过滤的行数据
      * @return array
      */
+    #[\Override]
     public function filter(array $row): array
     {
         return Users::pluginHandle()->filter('filter', $row, $this);
@@ -71,6 +74,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
      * @param string $key
      * @return string
      */
+    #[\Override]
     public function getRouterParam(string $key): string
     {
         switch ($key) {
@@ -88,6 +92,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
      * @return Query
      * @throws Exception
      */
+    #[\Override]
     public function select(...$fields): Query
     {
         return $this->db->select(...$fields)->from('table.users');
@@ -100,6 +105,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function size(Query $condition): int
     {
         return $this->db->fetchObject($condition->select(['COUNT(uid)' => 'num'])->from('table.users'))->num;
@@ -112,6 +118,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function insert(array $rows): int
     {
         return $this->db->query($this->db->insert('table.users')->rows($rows));
@@ -125,6 +132,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function update(array $rows, Query $condition): int
     {
         return $this->db->query($condition->update('table.users')->rows($rows));
@@ -137,6 +145,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function delete(Query $condition): int
     {
         return $this->db->query($condition->delete('table.users'));

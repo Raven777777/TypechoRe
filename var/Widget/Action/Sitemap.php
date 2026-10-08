@@ -98,6 +98,7 @@ class Sitemap extends Contents implements ActionInterface
     /**
      * @throws Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         $exists = false;
@@ -121,6 +122,7 @@ class Sitemap extends Contents implements ActionInterface
     /**
      * @return void
      */
+    #[\Override]
     public function action()
     {
         $this->render();

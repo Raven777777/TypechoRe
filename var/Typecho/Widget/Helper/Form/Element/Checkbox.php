@@ -33,6 +33,7 @@ class Checkbox extends Element
      * @param array|null $options 选择项
      * @return Layout|null
      */
+    #[\Override]
     public function input(?string $name = null, ?array $options = null): ?Layout
     {
         foreach ($options as $value => $label) {
@@ -59,6 +60,7 @@ class Checkbox extends Element
      *
      * @param mixed $value 表单元素值
      */
+    #[\Override]
     protected function inputValue($value)
     {
         $values = isset($value) ? (is_array($value) ? $value : [$value]) : [];

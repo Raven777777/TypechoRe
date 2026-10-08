@@ -12,6 +12,3 @@ parameters:
         - install.php
     bootstrapFiles:
         - tools/phpstan-bootstrap.php
-    excludePaths:
-        analyse:
-            - var/lbuchs/**

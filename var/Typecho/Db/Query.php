@@ -154,7 +154,7 @@ class Query
      */
     private function filterPrefix(string $string): string
     {
-        return (0 === strpos($string, 'table.')) ? substr_replace($string, $this->prefix, 0, 6) : $string;
+        return str_starts_with($string, 'table.') ? substr_replace($string, $this->prefix, 0, 6) : $string;
     }
 
     /**
@@ -177,7 +177,7 @@ class Query
         for ($i = 0; $i < $length; $i++) {
             $cha = $str[$i];
 
-            if (ctype_alnum($cha) || false !== strpos('_*', $cha)) {
+            if (ctype_alnum($cha) || str_contains('_*', $cha)) {
                 if (!$lastIsAlnum) {
                     if (
                         $quotes > 0 && !ctype_digit($word) && '.' != $split
@@ -524,6 +524,7 @@ class Query
      *
      * @return string
      */
+    #[\Override]
     public function __toString()
     {
         switch ($this->sqlPreBuild['action']) {

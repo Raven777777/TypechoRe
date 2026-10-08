@@ -24,6 +24,7 @@ class Admin extends Cloud
      *
      * @throws Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         $select = $this->select()->where('type = ?', 'tag')->order('mid', Db::SORT_DESC);

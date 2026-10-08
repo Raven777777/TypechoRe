@@ -175,6 +175,7 @@ class Archive extends Contents
      * @param Config $parameter
      * @throws \Exception
      */
+    #[\Override]
     protected function initParameter(Config $parameter)
     {
         $parameter->setDefault([
@@ -527,6 +528,7 @@ class Archive extends Contents
     /**
      * 执行函数
      */
+    #[\Override]
     public function execute()
     {
         /** 避免重复取数据 */
@@ -576,12 +578,12 @@ class Archive extends Contents
         $frontPage = $this->options->frontPage;
         if (!$this->invokeByFeed && ('index' == $this->parameter->type || 'index_page' == $this->parameter->type)) {
             //显示某个页面
-            if (0 === strpos($frontPage, 'page:')) {
+            if (str_starts_with($frontPage, 'page:')) {
                 // 对某些变量做hack
                 $this->request->setParam('cid', intval(substr($frontPage, 5)));
                 $this->parameter->type = 'page';
                 $this->makeSinglePageAsFrontPage = true;
-            } elseif (0 === strpos($frontPage, 'file:')) {
+            } elseif (str_starts_with($frontPage, 'file:')) {
                 // 显示某个文件
                 $this->setThemeFile(substr($frontPage, 5));
                 return;
@@ -701,6 +703,7 @@ class Archive extends Contents
      * @return Query
      * @throws Db\Exception
      */
+    #[\Override]
     public function select(...$fields): Query
     {
         if ($this->invokeByFeed) {
@@ -717,6 +720,7 @@ class Archive extends Contents
      *
      * @param string $more 文章截取后缀
      */
+    #[\Override]
     public function content($more = null)
     {
         parent::content($this->is('single') ? false : $more);
@@ -756,7 +760,7 @@ class Archive extends Contents
             $total = $this->getTotal();
             $query = Router::url(
                 $this->parameter->type .
-                (false === strpos($this->parameter->type, '_page') ? '_page' : null),
+                (false === str_contains($this->parameter->type, '_page') ? '_page' : null),
                 $this->pageRow,
                 $this->options->index
             );
@@ -806,7 +810,7 @@ class Archive extends Contents
             if (!isset($nav)) {
                 $query = Router::url(
                     $this->parameter->type .
-                    (false === strpos($this->parameter->type, '_page') ? '_page' : null),
+                    (false === str_contains($this->parameter->type, '_page') ? '_page' : null),
                     $this->pageRow,
                     $this->options->index
                 );
@@ -1426,6 +1430,7 @@ EOF;
     /**
      * @return array
      */
+    #[\Override]
     protected function ___directory(): array
     {
         if ('page' == $this->type) {
@@ -1444,6 +1449,7 @@ EOF;
      *
      * @return string
      */
+    #[\Override]
     protected function ___commentUrl(): string
     {
         /** 生成反馈地址 */
@@ -1453,7 +1459,7 @@ EOF;
         //不依赖js的父级评论
         $reply = $this->request->filter('int')->get('replyTo');
         if ($reply && $this->is('single')) {
-            $commentUrl .= (false === strpos($commentUrl, '?') ? '?' : '&') . 'parent=' . $reply;
+            $commentUrl .= (false === str_contains($commentUrl, '?') ? '?' : '&') . 'parent=' . $reply;
         }
 
         // 评论接口启用 Security::protect() 时必须携带 CSRF token。
@@ -1611,7 +1617,7 @@ EOF;
 
         if ($this->request->is('directory') && 'page' == $this->parameter->type) {
             $directory = explode('/', $this->request->get('directory'));
-            $select->where('slug = ?', $directory[count($directory) - 1]);
+            $select->where('slug = ?', array_last($directory));
         }
 
         /** 匹配时间 */
@@ -1765,7 +1771,7 @@ EOF;
 
         if ($this->request->is('directory')) {
             $directory = explode('/', $this->request->get('directory'));
-            $slug = $directory[count($directory) - 1];
+            $slug = array_last($directory);
             $categorySelect->where('slug = ?', $slug);
             $alias .= ':' . $slug;
         }

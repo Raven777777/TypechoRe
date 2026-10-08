@@ -26,6 +26,7 @@ class Textarea extends Element
      * @param array|null $options 选择项
      * @return Layout|null
      */
+    #[\Override]
     public function input(?string $name = null, ?array $options = null): ?Layout
     {
         $input = new Layout('textarea', ['id' => $name . '-0-' . self::$uniqueId, 'name' => $name]);
@@ -41,6 +42,7 @@ class Textarea extends Element
      *
      * @param mixed $value 表单项默认值
      */
+    #[\Override]
     protected function inputValue($value)
     {
         $this->input->html(htmlspecialchars($value ?? ''));

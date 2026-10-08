@@ -13,6 +13,7 @@ namespace {
          * @param $value
          * @return string
          */
+        #[\Deprecated(message: 'use json_encode() directly', since: '1.3.1')]
         public static function encode($value): string
         {
             return json_encode($value);
@@ -23,6 +24,7 @@ namespace {
          * @param bool $assoc
          * @return mixed
          */
+        #[\Deprecated(message: 'use json_decode() directly', since: '1.3.1')]
         public static function decode(string $string, bool $assoc = false)
         {
             return json_decode($string, $assoc);
@@ -78,7 +80,7 @@ namespace Typecho {
 
     spl_autoload_register(function (string $className) {
         $isDefinedAlias = defined('__TYPECHO_CLASS_ALIASES__');
-        $isNamespace = strpos($className, '\\') !== false;
+        $isNamespace = str_contains($className, '\\');
         $isAlias = $isDefinedAlias && isset(__TYPECHO_CLASS_ALIASES__[$className]);
         $isPlugin = false;
 
@@ -98,7 +100,7 @@ namespace Typecho {
                 $alias = empty($alias) ? Common::nativeClassName($className) : $alias;
                 $path = str_replace('\\', '/', $className);
             }
-        } elseif (strpos($className, '_') !== false || $isAlias) {
+        } elseif (str_contains($className, '_') || $isAlias) {
             $isPlugin = !$isAlias && !preg_match("/^(Typecho|Widget|IXR)_/", $className);
 
             if ($isPlugin) {
@@ -192,7 +194,7 @@ namespace Typecho {
         public static function url(?string $path, ?string $prefix): string
         {
             $path = $path ?? '';
-            $path = (0 === strpos($path, './')) ? substr($path, 2) : $path;
+            $path = str_starts_with($path, './') ? substr($path, 2) : $path;
             return rtrim($prefix ?? '', '/') . '/'
                 . str_replace('//', '/', ltrim($path, '/'));
         }
@@ -237,6 +239,9 @@ namespace Typecho {
 
             $secure = (!empty($_SERVER['HTTPS']) && 'off' !== strtolower($_SERVER['HTTPS']))
                 || 0 === stripos($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '', 'https');
+
+            /** PHP 8.5 起 session.use_strict_mode 可编程设置, 拒绝未初始化的会话 ID */
+            ini_set('session.use_strict_mode', '1');
 
             session_set_cookie_params([
                 'lifetime' => 0,
@@ -373,6 +378,7 @@ EOF;
          * @return boolean
          * @deprecated
          */
+        #[\Deprecated(message: 'use class_exists() directly', since: '1.3.1')]
         public static function isAvailableClass(string $className): bool
         {
             return class_exists($className);
@@ -386,6 +392,7 @@ EOF;
          * @deprecated use array_column instead
          *
          */
+        #[\Deprecated(message: 'use array_column() instead', since: '1.3.1')]
         public static function arrayFlatten(array $value, $key): array
         {
             return array_column($value, $key);
@@ -448,7 +455,7 @@ EOF;
 
             $trimString = substr($string, $startPos);
 
-            if (false === strpos($trimString, ">")) {
+            if (false === str_contains($trimString, ">")) {
                 $string = substr($string, 0, $startPos);
             }
 
@@ -574,7 +581,7 @@ EOF;
          */
         public static function slugName(?string $str, string $default = '', int $maxLength = 128): string
         {
-            $str = trim($str ?? '');
+            $str = mb_trim($str ?? '');
 
             if (!strlen($str)) {
                 return $default;
@@ -657,6 +664,7 @@ EOF;
          *
          * @return string
          */
+        #[\NoDiscard(message: 'escape() 的转义结果必须被输出或拼接')]
         public static function escape($val, int $flags = ENT_QUOTES): string
         {
             if (is_scalar($val)) {
@@ -840,7 +848,7 @@ EOF;
          *
          * @return boolean
          */
-        public static function hashValidate(?string $from, ?string $to): bool
+        public static function hashValidate(#[\SensitiveParameter] ?string $from, ?string $to): bool
         {
             if (!isset($from) || !isset($to) || '' === $to) {
                 return false;
@@ -860,7 +868,8 @@ EOF;
          *
          * @return string
          */
-        public static function hashPassword(string $password): string
+        #[\NoDiscard(message: '密码哈希必须被存储')]
+        public static function hashPassword(#[\SensitiveParameter] string $password): string
         {
             return password_hash($password, PASSWORD_BCRYPT, ['cost' => self::PASSWORD_HASH_COST]);
         }
@@ -883,6 +892,7 @@ EOF;
          *
          * @return string 128 位十六进制随机串 (512bit)
          */
+        #[\NoDiscard(message: 'authCode 明文必须被写入 cookie')]
         public static function generateAuthCode(): string
         {
             try {
@@ -906,6 +916,7 @@ EOF;
          *
          * @return string
          */
+        #[\NoDiscard(message: 'authCode 摘要必须被存储')]
         public static function hashAuthCode(string $authCode): string
         {
             return hash('sha512', $authCode);
@@ -968,9 +979,10 @@ EOF;
          * @param $secret
          * @return string
          */
+        #[\NoDiscard(message: 'token 必须被发送给服务端校验')]
         public static function timeToken($secret): string
         {
-            return sha1($secret . '&' . time());
+            return hash_hmac('sha256', (string) time(), (string) $secret);
         }
 
         /**
@@ -983,11 +995,18 @@ EOF;
          */
         public static function timeTokenValidate($token, $secret, int $timeout = 5): bool
         {
+            $token = (string) $token;
+
+            /** HMAC-SHA256 固定 64 位十六进制摘要, 长度不符直接拒绝 */
+            if (64 !== strlen($token)) {
+                return false;
+            }
+
             $now = time();
-            $from = $now - $timeout;
+            $from = $now - max(0, $timeout);
 
             for ($i = $now; $i >= $from; $i--) {
-                if (sha1($secret . '&' . $i) == $token) {
+                if (hash_equals(hash_hmac('sha256', (string) $i, (string) $secret), $token)) {
                     return true;
                 }
             }
@@ -1098,13 +1117,10 @@ EOF;
          */
         public static function buildBackupBuffer(string $type, string $header, string $body): string
         {
-            $buffer = '';
+            $buffer = pack('vvV', $type, strlen($header), strlen($body)) . $header . $body;
 
-            $buffer .= pack('vvV', $type, strlen($header), strlen($body));
-            $buffer .= $header . $body;
-            $buffer .= md5($buffer);
-
-            return $buffer;
+            /** 新备份使用 SHA-256 校验和; 旧版本为 32 字节 MD5, 导入时按文件版本自动兼容 */
+            return $buffer . hash('sha256', $buffer);
         }
 
         /**
@@ -1150,10 +1166,20 @@ EOF;
                 return false;
             }
 
-            $md5 = @fread($fp, 32);
-            $offset += 32;
+            /** 备份文件版本 0002 起使用 64 字节 SHA-256, 0001 为 32 字节 MD5 */
+            $hashLen = '0002' === $version ? 64 : 32;
+            $hash = @fread($fp, $hashLen);
+            $offset += $hashLen;
 
-            if (false === $md5 || $md5 != md5($meta . $header . $body)) {
+            if (false === $hash || strlen($hash) !== $hashLen) {
+                return false;
+            }
+
+            $expected = 64 === $hashLen
+                ? hash('sha256', $meta . $header . $body)
+                : md5($meta . $header . $body);
+
+            if (!hash_equals($expected, $hash)) {
                 return false;
             }
 
@@ -1206,11 +1232,10 @@ EOF;
 
             // 有可能是ipv6的地址
             if (function_exists('dns_get_record')) {
-                $records = dns_get_record($host, DNS_AAAA);
+                $record = array_first(dns_get_record($host, DNS_AAAA));
 
-                if (!empty($records) && !empty($records[0]['ipv6'])) {
-                    $address = $records[0]['ipv6'];
-                    return filter_var($address, FILTER_VALIDATE_IP, $flags) ?: null;
+                if (!empty($record['ipv6'])) {
+                    return filter_var($record['ipv6'], FILTER_VALIDATE_IP, $flags) ?: null;
                 }
             }
 
@@ -1221,6 +1246,7 @@ EOF;
          * @return bool
          * @deprecated after 1.2.0
          */
+        #[\Deprecated(message: 'App Engine 支持已移除', since: '1.2.0')]
         public static function isAppEngine(): bool
         {
             return false;
@@ -1611,17 +1637,17 @@ EOF;
             if (in_array($type, ['image', 'video', 'audio', 'text', 'application'])) {
                 switch (true) {
                     case in_array($stream, ['msword', 'msaccess', 'ms-powerpoint', 'ms-powerpoint']):
-                    case 0 === strpos($stream, 'vnd.'):
+                    case str_starts_with($stream, 'vnd.'):
                         return 'office';
-                    case false !== strpos($stream, 'html')
-                        || false !== strpos($stream, 'xml')
-                        || false !== strpos($stream, 'wml'):
+                    case str_contains($stream, 'html')
+                        || str_contains($stream, 'xml')
+                        || str_contains($stream, 'wml'):
                         return 'html';
-                    case false !== strpos($stream, 'compressed')
-                        || false !== strpos($stream, 'zip')
+                    case str_contains($stream, 'compressed')
+                        || str_contains($stream, 'zip')
                         || in_array($stream, ['application/x-gtar', 'application/x-tar']):
                         return 'archive';
-                    case 'text' == $type && 0 === strpos($stream, 'x-'):
+                    case 'text' == $type && str_starts_with($stream, 'x-'):
                         return 'script';
                     default:
                         return $type;

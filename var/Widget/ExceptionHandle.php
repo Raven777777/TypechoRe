@@ -20,6 +20,7 @@ class ExceptionHandle extends Base
     /**
      * 重载构造函数
      */
+    #[\Override]
     public function execute()
     {
         Archive::allocWithAlias('404', 'type=404')->render();

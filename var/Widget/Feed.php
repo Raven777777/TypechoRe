@@ -29,6 +29,7 @@ class Feed extends Contents
      * @param Config $parameter
      * @throws Exception
      */
+    #[\Override]
     protected function initParameter(Config $parameter)
     {
         $parameter->setDefault([
@@ -39,6 +40,7 @@ class Feed extends Contents
     /**
      * @throws Exception
      */
+    #[\Override]
     public function execute()
     {
         $feedPath = $this->request->get('feed', '/');

@@ -11,6 +11,7 @@ class Number extends Text
     /**
      * @return string
      */
+    #[\Override]
     protected function getType(): string
     {
         return 'number';

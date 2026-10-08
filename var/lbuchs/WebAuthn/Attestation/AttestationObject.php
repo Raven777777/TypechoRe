@@ -39,13 +39,8 @@ class AttestationObject {
 
 
         switch ($this->_attestationFormatName) {
-            case 'android-key': $this->_attestationFormat = new Format\AndroidKey($enc, $this->_authenticatorData); break;
-            case 'android-safetynet': $this->_attestationFormat = new Format\AndroidSafetyNet($enc, $this->_authenticatorData); break;
-            case 'apple': $this->_attestationFormat = new Format\Apple($enc, $this->_authenticatorData); break;
-            case 'fido-u2f': $this->_attestationFormat = new Format\U2f($enc, $this->_authenticatorData); break;
+            // TypechoRe 仅支持隐私友好的 none 自签名, 不随包分发其他 attestation 格式实现
             case 'none': $this->_attestationFormat = new Format\None($enc, $this->_authenticatorData); break;
-            case 'packed': $this->_attestationFormat = new Format\Packed($enc, $this->_authenticatorData); break;
-            case 'tpm': $this->_attestationFormat = new Format\Tpm($enc, $this->_authenticatorData); break;
             default: throw new WebAuthnException('invalid attestation format: ' . $enc['fmt'], WebAuthnException::INVALID_DATA);
         }
     }

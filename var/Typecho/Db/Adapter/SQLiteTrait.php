@@ -9,8 +9,6 @@ trait SQLiteTrait
 {
     use QueryTrait;
 
-    private bool $isSQLite2 = false;
-
     /**
      * 清空数据表
      *
@@ -66,23 +64,6 @@ trait SQLiteTrait
     }
 
     /**
-     * 处理sqlite2的distinct count
-     *
-     * @param string $sql
-     *
-     * @return string
-     */
-    private function filterCountQuery(string $sql): string
-    {
-        if (preg_match("/SELECT\s+COUNT\(DISTINCT\s+([^\)]+)\)\s+(AS\s+[^\s]+)?\s*FROM\s+(.+)/is", $sql, $matches)) {
-            return 'SELECT COUNT(' . $matches[1] . ') ' . $matches[2] . ' FROM SELECT DISTINCT '
-                . $matches[1] . ' FROM ' . $matches[3];
-        }
-
-        return $sql;
-    }
-
-    /**
      * 合成查询语句
      *
      * @access public
@@ -91,13 +72,7 @@ trait SQLiteTrait
      */
     public function parseSelect(array $sql): string
     {
-        $query = $this->buildQuery($sql);
-
-        if ($this->isSQLite2) {
-            $query = $this->filterCountQuery($query);
-        }
-
-        return $query;
+        return $this->buildQuery($sql);
     }
 
     /**

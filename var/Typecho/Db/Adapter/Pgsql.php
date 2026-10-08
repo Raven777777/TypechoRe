@@ -25,6 +25,7 @@ class Pgsql implements Adapter
      * @access public
      * @return boolean
      */
+    #[\Override]
     public static function isAvailable(): bool
     {
         return extension_loaded('pgsql');
@@ -37,6 +38,7 @@ class Pgsql implements Adapter
      * @return resource
      * @throws ConnectionException
      */
+    #[\Override]
     public function connect(Config $config)
     {
         $dsn = "host={$config->host} port={$config->port}"
@@ -70,6 +72,7 @@ class Pgsql implements Adapter
      * @param mixed $handle
      * @return string
      */
+    #[\Override]
     public function getVersion($handle): string
     {
         $version = pg_version($handle);
@@ -87,6 +90,7 @@ class Pgsql implements Adapter
      * @return resource
      * @throws SQLException
      */
+    #[\Override]
     public function query(string $query, $handle, int $op = Db::READ, ?string $action = null, ?string $table = null)
     {
         $this->prepareQuery($query, $handle, $action, $table);
@@ -107,6 +111,7 @@ class Pgsql implements Adapter
      * @param resource $resource 查询返回资源标识
      * @return array|null
      */
+    #[\Override]
     public function fetch($resource): ?array
     {
         return pg_fetch_assoc($resource) ?: null;
@@ -118,6 +123,7 @@ class Pgsql implements Adapter
      * @param resource $resource 查询的资源数据
      * @return \stdClass|null
      */
+    #[\Override]
     public function fetchObject($resource): ?\stdClass
     {
         return pg_fetch_object($resource) ?: null;
@@ -127,6 +133,7 @@ class Pgsql implements Adapter
      * @param resource $resource
      * @return array
      */
+    #[\Override]
     public function fetchAll($resource): array
     {
         return pg_fetch_all($resource, PGSQL_ASSOC) ?: [];
@@ -139,6 +146,7 @@ class Pgsql implements Adapter
      * @param resource $handle 连接对象
      * @return integer
      */
+    #[\Override]
     public function affectedRows($resource, $handle): int
     {
         return pg_affected_rows($resource);
@@ -150,6 +158,7 @@ class Pgsql implements Adapter
      * @param mixed $string 需要转义的字符串
      * @return string
      */
+    #[\Override]
     public function quoteValue($string): string
     {
         return '\'' . str_replace('\'', '\'\'', $string) . '\'';

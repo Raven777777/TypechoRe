@@ -34,6 +34,7 @@ class Edit extends Contents implements ActionInterface
      *
      * @throws Exception|\Typecho\Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         /** 必须为贡献者以上权限 */
@@ -284,6 +285,7 @@ class Edit extends Contents implements ActionInterface
      * @access public
      * @return void
      */
+    #[\Override]
     public function action()
     {
         $this->security->protect();

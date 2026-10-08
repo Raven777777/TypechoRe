@@ -24,6 +24,7 @@ class Recent extends Contents
      *
      * @throws Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->parameter->setDefault(['pageSize' => $this->options->postsListSize]);

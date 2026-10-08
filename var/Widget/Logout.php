@@ -24,6 +24,7 @@ class Logout extends Users implements ActionInterface
      * @access public
      * @return void
      */
+    #[\Override]
     public function action()
     {
         // protect

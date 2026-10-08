@@ -20,7 +20,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 class Backup extends BaseOptions implements ActionInterface
 {
     public const HEADER = '%TYPECHO_BACKUP_XXXX%';
-    public const HEADER_VERSION = '0001';
+    public const HEADER_VERSION = '0002';
 
     /**
      * @var array
@@ -87,6 +87,7 @@ class Backup extends BaseOptions implements ActionInterface
     /**
      * 绑定动作
      */
+    #[\Override]
     public function action()
     {
         $this->user->pass('administrator');

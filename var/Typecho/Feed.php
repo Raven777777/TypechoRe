@@ -199,6 +199,7 @@ class Feed
      *
      * @return string
      */
+    #[\Override]
     public function __toString(): string
     {
         $result = '<?xml version="1.0" encoding="' . $this->charset . '"?>' . self::EOL;

@@ -49,6 +49,7 @@ class Config extends Options
      * @throws Plugin\Exception
      * @throws Exception|\Typecho\Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->user->pass('administrator');

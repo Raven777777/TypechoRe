@@ -97,6 +97,7 @@ class Upgrade extends BaseOptions implements ActionInterface
      * @throws \Typecho\Db\Exception
      * @throws \Typecho\Widget\Exception
      */
+    #[\Override]
     public function action()
     {
         $this->user->pass('administrator');

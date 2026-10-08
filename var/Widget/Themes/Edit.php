@@ -177,6 +177,7 @@ class Edit extends Options implements ActionInterface
      *
      * @throws Exception|\Typecho\Db\Exception
      */
+    #[\Override]
     public function action()
     {
         /** 需要管理员权限 */

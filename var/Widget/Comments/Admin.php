@@ -72,6 +72,7 @@ class Admin extends Comments
      *
      * @throws Db\Exception|Exception
      */
+    #[\Override]
     public function execute()
     {
         $select = $this->select();
@@ -146,6 +147,7 @@ class Admin extends Comments
      * @return Contents
      * @throws Db\Exception
      */
+    #[\Override]
     protected function ___parentContent(): Contents
     {
         $cid = $this->request->is('cid') ? $this->request->filter('int')->get('cid') : $this->cid;
@@ -155,6 +157,7 @@ class Admin extends Comments
     /**
      * @return string
      */
+    #[\Override]
     protected function ___permalink(): string
     {
         if ('approved' === $this->status) {

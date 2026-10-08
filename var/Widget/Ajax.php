@@ -63,6 +63,7 @@ class Ajax extends BaseOptions implements ActionInterface
      * @access public
      * @return void
      */
+    #[\Override]
     public function action()
     {
         if (!$this->request->isAjax()) {

@@ -30,6 +30,7 @@ class Edit extends Metas implements ActionInterface
     /**
      * 入口函数
      */
+    #[\Override]
     public function execute()
     {
         /** 编辑以上权限 */
@@ -394,6 +395,7 @@ class Edit extends Metas implements ActionInterface
      * @return void
      * @throws Exception
      */
+    #[\Override]
     public function action()
     {
         $this->security->protect();

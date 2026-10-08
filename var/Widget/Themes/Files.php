@@ -42,6 +42,7 @@ class Files extends Base
      *
      * @throws Widget\Exception
      */
+    #[\Override]
     public function execute()
     {
         /** 管理员权限 */

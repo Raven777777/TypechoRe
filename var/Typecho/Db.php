@@ -111,7 +111,7 @@ class Db
         /** 数据库适配器 */
         $adapterName = '\Typecho\Db\Adapter\\' . str_replace('_', '\\', $adapterName);
 
-        if (!call_user_func([$adapterName, 'isAvailable'])) {
+        if (!$adapterName::isAvailable()) {
             throw new DbException("Adapter {$adapterName} is not available");
         }
 
@@ -441,7 +441,7 @@ class Db
         $resource = $this->query($query);
 
         return ($rows = $this->adapter->fetch($resource)) ?
-            ($filter ? call_user_func($filter, $rows) : $rows) :
+            ($filter ? $filter($rows) : $rows) :
             null;
     }
 
@@ -458,7 +458,7 @@ class Db
         $resource = $this->query($query);
 
         return ($rows = $this->adapter->fetchObject($resource)) ?
-            ($filter ? call_user_func($filter, $rows) : $rows) :
+            ($filter ? $filter($rows) : $rows) :
             null;
     }
 }

@@ -24,6 +24,7 @@ class Plugin implements PluginInterface
     /**
      * 激活插件方法,如果激活失败,直接抛出异常
      */
+    #[\Override]
     public static function activate()
     {
         \Typecho\Plugin::factory('admin/menu.php')->navBar = __CLASS__ . '::render';
@@ -32,6 +33,7 @@ class Plugin implements PluginInterface
     /**
      * 禁用插件方法,如果禁用失败,直接抛出异常
      */
+    #[\Override]
     public static function deactivate()
     {
     }
@@ -41,6 +43,7 @@ class Plugin implements PluginInterface
      *
      * @param Form $form 配置面板
      */
+    #[\Override]
     public static function config(Form $form)
     {
         /** 分类名称 */
@@ -53,6 +56,7 @@ class Plugin implements PluginInterface
      *
      * @param Form $form
      */
+    #[\Override]
     public static function personalConfig(Form $form)
     {
     }

@@ -25,6 +25,7 @@ class Hidden extends Element
      *
      * @return void
      */
+    #[\Override]
     public function init()
     {
         /** 隐藏此行 */
@@ -35,6 +36,7 @@ class Hidden extends Element
      * @param string $value
      * @return string
      */
+    #[\Override]
     protected function filterValue(string $value): string
     {
         return htmlspecialchars($value);

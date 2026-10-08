@@ -31,6 +31,7 @@ class Edit extends Users implements ActionInterface
      * @return void
      * @throws Exception|\Typecho\Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         /** 管理员以上权限 */
@@ -305,6 +306,7 @@ class Edit extends Users implements ActionInterface
      * @access public
      * @return void
      */
+    #[\Override]
     public function action()
     {
         $this->user->pass('administrator');

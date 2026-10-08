@@ -25,6 +25,7 @@ class Passkey extends BaseOptions implements ActionInterface
     private const SESSION_KEY = '__typecho_passkey';
     private static bool $tableReady = false;
 
+    #[\Override]
     public function action()
     {
         Common::startSession();
@@ -242,7 +243,9 @@ class Passkey extends BaseOptions implements ActionInterface
     private function input(): array
     {
         $body = file_get_contents('php://input');
-        $data = json_decode(false === $body ? '' : $body, true);
+        $raw = false === $body ? '' : $body;
+        $data = json_validate($raw) ? json_decode($raw, true) : null;
+
         if (!is_array($data)) {
             throw new WidgetException(_t('Passkey 请求格式错误'), 400);
         }

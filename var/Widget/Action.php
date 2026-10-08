@@ -54,6 +54,7 @@ class Action extends Widget
      *
      * @throws Widget\Exception
      */
+    #[\Override]
     public function execute()
     {
         /** 验证路由地址 **/

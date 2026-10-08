@@ -79,6 +79,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
     /**
      * @return string 获取主键
      */
+    #[\Override]
     public function getPrimaryKey(): string
     {
         return 'cid';
@@ -88,6 +89,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      * @param string $key
      * @return string
      */
+    #[\Override]
     public function getRouterParam(string $key): string
     {
         switch ($key) {
@@ -116,6 +118,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      * @param mixed $fields
      * @return Query
      */
+    #[\Override]
     public function select(...$fields): Query
     {
         return $this->db->select(...$fields)->from('table.contents');
@@ -128,6 +131,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function insert(array $rows): int
     {
         /** 构建插入结构 */
@@ -231,6 +235,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function update(array $rows, Query $condition): int
     {
         /** 首先验证写入权限 */
@@ -300,6 +305,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function delete(Query $condition): int
     {
         return $this->db->query($condition->delete('table.contents'));
@@ -312,6 +318,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function size(Query $condition): int
     {
         return $this->db->fetchObject($condition
@@ -348,6 +355,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      * @param array $value 每行的值
      * @return array
      */
+    #[\Override]
     public function push(array $value): array
     {
         $value = $this->filter($value);
@@ -360,6 +368,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      * @param array $row 需要过滤的行数据
      * @return array
      */
+    #[\Override]
     public function filter(array $row): array
     {
         /** 处理默认空值 */

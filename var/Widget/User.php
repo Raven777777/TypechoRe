@@ -52,6 +52,7 @@ class User extends Users
     /**
      * @param int $components
      */
+    #[\Override]
     protected function initComponents(int &$components)
     {
         $components = self::INIT_OPTIONS;
@@ -62,6 +63,7 @@ class User extends Users
      *
      * @throws DbException
      */
+    #[\Override]
     public function execute()
     {
         if ($this->hasLogin()) {
@@ -152,7 +154,7 @@ class User extends Users
      * @return boolean
      * @throws DbException
      */
-    public function login(string $name, string $password, bool $temporarily = false, int $expire = 0): bool
+    public function login(string $name, #[\SensitiveParameter] string $password, bool $temporarily = false, int $expire = 0): bool
     {
         //插件接口
         $result = self::pluginHandle()->trigger($loginPluggable)->call('login', $name, $password, $temporarily, $expire);
@@ -166,7 +168,7 @@ class User extends Users
             ->where('name = ?', $name)
             ->limit(1));
 
-        if (empty($user) && strpos($name, '@') !== false) {
+        if (empty($user) && str_contains($name, '@')) {
             $user = $this->db->fetchRow($this->db->select()
                 ->from('table.users')
                 ->where('mail = ?', $name)
@@ -218,6 +220,11 @@ class User extends Users
 
         Cookie::set('__typecho_uid', $user['uid'], $expire);
         Cookie::set('__typecho_authCode', $authCode, $expire);
+
+        // 权限提升后轮换会话 ID, 防止会话固定 (Passkey challenge 会话可能早于登录建立)
+        if (PHP_SESSION_ACTIVE === session_status()) {
+            session_regenerate_id(true);
+        }
 
         //更新最后登录时间以及验证码
         $this->db->query($this->db

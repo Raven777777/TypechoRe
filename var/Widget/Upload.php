@@ -85,6 +85,7 @@ class Upload extends Contents implements ActionInterface
     /**
      * 初始化函数
      */
+    #[\Override]
     public function action()
     {
         if ($this->user->pass('contributor', true) && $this->request->isPost()) {

@@ -26,6 +26,7 @@ class Related extends Contents
      *
      * @throws Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->parameter->setDefault('limit=5');

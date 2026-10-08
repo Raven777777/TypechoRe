@@ -280,8 +280,7 @@ class Helper
 
         self::setOption('panelTable', $panelTable);
 
-        end($panelTable['parent']);
-        return key($panelTable['parent']) + 10;
+        return array_key_last($panelTable['parent']) + 10;
     }
 
     /**
@@ -340,8 +339,7 @@ class Helper
 
         self::setOption('panelTable', $panelTable);
 
-        end($panelTable['child'][$index]);
-        return key($panelTable['child'][$index]);
+        return array_key_last($panelTable['child'][$index]);
     }
 
     /**

@@ -30,6 +30,7 @@ class Admin extends Contents
      * @return void
      * @throws Exception|\Typecho\Widget\Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->initPage();

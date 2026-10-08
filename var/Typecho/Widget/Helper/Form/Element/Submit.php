@@ -26,6 +26,7 @@ class Submit extends Element
      * @param array|null $options 选择项
      * @return Layout|null
      */
+    #[\Override]
     public function input(?string $name = null, ?array $options = null): ?Layout
     {
         $this->setAttribute('class', 'typecho-option typecho-option-submit');
@@ -41,6 +42,7 @@ class Submit extends Element
      *
      * @param mixed $value 表单元素值
      */
+    #[\Override]
     protected function inputValue($value)
     {
         $this->input->html($value ?? 'Submit');

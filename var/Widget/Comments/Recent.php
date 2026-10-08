@@ -24,6 +24,7 @@ class Recent extends Comments
     /**
      * @param Config $parameter
      */
+    #[\Override]
     protected function initParameter(Config $parameter)
     {
         $parameter->setDefault(
@@ -36,6 +37,7 @@ class Recent extends Comments
      *
      * @throws Exception
      */
+    #[\Override]
     public function execute()
     {
         $select = $this->select()->limit($this->parameter->pageSize)

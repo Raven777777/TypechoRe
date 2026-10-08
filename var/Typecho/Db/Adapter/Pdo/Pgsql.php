@@ -27,6 +27,7 @@ class Pgsql extends Pdo
      * @access public
      * @return boolean
      */
+    #[\Override]
     public static function isAvailable(): bool
     {
         return parent::isAvailable() && in_array('pgsql', \PDO::getAvailableDrivers());
@@ -43,6 +44,7 @@ class Pgsql extends Pdo
      * @return \PDOStatement
      * @throws SQLException
      */
+    #[\Override]
     public function query(
         string $query,
         $handle,
@@ -60,6 +62,7 @@ class Pgsql extends Pdo
      * @param Config $config 数据库配置
      * @return \PDO
      */
+    #[\Override]
     public function init(Config $config): \PDO
     {
         $dsn = "pgsql:dbname={$config->database};host={$config->host};port={$config->port}";
@@ -75,7 +78,7 @@ class Pgsql extends Pdo
             $dsn .= ';client_encoding=' . $config->charset;
         }
 
-        $pdo = new \PDO(
+        $pdo = new \Pdo\Pgsql(
             $dsn,
             $config->user,
             $config->password

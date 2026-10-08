@@ -32,6 +32,7 @@ class Ping extends Comments
     /**
      * @param Config $parameter
      */
+    #[\Override]
     protected function initParameter(Config $parameter)
     {
         $parameter->setDefault('parentId=0');
@@ -63,6 +64,7 @@ class Ping extends Comments
      * @return void
      * @throws Exception
      */
+    #[\Override]
     public function execute()
     {
         if (!$this->parameter->parentId) {
@@ -138,6 +140,7 @@ class Ping extends Comments
         <?php
     }
 
+    #[\Override]
     protected function ___parentContent(): Contents
     {
         return $this->parameter->parentContent instanceof Contents

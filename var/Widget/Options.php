@@ -125,6 +125,7 @@ class Options extends Base
     /**
      * @param int $components
      */
+    #[\Override]
     protected function initComponents(int &$components)
     {
         $components = self::INIT_NONE;
@@ -133,6 +134,7 @@ class Options extends Base
     /**
      * @param Config $parameter
      */
+    #[\Override]
     protected function initParameter(Config $parameter)
     {
         if (!$parameter->isEmpty()) {
@@ -147,6 +149,7 @@ class Options extends Base
      *
      * @throws DbException
      */
+    #[\Override]
     public function execute()
     {
         $options = [];
@@ -793,7 +796,10 @@ class Options extends Base
      */
     private function tryDeserialize(string $value)
     {
-        $isSerialized = strpos($value, 'a:') === 0 || $value === 'b:0;';
-        return $isSerialized ? @unserialize($value, ['allowed_classes' => false]) : json_decode($value, true);
+        if (str_starts_with($value, 'a:') || 'b:0;' === $value) {
+            return @unserialize($value, ['allowed_classes' => false]);
+        }
+
+        return json_validate($value) ? json_decode($value, true) : null;
     }
 }

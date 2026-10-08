@@ -59,6 +59,7 @@ class Archive extends Comments
     /**
      * @param Config $parameter
      */
+    #[\Override]
     protected function initParameter(Config $parameter)
     {
         $parameter->setDefault([
@@ -93,6 +94,7 @@ class Archive extends Comments
      * @access public
      * @return void
      */
+    #[\Override]
     public function execute()
     {
         if (!$this->parameter->parentId) {
@@ -188,6 +190,7 @@ class Archive extends Comments
      * @param array $value 每行的值
      * @return array
      */
+    #[\Override]
     public function push(array $value): array
     {
         $value = $this->filter($value);
@@ -394,6 +397,7 @@ class Archive extends Comments
      *
      * @param ...$args
      */
+    #[\Override]
     public function alt(...$args)
     {
         $sequence = $this->levels <= 0 ? $this->sequence : $this->order;
@@ -491,6 +495,7 @@ class Archive extends Comments
      *
      * @return int
      */
+    #[\Override]
     protected function ___commentPage(): int
     {
         return $this->currentPage;
@@ -501,6 +506,7 @@ class Archive extends Comments
      *
      * @return Contents
      */
+    #[\Override]
     protected function ___parentContent(): Contents
     {
         return $this->parameter->parentContent;

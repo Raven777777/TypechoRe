@@ -32,6 +32,7 @@ class Init extends Widget
      * @return void
      * @throws Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         /** 初始化exception */

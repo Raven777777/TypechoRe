@@ -93,6 +93,16 @@ class Client
     private array $options = [];
 
     /**
+     * PHP 8.5 持久化 cURL 共享句柄
+     *
+     * 跨 PHP 请求复用 DNS 缓存 / TLS 会话 / 连接池, 消除每个请求重建 TCP 握手的开销。
+     * 不共享 Cookie, 避免不同用户之间互相污染。
+     *
+     * @var \CurlSharePersistentHandle|null
+     */
+    private static ?\CurlSharePersistentHandle $shareHandle = null;
+
+    /**
      * 回执头部信息
      *
      * @var array
@@ -309,9 +319,30 @@ class Client
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLINFO_HEADER_OUT, true);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($this->timeout, 10));
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $this->method);
+
+        /** 优先 HTTP/2 (TLS 协商失败时自动回退 HTTP/1.1) */
+        if (defined('CURL_HTTP_VERSION_2TLS')) {
+            curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
+        }
+
+        /** 仅允许 http/https, 阻断 file:// gopher:// 等协议被 SSRF 链利用 */
+        if (defined('CURLOPT_PROTOCOLS_STR')) {
+            curl_setopt($ch, CURLOPT_PROTOCOLS_STR, 'http,https');
+            curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS_STR, 'http,https');
+        }
+
+        /** PHP 8.5 持久化共享句柄: 跨请求复用连接, 替代原先的 CURLOPT_FRESH_CONNECT 强制新连接 */
+        if (function_exists('curl_share_init_persistent')) {
+            self::$shareHandle ??= curl_share_init_persistent([
+                CURL_LOCK_DATA_DNS,
+                CURL_LOCK_DATA_SSL_SESSION,
+                CURL_LOCK_DATA_CONNECT,
+            ]);
+            curl_setopt($ch, CURLOPT_SHARE, self::$shareHandle);
+        }
 
         if (isset($this->agent)) {
             curl_setopt($ch, CURLOPT_USERAGENT, $this->agent);

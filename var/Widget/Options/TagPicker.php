@@ -41,7 +41,8 @@ class TagPicker extends Options implements ActionInterface
     public static function config(): array
     {
         $conf = self::DEFAULTS;
-        $stored = json_decode((string) Options::alloc()->tagPicker, true);
+        $raw = (string) Options::alloc()->tagPicker;
+        $stored = json_validate($raw) ? json_decode($raw, true) : null;
 
         if (is_array($stored)) {
             if (isset($stored['sort']) && in_array($stored['sort'], ['count', 'name'], true)) {
@@ -65,6 +66,7 @@ class TagPicker extends Options implements ActionInterface
      * @return void
      * @throws WidgetException
      */
+    #[\Override]
     public function action()
     {
         $this->user->pass('editor');

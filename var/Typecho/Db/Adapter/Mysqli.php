@@ -34,6 +34,7 @@ class Mysqli implements Adapter
      * @access public
      * @return boolean
      */
+    #[\Override]
     public static function isAvailable(): bool
     {
         return extension_loaded('mysqli');
@@ -46,6 +47,7 @@ class Mysqli implements Adapter
      * @return \mysqli
      * @throws ConnectionException
      */
+    #[\Override]
     public function connect(Config $config): \mysqli
     {
         $mysqli = mysqli_init();
@@ -62,7 +64,7 @@ class Mysqli implements Adapter
                 $host = $config->host;
                 $port = empty($config->port) ? null : $config->port;
                 $socket = null;
-                if (strpos($host, '/') !== false) {
+                if (str_contains($host, '/')) {
                     $socket = $host;
                     $host = 'localhost';
                     $port = null;
@@ -101,6 +103,7 @@ class Mysqli implements Adapter
      * @param mixed $handle
      * @return string
      */
+    #[\Override]
     public function getVersion($handle): string
     {
         return $this->dbLink->server_version;
@@ -116,6 +119,7 @@ class Mysqli implements Adapter
      * @param string|null $table 数据表
      * @throws SQLException
      */
+    #[\Override]
     public function query(
         string $query,
         $handle,
@@ -143,6 +147,7 @@ class Mysqli implements Adapter
      * @param string $string
      * @return string
      */
+    #[\Override]
     public function quoteColumn(string $string): string
     {
         return '`' . $string . '`';
@@ -154,6 +159,7 @@ class Mysqli implements Adapter
      * @param \mysqli_result $resource 查询返回资源标识
      * @return array|null
      */
+    #[\Override]
     public function fetch($resource): ?array
     {
         return $resource->fetch_assoc();
@@ -165,6 +171,7 @@ class Mysqli implements Adapter
      * @param \mysqli_result $resource 查询返回资源标识
      * @return array
      */
+    #[\Override]
     public function fetchAll($resource): array
     {
         return $resource->fetch_all(MYSQLI_ASSOC);
@@ -176,6 +183,7 @@ class Mysqli implements Adapter
      * @param \mysqli_result $resource 查询的资源数据
      * @return \stdClass|null
      */
+    #[\Override]
     public function fetchObject($resource): ?\stdClass
     {
         return $resource->fetch_object();
@@ -187,6 +195,7 @@ class Mysqli implements Adapter
      * @param mixed $string 需要转义的字符串
      * @return string
      */
+    #[\Override]
     public function quoteValue($string): string
     {
         return "'" . $this->dbLink->real_escape_string($string) . "'";
@@ -199,6 +208,7 @@ class Mysqli implements Adapter
      * @param \mysqli $handle 连接对象
      * @return integer
      */
+    #[\Override]
     public function affectedRows($resource, $handle): int
     {
         return $handle->affected_rows;
@@ -211,6 +221,7 @@ class Mysqli implements Adapter
      * @param \mysqli $handle 连接对象
      * @return integer
      */
+    #[\Override]
     public function lastInsertId($resource, $handle): int
     {
         return $handle->insert_id;

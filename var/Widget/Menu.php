@@ -77,6 +77,7 @@ class Menu extends Base
     /**
      * 执行函数,初始化菜单
      */
+    #[\Override]
     public function execute()
     {
         $parentNodes = [null, _t('控制台'), _t('撰写'), _t('管理'), _t('设置')];

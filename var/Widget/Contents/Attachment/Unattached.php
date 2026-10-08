@@ -35,6 +35,7 @@ class Unattached extends Contents
      * @return void
      * @throws Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         /** 构建基础查询 */

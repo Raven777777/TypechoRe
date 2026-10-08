@@ -28,6 +28,7 @@ class Admin extends Metas
     /**
      * 执行函数
      */
+    #[\Override]
     public function execute()
     {
         $this->parentId = $this->request->filter('int')->get('parent', 0);

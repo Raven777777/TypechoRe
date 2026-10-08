@@ -23,6 +23,7 @@ class Date extends Base
     /**
      * @param Config $parameter
      */
+    #[\Override]
     protected function initParameter(Config $parameter)
     {
         $parameter->setDefault('format=Y-m&type=month&limit=0');
@@ -33,6 +34,7 @@ class Date extends Base
      *
      * @return void
      */
+    #[\Override]
     public function execute()
     {
         /** 设置参数默认值 */

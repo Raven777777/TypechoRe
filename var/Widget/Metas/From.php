@@ -19,6 +19,7 @@ class From extends Metas
      * @param Config $parameter
      * @return void
      */
+    #[\Override]
     protected function initParameter(Config $parameter)
     {
         $parameter->setDefault([
@@ -31,6 +32,7 @@ class From extends Metas
      * @return void
      * @throws Exception
      */
+    #[\Override]
     public function execute()
     {
         $query = null;

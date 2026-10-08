@@ -19,6 +19,7 @@ class Related extends Metas
      * @return void
      * @throws Exception
      */
+    #[\Override]
     public function execute()
     {
         $ids = array_column($this->db->fetchAll($this->select('table.metas.mid')

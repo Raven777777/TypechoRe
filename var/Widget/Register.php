@@ -29,6 +29,7 @@ class Register extends Users implements ActionInterface
      *
      * @throws Exception
      */
+    #[\Override]
     public function action()
     {
         // protect

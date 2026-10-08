@@ -50,6 +50,7 @@ class Admin extends Users
      *
      * @throws Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->parameter->setDefault('pageSize=20');

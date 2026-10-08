@@ -95,6 +95,7 @@ trait EditTrait
         }
 
         $count = $this->db->fetchObject($select)->num + 1;
-        return ceil($count / $pageSize);
+        /** intdiv 向上取整: 避免 ceil() 返回 float 再隐式转 int */
+        return intdiv($count + $pageSize - 1, $pageSize);
     }
 }

@@ -30,6 +30,7 @@ class Rows extends Metas
      *
      * @return void
      */
+    #[\Override]
     public function execute()
     {
         $this->pushAll($this->getRows($this->orders, $this->parameter->ignore));

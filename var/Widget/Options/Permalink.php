@@ -35,9 +35,9 @@ class Permalink extends Options implements ActionInterface
      */
     public function checkPagePattern($value): bool
     {
-        return strpos($value, '{slug}') !== false
-            || strpos($value, '{cid}') !== false
-            || strpos($value, '{directory}') !== false;
+        return str_contains($value, '{slug}')
+            || str_contains($value, '{cid}')
+            || str_contains($value, '{directory}');
     }
 
     /**
@@ -48,9 +48,9 @@ class Permalink extends Options implements ActionInterface
      */
     public function checkCategoryPattern($value): bool
     {
-        return strpos($value, '{slug}') !== false
-            || strpos($value, '{mid}') !== false
-            || strpos($value, '{directory}') !== false;
+        return str_contains($value, '{slug}')
+            || str_contains($value, '{mid}')
+            || str_contains($value, '{directory}');
     }
 
     /**
@@ -377,6 +377,7 @@ RewriteRule . {$basePath}index.php [L]
      * @access public
      * @return void
      */
+    #[\Override]
     public function action()
     {
         $this->user->pass('administrator');

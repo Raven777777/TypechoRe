@@ -35,6 +35,7 @@ class Edit extends Contents implements ActionInterface
      * @throws Exception
      * @throws DbException
      */
+    #[\Override]
     public function execute()
     {
         /** 必须为编辑以上权限 */
@@ -323,6 +324,7 @@ class Edit extends Contents implements ActionInterface
      * @throws DbException
      * @throws Exception
      */
+    #[\Override]
     public function action()
     {
         $this->security->protect();

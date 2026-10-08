@@ -25,6 +25,7 @@ class Plugin implements PluginInterface
     /**
      * 启用插件
      */
+    #[\Override]
     public static function activate()
     {
         \Typecho\Plugin::factory(Archive::class)->header = [__CLASS__, 'header'];
@@ -34,6 +35,7 @@ class Plugin implements PluginInterface
     /**
      * 禁用插件
      */
+    #[\Override]
     public static function deactivate()
     {
         return _t('插件已禁用');
@@ -44,6 +46,7 @@ class Plugin implements PluginInterface
      *
      * @param Form $form 配置面板
      */
+    #[\Override]
     public static function config(Form $form)
     {
         $blurTitle = new Text(
@@ -79,6 +82,7 @@ class Plugin implements PluginInterface
      *
      * @param Form $form 配置面板
      */
+    #[\Override]
     public static function personalConfig(Form $form)
     {
     }

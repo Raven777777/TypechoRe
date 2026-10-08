@@ -33,6 +33,7 @@ class Security extends Base
     /**
      * @param int $components
      */
+    #[\Override]
     public function initComponents(int &$components)
     {
         $components = self::INIT_OPTIONS | self::INIT_USER;
@@ -41,6 +42,7 @@ class Security extends Base
     /**
      * 初始化函数
      */
+    #[\Override]
     public function execute()
     {
         $this->token = $this->options->secret;

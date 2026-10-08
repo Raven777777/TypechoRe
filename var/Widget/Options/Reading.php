@@ -92,6 +92,7 @@ class Reading extends Permalink
      *
      * @return Form
      */
+    #[\Override]
     public function form(): Form
     {
         /** 构建表格 */
@@ -241,6 +242,7 @@ class Reading extends Permalink
      * @access public
      * @return void
      */
+    #[\Override]
     public function action()
     {
         $this->user->pass('administrator');

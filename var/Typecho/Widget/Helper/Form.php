@@ -213,6 +213,7 @@ class Form extends Layout
      *
      * @return void
      */
+    #[\Override]
     public function render()
     {
         $id = md5(implode('"', array_keys($this->inputs)));

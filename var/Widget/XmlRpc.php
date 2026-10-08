@@ -56,6 +56,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
      *
      * @param bool $run 是否执行
      */
+    #[\Override]
     public function execute(bool $run = false)
     {
         if ($run) {
@@ -190,6 +191,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
      * @param array $parameters
      * @throws Exception
      */
+    #[\Override]
     public function beforeRpcCall(string $methodName, ReflectionMethod $reflectionMethod, array $parameters)
     {
         $valid = 2;
@@ -234,6 +236,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
      * @param string $methodName
      * @param mixed $result
      */
+    #[\Override]
     public function afterRpcCall(string $methodName, &$result): void
     {
         Widget::destroy();
@@ -549,7 +552,8 @@ class XmlRpc extends Contents implements ActionInterface, Hook
             $attachment['title'] = $content['post_title'];
             $attachment['slug'] = $content['post_excerpt'];
 
-            $text = json_decode($post->text, true);
+            $decoded = json_validate($post->text) ? json_decode($post->text, true) : null;
+            $text = is_array($decoded) ? $decoded : [];
             $text['description'] = $content['description'];
 
             $attachment['text'] = json_encode($text);
@@ -1749,6 +1753,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
      *
      * @throws Exception
      */
+    #[\Override]
     public function action()
     {
         if (0 == $this->options->allowXmlRpc) {

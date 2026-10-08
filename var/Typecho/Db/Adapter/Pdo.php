@@ -39,6 +39,7 @@ abstract class Pdo implements Adapter
      * @access public
      * @return boolean
      */
+    #[\Override]
     public static function isAvailable(): bool
     {
         return class_exists('PDO');
@@ -51,6 +52,7 @@ abstract class Pdo implements Adapter
      * @return \PDO
      * @throws ConnectionException
      */
+    #[\Override]
     public function connect(Config $config): \PDO
     {
         try {
@@ -79,6 +81,7 @@ abstract class Pdo implements Adapter
      * @param mixed $handle
      * @return string
      */
+    #[\Override]
     public function getVersion($handle): string
     {
         return $handle->getAttribute(\PDO::ATTR_SERVER_VERSION);
@@ -95,6 +98,7 @@ abstract class Pdo implements Adapter
      * @return \PDOStatement
      * @throws SQLException
      */
+    #[\Override]
     public function query(
         string $query,
         $handle,
@@ -120,6 +124,7 @@ abstract class Pdo implements Adapter
      * @param \PDOStatement $resource 查询的资源数据
      * @return array
      */
+    #[\Override]
     public function fetchAll($resource): array
     {
         return $resource->fetchAll(\PDO::FETCH_ASSOC);
@@ -131,6 +136,7 @@ abstract class Pdo implements Adapter
      * @param \PDOStatement $resource 查询返回资源标识
      * @return array|null
      */
+    #[\Override]
     public function fetch($resource): ?array
     {
         return $resource->fetch(\PDO::FETCH_ASSOC) ?: null;
@@ -142,6 +148,7 @@ abstract class Pdo implements Adapter
      * @param \PDOStatement $resource 查询的资源数据
      * @return \stdClass|null
      */
+    #[\Override]
     public function fetchObject($resource): ?\stdClass
     {
         return $resource->fetchObject() ?: null;
@@ -153,6 +160,7 @@ abstract class Pdo implements Adapter
      * @param mixed $string 需要转义的字符串
      * @return string
      */
+    #[\Override]
     public function quoteValue($string): string
     {
         return $this->object->quote($string);
@@ -165,6 +173,7 @@ abstract class Pdo implements Adapter
      * @param \PDO $handle 连接对象
      * @return integer
      */
+    #[\Override]
     public function affectedRows($resource, $handle): int
     {
         return $resource->rowCount();
@@ -177,6 +186,7 @@ abstract class Pdo implements Adapter
      * @param \PDO $handle 连接对象
      * @return integer
      */
+    #[\Override]
     public function lastInsertId($resource, $handle): int
     {
         return $handle->lastInsertId();

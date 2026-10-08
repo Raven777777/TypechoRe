@@ -28,6 +28,7 @@ class Config extends BaseOptions
      *
      * @throws Exception|\Typecho\Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->user->pass('administrator');

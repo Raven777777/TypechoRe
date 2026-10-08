@@ -30,6 +30,7 @@ class Rows extends Contents
      * @return void
      * @throws Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->pushAll($this->getRows($this->orders, $this->parameter->ignore));

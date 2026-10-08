@@ -25,6 +25,7 @@ class Cloud extends Metas
      *
      * @throws Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->parameter->setDefault(['sort' => 'count', 'ignoreZeroCount' => false, 'desc' => true, 'limit' => 0]);

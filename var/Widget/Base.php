@@ -81,6 +81,7 @@ abstract class Base extends Widget
     /**
      * init method
      */
+    #[\Override]
     protected function init()
     {
         $components = self::INIT_ALL;

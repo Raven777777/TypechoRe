@@ -382,6 +382,7 @@ class Edit extends Comments implements ActionInterface
      * @access public
      * @return void
      */
+    #[\Override]
     public function action()
     {
         $this->user->pass('contributor');

@@ -27,6 +27,7 @@ class Options extends Base implements QueryInterface
      * @return Query
      * @throws Exception
      */
+    #[\Override]
     public function select(...$fields): Query
     {
         return $this->db->select(...$fields)->from('table.options');
@@ -39,6 +40,7 @@ class Options extends Base implements QueryInterface
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function insert(array $rows): int
     {
         return $this->db->query($this->db->insert('table.options')->rows($rows));
@@ -52,6 +54,7 @@ class Options extends Base implements QueryInterface
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function update(array $rows, Query $condition): int
     {
         return $this->db->query($condition->update('table.options')->rows($rows));
@@ -64,6 +67,7 @@ class Options extends Base implements QueryInterface
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function delete(Query $condition): int
     {
         return $this->db->query($condition->delete('table.options'));
@@ -76,6 +80,7 @@ class Options extends Base implements QueryInterface
      * @return integer
      * @throws Exception
      */
+    #[\Override]
     public function size(Query $condition): int
     {
         return $this->db->fetchObject($condition->select(['COUNT(name)' => 'num'])->from('table.options'))->num;

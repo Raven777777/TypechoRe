@@ -46,6 +46,7 @@ class Admin extends Contents
      *
      * @throws DbException
      */
+    #[\Override]
     public function execute()
     {
         $this->initPage();

@@ -307,6 +307,7 @@ class Edit extends Options implements ActionInterface
     /**
      * 绑定动作
      */
+    #[\Override]
     public function action()
     {
         $this->user->pass('administrator');

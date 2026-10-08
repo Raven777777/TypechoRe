@@ -34,6 +34,7 @@ class Rows extends Widget
      * @access public
      * @return void
      */
+    #[\Override]
     public function execute()
     {
         /** 列出插件目录 */

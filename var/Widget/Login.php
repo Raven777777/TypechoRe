@@ -27,6 +27,7 @@ class Login extends Users implements ActionInterface
      * @access public
      * @return void
      */
+    #[\Override]
     public function action()
     {
         $origin = $this->request->getServer('HTTP_ORIGIN') ?: $this->request->getReferer();

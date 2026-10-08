@@ -39,6 +39,7 @@ class Admin extends Contents
      * @return void
      * @throws Db\Exception
      */
+    #[\Override]
     public function execute()
     {
         $this->parameter->setDefault('ignoreRequest=0');
