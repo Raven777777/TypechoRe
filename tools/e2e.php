@@ -429,11 +429,11 @@ out("PHP: {$php}");
 $zip = buildPackage($options['zip'] ?? null);
 out("package: " . str_replace(ROOT . '/', '', str_replace('\\', '/', $zip)));
 
-$workDir = (string) ($options['dir'] ?? tempnam(sys_get_temp_dir(), 'typechore-e2e-'));
-if (is_string($options['dir'] ?? null) && is_dir($workDir)) {
-    fail("--dir must not be an existing directory: {$workDir}");
+// 显式使用带前缀的目录名 (Windows 上 tempnam() 只保留前 3 个字符, 不安全)
+$workDir = (string) ($options['dir'] ?? sys_get_temp_dir() . '/typechore-e2e-' . bin2hex(random_bytes(4)));
+if (file_exists($workDir)) {
+    fail("work directory already exists: {$workDir} (use --dir=<new path> or remove it)");
 }
-@unlink($workDir);
 mkdir($workDir, 0777, true);
 $siteDir = $workDir . '/site';
 
