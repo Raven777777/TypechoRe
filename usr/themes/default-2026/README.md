@@ -111,7 +111,7 @@ npm run dev          # 监听源码变化自动构建
 
 ## 兼容性
 
-- 需要 PHP 8.0+ (与 TypechoRe 的运行要求一致), 无额外扩展依赖。
+- 主题不单独提高 PHP 版本要求；运行 TypechoRe 整站仍需要 PHP 8.5+。主题本身无额外 PHP 扩展依赖。
 - 移动端导航使用原生 `<details>`, 评论表单是普通 POST, 因此无 JavaScript 时功能完整。
 - Swup 会跳过后台 (`/admin/`)、动作路由 (`/action/`)、`install.php`、跨域链接、
   带 `onclick` 的链接 (评论回复 / 取消回复) 与带 `download` / `target` 的链接。

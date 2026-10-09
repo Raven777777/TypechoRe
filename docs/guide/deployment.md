@@ -8,7 +8,7 @@
 python tools/build_release.py
 ```
 
-输出为 `dist/TypechoRe-<版本>.zip`，解压后文件直接位于网站根目录。发布包包含 `admin/`、`install/`、`usr/`、`var/` 及入口文件；不会包含本地 `config.inc.php`、数据库、日志、备份、缓存或用户上传文件。
+输出为 `dist/TypechoRe-<版本>.zip`，解压后文件直接位于网站根目录。发布包包含 `LICENSE.txt`、`admin/`、`install/`、`usr/`、`var/` 及入口文件；不会包含本地 `config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、日志、备份、缓存或用户上传文件。
 
 生产站点还需要 `config.inc.php` 和数据库，但它们属于站点数据，不放进代码包：首次安装由安装向导生成；升级时保留服务器原有配置、数据库和上传文件，先备份再覆盖代码。
 
@@ -112,7 +112,7 @@ limit_req_status 429;
 10. 确认运行正常后删除部署压缩包
 
 发布包由 `tools/build_release.py` 构建（或由 GitHub Release 自动构建），已排除
-`config.inc.php`、`*.db`、`*.log`、`usr/uploads/` 与 `usr/backups/`。部署前仍建议
+`config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、`*.log`、`usr/uploads/` 与 `usr/backups/`。部署前仍建议
 确认 zip 内没有遗留的数据库或日志文件。
 
 已安装的网站不需要重复访问：
@@ -154,10 +154,20 @@ TypechoRe 已经不是与原版 Typecho 完全相通的数据库分支。
 
 TypechoRe 修改了：
 
-- 密码哈希与 authCode 存储方式 (仅支持 bcrypt cost 12 / SHA-512, 不兼容旧格式)
+- 密码哈希：新密码用 `password_hash()` 的 bcrypt cost 12 生成；登录仅用 `password_verify()` 校验，不支持 Typecho 遗留的 `$T$` / `$P$` / MD5 哈希
+- authCode：数据库保存随机会话凭证的 SHA-512 摘要；旧格式摘要不兼容，用户需要重新登录
 - Passkey 数据表
 - CSRF 和 Session 行为
 - 部分数据库和请求处理逻辑
+
+因此，迁移前必须单独处理密码：旧 `$T$` / `$P$` / MD5 哈希无法从摘要反推出 bcrypt，也没有自动迁移脚本；使用这些格式的账号在 TypechoRe 中无法用原密码登录。请先备份并在数据库副本上验证管理员登录恢复方案。可在受保护的离线 PHP 脚本中为管理员生成新哈希：
+
+```php
+// $newPassword 应从受保护的交互式输入获取；不要把真实密码硬编码进脚本。
+$newHash = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => 12]);
+```
+
+再通过可信的本地数据库管理方式更新管理员的 `password` 字段；不要把明文密码写进日志、Shell 历史或公开的 SQL 文件。切换后，其他使用旧格式的用户也需要重设密码。原本已是 `password_hash()` 可验证格式的哈希可继续由 `password_verify()` 校验。
 
 因此：
 
@@ -201,31 +211,31 @@ ALTER TABLE "typecho_users" ALTER COLUMN "authCode" TYPE varchar(128);
 
 - `config.inc.php` 依赖 PHP 正确执行且无输出; 一旦 PHP handler 配置
   事故 (如 FPM 未启动、扩展名误映射), 会被当作静态文件原样返回
-- SQLite 数据库文件名虽为 128 位随机串, 但文件名保密不作为安全边界
+- SQLite 数据库文件名虽为 128 位随机串, 但文件名保密不作为安全边界；SQLite WAL 模式还会产生 `-wal` / `-shm` 辅助文件, 事务模式也可能产生 `-journal` 文件
 
-两者都应在 Web 服务器层硬拒绝, 不依赖 PHP 行为或文件名保密。
+两者都应在 Web 服务器层硬拒绝, 不依赖 PHP 行为或文件名保密。数据库主文件及 `*.db-wal`、`*.db-shm`、`*.db-journal`（以及 `.sqlite` / `.sqlite3` 对应文件）都应禁止直接访问。
 
 ### Nginx
 
 ```nginx
 # server {} 块内
 location = /config.inc.php { deny all; }
-location ~* \.(db|sql)$    { deny all; }
+location ~* \.(?:db|sqlite|sqlite3)(?:-(?:wal|shm|journal))?$ { deny all; }
+location ~* \.sql$ { deny all; }
 ```
 
 ### Apache
 
 ```apache
 # .htaccess 或 vhost 配置
-<FilesMatch "(config\.inc\.php|\.(db|sql))$">
+<FilesMatch "(?i)(config\.inc\.php|\.(db|sqlite|sqlite3)(-(wal|shm|journal))?|\.sql)$">
     Require all denied
 </FilesMatch>
 ```
 
 ### IIS
 
-发布包自带的 `web.config` 已包含 `.db` / `.sql` 扩展名拒绝规则与
-`config.inc.php` URL 序列拒绝, 无需额外配置。
+发布包自带的 `.htaccess` / `web.config` 会拒绝 `.db`、`.sqlite`、`.sqlite3` 主文件、对应的 `-wal` / `-shm` / `-journal` 辅助文件及 `.sql` 文件，并阻止访问 `config.inc.php`。Apache 需允许 `.htaccess` 中的访问控制规则生效；若 `AllowOverride` 禁用，请在 VirtualHost 中配置等效规则。
 
 ### 根治方案
 

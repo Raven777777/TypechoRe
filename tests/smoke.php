@@ -36,6 +36,9 @@ check(!\Typecho\Common::isSameOrigin('https://not-example.test/', 'https://examp
 check(!\Typecho\Common::isSameOrigin('https://example.test:444/', 'https://example.test'), 'different port passed same-origin check');
 
 check(\Typecho\Common::hashValidate('password', \Typecho\Common::hashPassword('password')), 'password hash validation failed');
+foreach (['$T$' . str_repeat('x', 40), '$P$' . str_repeat('x', 31), md5('password')] as $legacyPasswordHash) {
+    check(!\Typecho\Common::hashValidate('password', $legacyPasswordHash), 'unsupported legacy password hash was accepted');
+}
 $authCodeHash = \Typecho\Common::hashAuthCode('auth-token');
 check(\Typecho\Common::validateAuthCode('auth-token', $authCodeHash), 'auth code validation failed');
 check(!\Typecho\Common::validateAuthCode('wrong-token', $authCodeHash), 'invalid auth code accepted');
@@ -43,6 +46,30 @@ check(\Typecho\Common::escape('<script>') === '&lt;script&gt;', 'HTML escaping f
 check(\Typecho\Common::slugName('中文 测试') === '中文-测试', 'UTF-8 slug generation failed');
 check(\Typecho\Common::checkSafeHost('127.0.0.1') === false, 'private IPv4 host accepted');
 check(\Typecho\Common::checkSafeHost('localhost') === false, 'localhost accepted');
+$apacheRules = file_get_contents(ROOT . '/.htaccess');
+if (
+    !is_string($apacheRules)
+    || 1 !== preg_match('/<FilesMatch "([^"]*sqlite3[^"]*)">/', $apacheRules, $apacheMatch)
+) {
+    throw new RuntimeException('Apache rules do not define a SQLite database deny rule');
+}
+foreach ([
+    'site.db', 'site.db-wal', 'site.db-shm', 'site.db-journal',
+    'site.sqlite3', 'site.sqlite3-wal', 'site.sqlite3-shm', 'site.sqlite3-journal',
+] as $databaseFile) {
+    check(
+        1 === preg_match('~' . $apacheMatch[1] . '~', $databaseFile),
+        "Apache rules do not deny {$databaseFile}"
+    );
+}
+$iisRules = file_get_contents(ROOT . '/web.config');
+check(
+    is_string($iisRules)
+        && str_contains($iisRules, 'fileExtension=".db-wal"')
+        && str_contains($iisRules, 'fileExtension=".db-shm"')
+        && str_contains($iisRules, 'fileExtension=".sqlite3-journal"'),
+    'IIS rules do not deny SQLite WAL/SHM/journal files'
+);
 
 // PHP 8.5: HMAC-SHA256 短时 token (替代旧 sha1 + 非恒定时间比较)
 $token = \Typecho\Common::timeToken('smoke-secret');

@@ -891,7 +891,8 @@ EOF;
         /**
          * 使用当前推荐算法生成密码哈希
          *
-         * 生成的哈希可由 hashValidate() 校验, 且与旧算法 ($T$ / md5 / $P$) 兼容共存.
+         * 生成的哈希可由 hashValidate() 校验。hashValidate() 仅支持 password_verify()
+         * 可识别的 password_hash 格式, 不兼容 Typecho 遗留的 $T$ / $P$ / MD5 哈希.
          *
          * @access public
          *

@@ -37,11 +37,13 @@
 - 新增 `tools/audit-override.php`：反射审计 `#[\Override]` 覆盖率，已接入
   `tools/quality.ps1`；`#[\Override]` 从 239 处增至 **250 处**
 - 新增 `tools/e2e.php`：用发布包在临时目录起真实站点，跑安装向导、28 个后台页面、
-  发布文章、匿名评论、图片上传、插件启停、Passkey 参数、XML-RPC 与 1.3.2 升级路径，
-  共 100 项断言，并检查服务器日志无任何 PHP 警告
+  发布文章、匿名评论、图片上传、插件启停、Passkey 注册与签名登录、XML-RPC 与 1.3.2 升级路径，
+  当前共 110 项断言，并检查服务器日志无任何 PHP 警告
 - 新增 `tests/integration.php`：真实数据库适配器集成测试（建表/CRUD/JOIN/
   truncate/lastInsertId/affectedRows/升级脚本），本地与 CI 都只跑 SQLite（`SQLite`、
   `Pdo_SQLite`）；MySQL / PostgreSQL 适配器不再维护、不再测试
+- 新增 `tests/webauthn.php`：用临时 P-256 密钥覆盖 WebAuthn `none` 注册、有效断言签名、Challenge/Origin/RP ID/UP/UV 拒绝、伪造签名及计数器回放检查；纳入质量门禁
+- Apache/IIS 规则统一拒绝 `.db`、`.sqlite`、`.sqlite3` 主文件及 `-wal` / `-shm` / `-journal` 辅助文件；发布包与 Git 忽略规则也排除这些 SQLite 运行时文件，`tests/build_release.py` 会检查实际 ZIP。发行包同时包含 GPL v2 许可证文本。修正文档中遗留密码“兼容验证”的错误描述，并明确迁移时需重设旧格式密码
 - 数据库支持范围收窄：**本项目只维护 SQLite**，`Mysqli`/`Pdo_Mysql`/`Pgsql`/
   `Pdo_Pgsql` 适配器保留（沿用上游 Typecho）但不在 CI 中运行，也不再修复问题
 - 新增 `.github/workflows/release.yml`：推送 `v*` tag 时自动构建发布包并附到

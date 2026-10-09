@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * 用发布包在临时目录搭建一个真实站点, 通过 PHP 内置服务器发真实 HTTP 请求,
  * 覆盖: 安装向导、后台全部页面、发布文章、前台文章页、评论提交、图片上传、
- * Sitemap、404、Passkey 注册参数、XML-RPC 开关与请求、1.3.2 升级脚本。
+ * Sitemap、404、合成 Passkey 注册/签名认证、XML-RPC 开关与请求、1.3.2 升级脚本。
  *
  * 用法:
  *   php tools/e2e.php                      # 自动构建发布包并测试
@@ -19,6 +19,7 @@ declare(strict_types=1);
  */
 
 const ROOT = __DIR__ . '/..';
+require_once ROOT . '/tests/WebAuthnTestFixture.php';
 
 /** 响应体中出现的 PHP 错误标记 */
 const BODY_ERROR_MARKERS = [
@@ -327,7 +328,7 @@ final class Site
     {
         $url = str_starts_with($path, 'http') ? $path : $this->base . $this->path($path);
         $curl = curl_init($url);
-        curl_setopt_array($curl, [
+        $curlOptions = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HEADER => true,
             CURLOPT_FOLLOWLOCATION => false,
@@ -340,7 +341,12 @@ final class Site
                 array_keys($headers),
                 $headers
             ),
-        ]);
+        ];
+        $cookieHeader = $this->cookieHeader();
+        if ('' !== $cookieHeader) {
+            $curlOptions[CURLOPT_COOKIE] = $cookieHeader;
+        }
+        curl_setopt_array($curl, $curlOptions);
 
         $raw = curl_exec($curl);
         if (false === $raw) {
@@ -400,7 +406,10 @@ function sitePhp(string $php, string $siteDir, string $phpCode): string
         . "\$options = \\Widget\\Options::alloc();\n"
         . $phpCode . "\n";
     $tmp = dirname($siteDir) . '/site-check.php';
-    $command = escapeshellarg($php) . ' ' . escapeshellarg($tmp) . ' 2>&1';
+    // These tiny probes do not measure performance; disable CLI OPcache/JIT to avoid unstable
+    // Windows JIT crashes when repeatedly spawning short-lived PHP processes.
+    $command = escapeshellarg($php) . ' -d opcache.enable_cli=0 -d opcache.jit=off '
+        . escapeshellarg($tmp) . ' 2>&1';
 
     $attempts = [];
     for ($try = 0; $try < 3; $try++) {
@@ -777,7 +786,7 @@ assertResponse($site->get('/admin/manage-medias.php'), [200], 'GET manage-medias
 
 // ---------------------------------------------------------------- passkey
 
-step('passkey');
+step('passkey registration and assertion');
 $profile = assertResponse($site->get('/admin/profile.php'), [200], 'GET profile (passkey section)');
 assertTrue(str_contains($profile, 'passkey-management'), 'passkey management section missing in profile');
 $passkeyJson = assertResponse(
@@ -786,10 +795,127 @@ $passkeyJson = assertResponse(
     'GET passkey create-options'
 );
 $passkey = json_decode($passkeyJson, true);
-assertTrue(
-    is_array($passkey) && !empty($passkey['success']) && !empty($passkey['options']['publicKey']['challenge']),
-    'passkey create-options did not return a challenge: ' . substr($passkeyJson, 0, 300)
+if (!is_array($passkey) || empty($passkey['success'])) {
+    fail('passkey create-options failed: ' . substr($passkeyJson, 0, 300));
+}
+$createChallengeEncoded = $passkey['options']['publicKey']['challenge'] ?? null;
+if (!is_string($createChallengeEncoded)) {
+    fail('passkey create-options did not return a challenge');
+}
+$createChallenge = \TypechoRe\Tests\WebAuthnTestFixture::base64UrlDecode($createChallengeEncoded);
+$testPrivateKey = \TypechoRe\Tests\WebAuthnTestFixture::createP256PrivateKey();
+$testCredentialId = random_bytes(32);
+$testRpId = '127.0.0.1';
+$testOrigin = 'https://127.0.0.1';
+$createClientData = \TypechoRe\Tests\WebAuthnTestFixture::clientData('webauthn.create', $createChallenge, $testOrigin);
+$testAttestation = \TypechoRe\Tests\WebAuthnTestFixture::attestationObject(
+    $testPrivateKey,
+    $testRpId,
+    $testCredentialId
 );
+$createPayload = json_encode([
+    'clientDataJSON' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($createClientData),
+    'attestationObject' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($testAttestation),
+    'name' => 'E2E synthetic passkey',
+], JSON_THROW_ON_ERROR);
+$createResultBody = assertResponse(
+    $site->postRaw(
+        '/index.php/action/passkey?do=process-create&_=' . urlencode($token),
+        $createPayload,
+        ['Content-Type' => 'application/json']
+    ),
+    [200],
+    'POST passkey process-create'
+);
+$createResult = json_decode($createResultBody, true);
+assertTrue(is_array($createResult) && ($createResult['success'] ?? false) === true, 'passkey registration failed: ' . $createResultBody);
+
+$adminUid = (int) sitePhp(
+    $php,
+    $siteDir,
+    "echo (int) \$db->fetchObject(\$db->select('uid')->from('table.users')->where('name = ?', " . var_export($adminUser, true) . "))->uid;"
+);
+$passkeyRows = (int) sitePhp(
+    $php,
+    $siteDir,
+    "echo (int) \$db->fetchObject(\$db->select(['COUNT(*)' => 'num'])->from('table.passkeys')->where('uid = ?', " . $adminUid . "))->num;"
+);
+assertTrue(1 === $passkeyRows, 'successful passkey registration was not stored in the database');
+
+$passkeyLoginSite = new Site("http://127.0.0.1:{$port}", $verbose);
+$getOptionsBody = assertResponse(
+    $passkeyLoginSite->get('/index.php/action/passkey?do=get-options'),
+    [200],
+    'GET passkey get-options'
+);
+$getOptions = json_decode($getOptionsBody, true);
+if (!is_array($getOptions) || empty($getOptions['success'])) {
+    fail('passkey get-options failed: ' . substr($getOptionsBody, 0, 300));
+}
+$assertionChallengeEncoded = $getOptions['options']['publicKey']['challenge'] ?? null;
+if (!is_string($assertionChallengeEncoded)) {
+    fail('passkey get-options did not return a challenge');
+}
+$assertionChallenge = \TypechoRe\Tests\WebAuthnTestFixture::base64UrlDecode($assertionChallengeEncoded);
+$assertionClientData = \TypechoRe\Tests\WebAuthnTestFixture::clientData('webauthn.get', $assertionChallenge, $testOrigin);
+$assertionAuthenticatorData = \TypechoRe\Tests\WebAuthnTestFixture::authenticatorData($testRpId, 0x05, 2);
+$assertionSignature = \TypechoRe\Tests\WebAuthnTestFixture::signAssertion(
+    $testPrivateKey,
+    $assertionClientData,
+    $assertionAuthenticatorData
+);
+$assertionPayload = [
+    'id' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($testCredentialId),
+    'userHandle' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode((string) $adminUid),
+    'clientDataJSON' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($assertionClientData),
+    'authenticatorData' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($assertionAuthenticatorData),
+    'signature' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($assertionSignature),
+    'remember' => false,
+];
+$wrongHandleAssertion = $assertionPayload;
+$wrongHandleAssertion['userHandle'] = \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode((string) ($adminUid + 1));
+$wrongHandleResultBody = assertResponse(
+    $passkeyLoginSite->postRaw(
+        '/index.php/action/passkey?do=process-get',
+        json_encode($wrongHandleAssertion, JSON_THROW_ON_ERROR),
+        ['Content-Type' => 'application/json']
+    ),
+    [200],
+    'POST passkey assertion with wrong userHandle'
+);
+$wrongHandleResult = json_decode($wrongHandleResultBody, true);
+assertTrue(is_array($wrongHandleResult) && ($wrongHandleResult['success'] ?? true) === false, 'passkey assertion with wrong userHandle was accepted');
+
+$forgedAssertion = $assertionPayload;
+$forgedSignature = \TypechoRe\Tests\WebAuthnTestFixture::base64UrlDecode($forgedAssertion['signature']);
+$forgedSignature[0] = chr(ord($forgedSignature[0]) ^ 1);
+$forgedAssertion['signature'] = \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($forgedSignature);
+$forgedResultBody = assertResponse(
+    $passkeyLoginSite->postRaw(
+        '/index.php/action/passkey?do=process-get',
+        json_encode($forgedAssertion, JSON_THROW_ON_ERROR),
+        ['Content-Type' => 'application/json']
+    ),
+    [200],
+    'POST forged passkey assertion'
+);
+$forgedResult = json_decode($forgedResultBody, true);
+assertTrue(is_array($forgedResult) && ($forgedResult['success'] ?? true) === false, 'forged passkey signature was accepted');
+
+$loginResultBody = assertResponse(
+    $passkeyLoginSite->postRaw(
+        '/index.php/action/passkey?do=process-get',
+        json_encode($assertionPayload, JSON_THROW_ON_ERROR),
+        ['Content-Type' => 'application/json']
+    ),
+    [200],
+    'POST valid passkey assertion'
+);
+$loginResult = json_decode($loginResultBody, true);
+assertTrue(is_array($loginResult) && ($loginResult['success'] ?? false) === true, 'valid passkey assertion failed: ' . $loginResultBody);
+$passkeyDashboard = assertResponse($passkeyLoginSite->get('/admin/'), [200], 'GET admin after passkey login');
+$site = $passkeyLoginSite;
+$token = csrfToken($passkeyDashboard);
 
 // ---------------------------------------------------------------- xmlrpc
 

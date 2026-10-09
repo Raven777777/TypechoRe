@@ -51,6 +51,9 @@ try {
     & $php tests/smoke.php
     if ($LASTEXITCODE -ne 0) { throw 'Smoke tests failed.' }
 
+    & $php tests/webauthn.php
+    if ($LASTEXITCODE -ne 0) { throw 'WebAuthn ceremony tests failed.' }
+
     & $php tools/audit-override.php
     if ($LASTEXITCODE -ne 0) { throw 'PHP #[\Override] audit failed.' }
 
@@ -58,6 +61,9 @@ try {
     # TYPECHORE_TEST_ADAPTER / TYPECHORE_TEST_HOST 等环境变量指定
     & $php tests/integration.php
     if ($LASTEXITCODE -ne 0) { throw 'Database integration test failed.' }
+
+    & $venvPython tests/build_release.py
+    if ($LASTEXITCODE -ne 0) { throw 'Release package exclusion test failed.' }
 
     & $php $phpstan analyse --configuration=phpstan.neon --no-progress
     if ($LASTEXITCODE -ne 0) { throw 'PHPStan failed.' }

@@ -30,6 +30,10 @@
 * [代码质量与 PHP 8.5 检查报告](docs/guide/quality.md)
 * [更新日志](CHANGELOG.md)
 
+## 许可证
+
+核心代码按 GNU GPL v2 发布，完整许可证文本见 [`LICENSE.txt`](LICENSE.txt)。
+
 ## 反馈问题
 
 请在 https://github.com/Raven777777/TypechoRe/issues 提交 Issue。

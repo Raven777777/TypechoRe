@@ -21,9 +21,10 @@
 2. `tests/smoke.php` 基础回归测试
 3. `tools/audit-override.php` 反射审计 `#[\Override]` 覆盖率
 4. `tests/integration.php` 数据库适配器集成测试（本地默认 SQLite）
-5. PHPStan 静态分析（`phpstan.neon`，**level 5**）
-6. `tools/e2e.php` 真实站点端到端回归（发布包 + PHP 内置服务器）
-7. Semgrep 安全扫描（`p/php`、`p/security-audit`、`p/owasp-top-ten`、`p/secrets`；
+5. `tests/build_release.py` 发布包隔离测试（确认 SQLite 主库及 WAL/SHM/journal 文件不进入 ZIP）
+6. PHPStan 静态分析（`phpstan.neon`，**level 5**）
+7. `tools/e2e.php` 真实站点端到端回归（发布包 + PHP 内置服务器）
+8. Semgrep 安全扫描（`p/php`、`p/security-audit`、`p/owasp-top-ten`、`p/secrets`；
    配置 `SEMGREP_APP_TOKEN` 时启用 Pro 规则）
 
 首次运行会把 PHPStan 2.3.0 PHAR 和 Semgrep 1.179.0 安装到被 Git 忽略的
@@ -60,7 +61,7 @@ trait 中声明的覆盖方法不参与审计：属性会由 trait 原样带到�
 ### 真实站点端到端测试
 
 `tools/e2e.php` 会构建发布包、解压到临时目录、用 PHP 内置服务器起一个真实站点，
-然后通过 HTTP 跑完整流程（当前 100 项断言）：
+然后通过 HTTP 跑完整流程（当前 110 项断言，以脚本运行输出为准）：
 
 - 安装向导三个步骤（SQLite）
 - 前台首页、404 页、Sitemap、Feed
@@ -69,7 +70,7 @@ trait 中声明的覆盖方法不参与审计：属性会由 trait 原样带到�
 - 发布文章（分类/标签）→ 前台文章页 → 后台列表
 - 匿名访客提交评论（CSRF + 反垃圾 + 来源校验）并校验审核状态
 - 图片上传（multipart）→ 附件入库 → 附件编辑页 → 文件列表
-- Passkey 注册参数（`do=create-options`，覆盖 passkeys 数据表）
+- Passkey 合成注册与登录：HTTP 注册后检查数据库记录；错误 User Handle 和伪造签名均被拒绝；有效签名登录后获得后台会话；升级后再次检查 Passkey 参数可用
 - XML-RPC 默认关闭返回 404、开启后 `system.listMethods` 正常
 - 1.3.2 升级路径：把版本改回 1.3.1 并删除 passkeys 表，验证后台跳转
   `upgrade.php`、执行升级、版本回到 1.3.2 且 passkey 恢复可用
@@ -98,6 +99,10 @@ php-8.5.10/php.exe tools/e2e.php --zip=dist/x.zip --keep --verbose
 MySQL/PostgreSQL 适配器只有在显式设置 `TYPECHORE_TEST_ADAPTER` 与
 `TYPECHORE_TEST_HOST` 时才会本地执行（未设置则跳过并提示，退出码仍为 0）；
 CI 只跑 SQLite。
+
+### 发布包敏感文件排除
+
+`tests/build_release.py` 会在 `usr/` 临时创建 12 种 SQLite 主库与 `-wal` / `-shm` / `-journal` 文件名，实际构建 ZIP，确认这些运行时文件一个也未打包且包含 `LICENSE.txt`，然后清理测试文件。该测试随 `tools/quality.ps1` 运行，可防止发布包误带数据库或漏掉许可证文本。
 
 ## 已完成检查
 
@@ -132,7 +137,7 @@ PASS: PHP 8.5 smoke tests
 
 覆盖内容：
 
-- bcrypt 密码生成和验证、旧密码兼容验证、authCode 生成/验证/拒绝伪造
+- bcrypt 密码生成和验证；明确拒绝 Typecho 遗留的 `$T$` / `$P$` / MD5 密码哈希；authCode 生成/验证/拒绝伪造
 - HTML 转义、UTF-8 slug 生成（含全角空格 `mb_trim`）、`json_validate()`、
   `array_first()`/`array_last()`
 - 私有地址 SSRF 检查、未配置可信代理时拒绝伪造的 `X-Forwarded-For`
@@ -141,7 +146,7 @@ PASS: PHP 8.5 smoke tests
 - `fileinfo` 内容嗅探 MIME、备份缓冲 v2（SHA-256）与 v1（MD5）双向兼容
 - 遗留类名别名表：每个别名目标都能加载，`Typecho_Plugin_Interface`、
   `Widget_Abstract_Contents`、`Typecho_Db_Adapter_Mysql` 等旧类名可被自动加载器解析
-- SQLite 建表、插入、查询和读取；WebAuthn Passkey 注册参数生成
+- SQLite 建表、插入、查询和读取；WebAuthn Passkey 完整注册与认证签名流程见下文
 - 回归断言（对应本轮修复）：
   - `XmlRpc` 依赖的 `Post\Edit::setCategories()` 保持 public
   - `Attachment\Edit` 具备 `PageOffsetTrait::getPageOffset()`
@@ -158,6 +163,14 @@ PASS: PHP 8.5 smoke tests
 
 ### Passkey/WebAuthn
 
+`tests/webauthn.php` 用运行时生成的一次性 P-256 密钥执行完整的服务端 `none` 注册和认证校验；不会依赖真实硬件或浏览器。测试覆盖成功注册/签名认证，以及错误 Challenge、Origin、RP ID Hash、UP/UV 标志、伪造签名和非递增签名计数器。`tools/e2e.php` 还通过真实 HTTP 调用 `process-create` / `process-get`，验证数据库写入、错误 User Handle / 伪造签名拒绝和 Passkey 登录会话。测试私钥仅用于本次测试进程，不写入数据库或仓库；合成测试不取代真实设备上的人工验收。可单独运行：
+
+```bash
+php-8.5.10/php.exe tests/webauthn.php
+```
+
+当前输出为 `PASS: WebAuthn registration and assertion tests (18 checks)`。
+
 Passkey 核心代码位于 `var/lbuchs/WebAuthn/`，不再依赖体积较大的 `vendor/`。当前仅保留
 `none` 自签名认证所需代码，支持 Windows Hello、手机同步 Passkey、浏览器
 Discoverable Credential 和 FIDO2 安全密钥。
@@ -172,9 +185,9 @@ Passkey 需要 `openssl`、`mbstring`、`sodium`、`session` 和数据库扩展�
 ### 临时站点集成测试
 
 使用 PHP 内置服务器和临时 SQLite 数据库完成了真实请求测试：安装向导、首页、
-后台登录、旧 MD5 密码登录并自动升级为 bcrypt、后台发布文章、评论提交、
-评论 CSRF Token、文件上传、图片附件入库、Sitemap（含分页）、XML-RPC 基础请求、
-后台登出。本版本已在生产站点完成部署验证（2026-10-09），暂未发现回归问题。
+后台登录、文章发布、评论提交、评论 CSRF Token、文件上传、图片附件入库、Sitemap（含分页）、
+XML-RPC、合成 Passkey 注册与登录（含伪造签名拒绝）和后台登出。遗留 `$T$` / `$P$` / MD5
+密码哈希在 smoke test 中明确验证为拒绝；它们不会自动升级为 bcrypt。
 
 ## level 5 发现并修复的缺陷
 

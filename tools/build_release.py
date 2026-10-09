@@ -8,7 +8,15 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIRS = ("admin", "install", "var", "usr")
-ROOT_FILES = (".htaccess", "web.config", "robots.txt", "favicon.ico", "index.php", "install.php")
+ROOT_FILES = (
+    ".htaccess",
+    "web.config",
+    "robots.txt",
+    "favicon.ico",
+    "LICENSE.txt",
+    "index.php",
+    "install.php",
+)
 REQUIRED = {
     "admin/index.php",
     "install/SQLite.php",
@@ -16,9 +24,24 @@ REQUIRED = {
     "var/Typecho/Common.php",
     "index.php",
     "install.php",
+    "LICENSE.txt",
 }
 SKIP_DIRS = {"backups", "cache", "tmp", "node_modules"}
-SKIP_SUFFIXES = {".db", ".sqlite", ".sqlite3", ".log"}
+SKIP_SUFFIXES = {
+    ".db",
+    ".sqlite",
+    ".sqlite3",
+    ".db-wal",
+    ".db-shm",
+    ".db-journal",
+    ".sqlite-wal",
+    ".sqlite-shm",
+    ".sqlite-journal",
+    ".sqlite3-wal",
+    ".sqlite3-shm",
+    ".sqlite3-journal",
+    ".log",
+}
 
 
 def included(path: Path) -> bool:
