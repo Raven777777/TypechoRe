@@ -102,7 +102,7 @@ abstract class Element extends Layout
      * 多行输入
      *
      * @access public
-     * @var array()
+     * @var array
      */
     protected array $multiline = [];
 

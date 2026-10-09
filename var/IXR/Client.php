@@ -8,6 +8,11 @@ use Typecho\Http\Client as HttpClient;
  * IXR客户端
  * reload by typecho team(http://www.typecho.org)
  *
+ * 任意前缀属性都会生成按该前缀拼接方法名的子客户端, 例如
+ * `$client->pingback->ping(...)` 实际调用 `pingback.ping`。
+ *
+ * @property-read Client $pingback
+ *
  * @package IXR
  */
 class Client
@@ -67,6 +72,7 @@ class Client
      * 设置调试模式
      * @deprecated
      */
+    #[\Deprecated(message: 'debug 属性已移除', since: '1.3.2')]
     public function setDebug()
     {
         $this->debug = true;

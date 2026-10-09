@@ -51,8 +51,20 @@ try {
     & $php tests/smoke.php
     if ($LASTEXITCODE -ne 0) { throw 'Smoke tests failed.' }
 
+    & $php tools/audit-override.php
+    if ($LASTEXITCODE -ne 0) { throw 'PHP #[\Override] audit failed.' }
+
+    # 数据库适配器集成测试: 默认只跑 SQLite; MySQL/PostgreSQL 需通过
+    # TYPECHORE_TEST_ADAPTER / TYPECHORE_TEST_HOST 等环境变量指定
+    & $php tests/integration.php
+    if ($LASTEXITCODE -ne 0) { throw 'Database integration test failed.' }
+
     & $php $phpstan analyse --configuration=phpstan.neon --no-progress
     if ($LASTEXITCODE -ne 0) { throw 'PHPStan failed.' }
+
+    # 真实站点端到端回归: 用发布包 + PHP 内置服务器跑安装向导/后台/发文/评论/上传/升级
+    & $php tools/e2e.php
+    if ($LASTEXITCODE -ne 0) { throw 'End-to-end site test failed.' }
 
     $semgrepArgs = @(
         'scan',

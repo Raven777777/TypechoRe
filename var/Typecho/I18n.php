@@ -92,16 +92,16 @@ class I18n
                     if (0 == $between) {
                         return _t('刚刚');
                     } else {
-                        return str_replace('%d', $between, _n('一秒前', '%d秒前', $between));
+                        return str_replace('%d', (string) $between, _n('一秒前', '%d秒前', $between));
                     }
                 }
 
-                $min = floor($between / 60);
-                return str_replace('%d', $min, _n('一分钟前', '%d分钟前', $min));
+                $min = intdiv($between, 60);
+                return str_replace('%d', (string) $min, _n('一分钟前', '%d分钟前', $min));
             }
 
-            $hour = floor($between / 3600);
-            return str_replace('%d', $hour, _n('一小时前', '%d小时前', $hour));
+            $hour = intdiv($between, 3600);
+            return str_replace('%d', (string) $hour, _n('一小时前', '%d小时前', $hour));
         }
 
         /** 如果是昨天 (直接比较日历日期, 修正闰年跨年判定失效) */
@@ -111,8 +111,8 @@ class I18n
 
         /** 如果是一个星期 */
         if ($between > 0 && $between < 604800) {
-            $day = floor($between / 86400);
-            return str_replace('%d', $day, _n('一天前', '%d天前', $day));
+            $day = intdiv($between, 86400);
+            return str_replace('%d', (string) $day, _n('一天前', '%d天前', $day));
         }
 
         /** 如果是 */

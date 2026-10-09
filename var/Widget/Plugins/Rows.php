@@ -12,6 +12,10 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 /**
  * 插件列表组件
  *
+ * @property-read string $name 插件目录名
+ * @property-read string $title 插件标题
+ * @property-read ?Config $personalConfig 当前用户的插件配置 (插件未提供时为空)
+ *
  * @author qining
  * @category typecho
  * @package Widget

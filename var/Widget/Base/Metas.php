@@ -32,6 +32,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property-read string $feedUrl
  * @property-read string $feedRssUrl
  * @property-read string $feedAtomUrl
+ *
+ * @method void count()
  */
 class Metas extends Base implements QueryInterface, RowFilterInterface, PrimaryKeyInterface, ParamsDelegateInterface
 {
@@ -260,5 +262,33 @@ class Metas extends Base implements QueryInterface, RowFilterInterface, PrimaryK
     protected function ___feedAtomUrl(): string
     {
         return Router::url($this->type, $this, $this->options->feedAtomUrl);
+    }
+
+    /**
+     * 清理没有任何内容的标签
+     *
+     * 删除文章/刷新标签后需要调用, 否则 count 为 0 的孤立标签会一直留在表里。
+     * 原先只声明在 Widget\Metas\Tag\Edit 上, 导致 Post\Edit 里的调用被
+     * __call() 吞掉而静默失效。
+     *
+     * @throws Exception
+     */
+    public function clearTags(): void
+    {
+        // 取出count为0的标签
+        $tags = array_column($this->db->fetchAll($this->select('mid')
+            ->where('type = ? AND count = ?', 'tag', 0)), 'mid');
+
+        foreach ($tags as $tag) {
+            // 确认是否已经没有关联了
+            $content = $this->db->fetchRow($this->db->select('cid')
+                ->from('table.relationships')->where('mid = ?', $tag)
+                ->limit(1));
+
+            if (empty($content)) {
+                $this->db->query($this->db->delete('table.metas')
+                    ->where('mid = ?', $tag));
+            }
+        }
     }
 }

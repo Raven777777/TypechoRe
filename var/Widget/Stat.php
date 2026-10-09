@@ -35,6 +35,30 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property-read int $currentSpamCommentsNum
  * @property-read int $categoriesNum
  * @property-read int $tagsNum
+ *
+ * @method void publishedPostsNum()
+ * @method void waitingPostsNum()
+ * @method void draftPostsNum()
+ * @method void myPublishedPostsNum()
+ * @method void myWaitingPostsNum()
+ * @method void myDraftPostsNum()
+ * @method void currentPublishedPostsNum()
+ * @method void currentWaitingPostsNum()
+ * @method void currentDraftPostsNum()
+ * @method void publishedPagesNum()
+ * @method void draftPagesNum()
+ * @method void publishedCommentsNum()
+ * @method void waitingCommentsNum()
+ * @method void spamCommentsNum()
+ * @method void myPublishedCommentsNum()
+ * @method void myWaitingCommentsNum()
+ * @method void mySpamCommentsNum()
+ * @method void currentCommentsNum()
+ * @method void currentPublishedCommentsNum()
+ * @method void currentWaitingCommentsNum()
+ * @method void currentSpamCommentsNum()
+ * @method void categoriesNum()
+ * @method void tagsNum()
  */
 class Stat extends Base
 {

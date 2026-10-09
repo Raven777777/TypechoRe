@@ -139,9 +139,9 @@ class GetText
      * Plural version of gettext
      *
      * @access public
-     * @param string single
-     * @param string plural
-     * @param string number
+     * @param string $single
+     * @param string $plural
+     * @param string $number
      * @param integer|null $num found string number
      * @return string plural form
      */

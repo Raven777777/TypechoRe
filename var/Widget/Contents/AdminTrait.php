@@ -12,7 +12,8 @@ use Widget\Users\Author;
 /**
  * 文章管理列表组件
  *
- * @property-read array? $revision
+ * @property-read ?array $revision 该条目当前保存的草稿 (cid/modified/status)
+ * @property-read bool $hasSaved 是否存在未发布的草稿
  */
 trait AdminTrait
 {
@@ -115,37 +116,33 @@ trait AdminTrait
 
         /** 预取修订版 */
         $revisionMap = [];
-        if (!empty($cids)) {
-            $rows = $this->db->fetchAll($this->db->select('cid', 'parent', 'modified')
-                ->from('table.contents')
-                ->where('table.contents.type = ? AND table.contents.parent IN ?', 'revision', $cids));
+        $rows = $this->db->fetchAll($this->db->select('cid', 'parent', 'modified')
+            ->from('table.contents')
+            ->where('table.contents.type = ? AND table.contents.parent IN ?', 'revision', $cids));
 
-            foreach ($rows as $row) {
-                $revisionMap[(int)$row['parent']] = ['cid' => $row['cid'], 'modified' => $row['modified']];
-            }
+        foreach ($rows as $row) {
+            $revisionMap[(int)$row['parent']] = ['cid' => $row['cid'], 'modified' => $row['modified']];
         }
 
         /** 预取分类, 字段与 Base\Contents::___categories 保持一致 (permalink 除外) */
         $categoryMap = [];
-        if (!empty($cids)) {
-            $rows = $this->db->fetchAll($this->db->select(
-                'table.relationships.cid',
-                'table.metas.mid',
-                'table.metas.name',
-                'table.metas.slug',
-                'table.metas.description',
-                'table.metas.count',
-                'table.metas.parent'
-            )->from('table.relationships')
-                ->join('table.metas', 'table.relationships.mid = table.metas.mid')
-                ->where('table.metas.type = ? AND table.relationships.cid IN ?', 'category', $cids)
-                ->order('table.metas.order', 'ASC'));
+        $rows = $this->db->fetchAll($this->db->select(
+            'table.relationships.cid',
+            'table.metas.mid',
+            'table.metas.name',
+            'table.metas.slug',
+            'table.metas.description',
+            'table.metas.count',
+            'table.metas.parent'
+        )->from('table.relationships')
+            ->join('table.metas', 'table.relationships.mid = table.metas.mid')
+            ->where('table.metas.type = ? AND table.relationships.cid IN ?', 'category', $cids)
+            ->order('table.metas.order', 'ASC'));
 
-            foreach ($rows as $row) {
-                $cid = $row['cid'];
-                unset($row['cid']);
-                $categoryMap[$cid][] = $row;
-            }
+        foreach ($rows as $row) {
+            $cid = $row['cid'];
+            unset($row['cid']);
+            $categoryMap[$cid][] = $row;
         }
 
         /** 每 uid 复用同一个作者 widget, 利用 widgetPool 按别名缓存 */
@@ -192,5 +189,41 @@ trait AdminTrait
                 )
                 ->limit(1)
         );
+    }
+
+    /**
+     * 当前条目是否存在未发布的草稿
+     *
+     * 上游 v1.2.1 在 Widget\Contents\Post\Admin 中实现过同样逻辑, v1.3.0 重构时
+     * 丢失, 导致 XmlRpc 的 wp.getPosts / metaWeblog.getPost 无法报告 draft 状态。
+     * 这里放回共用 trait, 供文章/页面/附件管理列表使用。
+     *
+     * @return bool
+     * @throws DbException
+     */
+    protected function ___hasSaved(): bool
+    {
+        if (in_array($this->type, ['post_draft', 'page_draft'], true)) {
+            return true;
+        }
+
+        $savedPost = $this->db->fetchRow(
+            $this->db->select('cid', 'modified', 'status')
+                ->from('table.contents')
+                ->where(
+                    'table.contents.parent = ? AND (table.contents.type = ? OR table.contents.type = ?)',
+                    $this->cid,
+                    'post_draft',
+                    'page_draft'
+                )
+                ->limit(1)
+        );
+
+        if ($savedPost) {
+            $this->modified = $savedPost['modified'];
+            return true;
+        }
+
+        return false;
     }
 }

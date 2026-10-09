@@ -55,19 +55,23 @@ interface Adapter
     /**
      * 执行数据库查询
      *
+     * PHP 8 起各数据库扩展的查询句柄均为对象 (PDOStatement / mysqli_result /
+     * SQLite3Result / PgSql\Result), 不再是 resource, 因此接口只描述为 mixed,
+     * 具体类型由各适配器声明。
+     *
      * @param string $query 数据库查询SQL字符串
      * @param mixed $handle 连接对象
      * @param integer $op 数据库读写状态
      * @param string|null $action 数据库动作
      * @param string|null $table 数据表
-     * @return resource
+     * @return mixed 查询句柄对象
      */
     public function query(string $query, $handle, int $op = Db::READ, ?string $action = null, ?string $table = null);
 
     /**
      * 将数据查询的其中一行作为数组取出,其中字段名对应数组键值
      *
-     * @param resource $resource 查询的资源数据
+     * @param mixed $resource 查询句柄对象
      * @return array|null
      */
     public function fetch($resource): ?array;
@@ -75,7 +79,7 @@ interface Adapter
     /**
      * 将数据查询的结果作为数组全部取出,其中字段名对应数组键值
      *
-     * @param resource $resource 查询的资源数据
+     * @param mixed $resource 查询句柄对象
      * @return array
      */
     public function fetchAll($resource): array;
@@ -83,7 +87,7 @@ interface Adapter
     /**
      * 将数据查询的其中一行作为对象取出,其中字段名对应对象属性
      *
-     * @param resource $resource 查询的资源数据
+     * @param mixed $resource 查询句柄对象
      * @return \stdClass|null
      */
     public function fetchObject($resource): ?\stdClass;
@@ -117,7 +121,7 @@ interface Adapter
     /**
      * 取出最后一次查询影响的行数
      *
-     * @param resource $resource 查询的资源数据
+     * @param mixed $resource 查询句柄对象
      * @param mixed $handle 连接对象
      * @return integer
      */
@@ -126,7 +130,7 @@ interface Adapter
     /**
      * 取出最后一次插入返回的主键值
      *
-     * @param resource $resource 查询的资源数据
+     * @param mixed $resource 查询句柄对象
      * @param mixed $handle 连接对象
      * @return integer
      */

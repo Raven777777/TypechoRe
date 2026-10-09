@@ -189,7 +189,8 @@ class Sitemap extends Contents implements ActionInterface
 
         // The home page occupies the first global URL slot.
         $contentOffset = max(0, $offset - 1);
-        if ($remaining > 0 && $contentOffset < $counts['content']) {
+        // $remaining 在此处必定大于 0 (上方已递减首页占用的 1 个位置)
+        if ($contentOffset < $counts['content']) {
             $limit = min($remaining, $counts['content'] - $contentOffset);
             $this->addContentUrls($contentOffset, $limit);
             $remaining -= $limit;

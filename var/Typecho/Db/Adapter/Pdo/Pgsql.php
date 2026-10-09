@@ -19,6 +19,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  */
 class Pgsql extends Pdo
 {
+    /** @use PgsqlTrait<\PDOStatement, \PDO> */
     use PgsqlTrait;
 
     /**

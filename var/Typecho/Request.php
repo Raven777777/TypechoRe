@@ -339,15 +339,8 @@ class Request
             $requestUri = substr($requestUri, 0, $pos);
         }
 
-        if (
-            (null !== $finalBaseUrl)
-            && (false === ($pathInfo = substr($requestUri, strlen($finalBaseUrl))))
-        ) {
-            // If substr() returns false then PATH_INFO is set to an empty string
-            $pathInfo = '/';
-        } elseif (null === $finalBaseUrl) {
-            $pathInfo = $requestUri;
-        }
+        // getBaseUrl() 始终返回字符串, 这里直接取 PATH_INFO; 为空时下面的分支会回退到 '/'
+        $pathInfo = substr($requestUri, strlen($finalBaseUrl));
 
         if (!empty($pathInfo)) {
             //针对iis的utf8编码做强制转换
@@ -822,7 +815,7 @@ class Request
      *
      * @return string
      */
-    private function getBaseUrl(): ?string
+    private function getBaseUrl(): string
     {
         if (null !== $this->baseUrl) {
             return $this->baseUrl;
@@ -869,11 +862,10 @@ class Request
             $finalBaseUrl = '';
         } elseif (
             (strlen($requestUri) >= strlen($baseUrl))
-            && ((false !== ($pos = strpos($requestUri, $baseUrl))) && ($pos !== 0))
+            && (false !== ($pos = strpos($requestUri, $baseUrl)))
         ) {
             // If using mod_rewrite or ISAPI_Rewrite strip the script filename
-            // out of baseUrl. $pos !== 0 makes sure it is not matching a value
-            // from PATH_INFO or QUERY_STRING
+            // out of baseUrl (此处 $pos 必不为 0, 上面的分支已排除前缀匹配)
             $baseUrl = substr($requestUri, 0, $pos + strlen($baseUrl));
         }
 

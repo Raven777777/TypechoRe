@@ -338,7 +338,7 @@ class Backup extends BaseOptions implements ActionInterface
 
             $this->importData($table, $data);
         } else {
-            self::pluginHandle()->import($type, $header, $body);
+            self::pluginHandle()->call('import', $type, $header, $body);
         }
     }
 

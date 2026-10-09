@@ -1693,58 +1693,54 @@ class XmlRpc extends Contents implements ActionInterface, Hook
             throw new Exception(_t('这个目标地址不存在'), 33);
         }
 
-        if ($post) {
-            /** 检查是否可以ping*/
-            if ($post->allowPing) {
+        /** 检查是否可以ping*/
+        if ($post->allowPing) {
 
-                /** 现在可以ping了，但是还得检查下这个pingback是否已经存在了*/
-                $pingNum = $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-                    ->from('table.comments')
-                    ->where(
-                        'table.comments.cid = ? AND table.comments.url = ? AND table.comments.type <> ?',
-                        $post->cid,
-                        $source,
-                        'comment'
-                    ))->num;
+            /** 现在可以ping了，但是还得检查下这个pingback是否已经存在了*/
+            $pingNum = $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
+                ->from('table.comments')
+                ->where(
+                    'table.comments.cid = ? AND table.comments.url = ? AND table.comments.type <> ?',
+                    $post->cid,
+                    $source,
+                    'comment'
+                ))->num;
 
-                if ($pingNum <= 0) {
-                    try {
-                        $pingbackRequest = new Pingback($source, $target);
+            if ($pingNum <= 0) {
+                try {
+                    $pingbackRequest = new Pingback($source, $target);
 
-                        $pingback = [
-                            'cid'     => $post->cid,
-                            'created' => $this->options->time,
-                            'agent'   => $this->request->getAgent(),
-                            'ip'      => $this->request->getIp(),
-                            'author'  => $pingbackRequest->getTitle(),
-                            'url'     => Common::safeUrl($source),
-                            'text'    => $pingbackRequest->getContent(),
-                            'ownerId' => $post->author->uid,
-                            'type'    => 'pingback',
-                            'status'  => $this->options->commentsRequireModeration ? 'waiting' : 'approved'
-                        ];
+                    $pingback = [
+                        'cid'     => $post->cid,
+                        'created' => $this->options->time,
+                        'agent'   => $this->request->getAgent(),
+                        'ip'      => $this->request->getIp(),
+                        'author'  => $pingbackRequest->getTitle(),
+                        'url'     => Common::safeUrl($source),
+                        'text'    => $pingbackRequest->getContent(),
+                        'ownerId' => $post->author->uid,
+                        'type'    => 'pingback',
+                        'status'  => $this->options->commentsRequireModeration ? 'waiting' : 'approved'
+                    ];
 
-                        /** 加入plugin */
-                        $pingback = self::pluginHandle()->filter('pingback', $pingback, $post);
+                    /** 加入plugin */
+                    $pingback = self::pluginHandle()->filter('pingback', $pingback, $post);
 
-                        /** 执行插入*/
-                        $insertId = Comments::alloc()->insert($pingback);
+                    /** 执行插入*/
+                    $insertId = Comments::alloc()->insert($pingback);
 
-                        /** 评论完成接口 */
-                        self::pluginHandle()->call('finishPingback', $this);
+                    /** 评论完成接口 */
+                    self::pluginHandle()->call('finishPingback', $this);
 
-                        return $insertId;
-                    } catch (WidgetException $e) {
-                        throw new Exception(_t('源地址服务器错误'), 16);
-                    }
-                } else {
-                    throw new Exception(_t('PingBack已经存在'), 48);
+                    return $insertId;
+                } catch (WidgetException $e) {
+                    throw new Exception(_t('源地址服务器错误'), 16);
                 }
             } else {
-                throw new Exception(_t('目标地址禁止Ping'), 49);
+                throw new Exception(_t('PingBack已经存在'), 48);
             }
         } else {
-            throw new Exception(_t('这个目标地址不存在'), 33);
+            throw new Exception(_t('目标地址禁止Ping'), 49);
         }
     }
 

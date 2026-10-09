@@ -1,5 +1,15 @@
 <?php if(!defined('__TYPECHO_ADMIN__')) exit; ?>
-<?php $content = !empty($post) ? $post : $page; ?>
+<?php
+/**
+ * 后台模板作用域变量: 由 admin/common.php (以及 header.php / menu.php) 通过 include 注入。
+ * PHPStan 无法跨 include 传播局部变量, 这里按实际作用域显式声明。
+ *
+ * @var Widget\Options $options
+ * @var Widget\Contents\Page\Edit|null $page
+ * @var Widget\Contents\Post\Edit|null $post
+ */
+?>
+<?php $content = $post ?? $page; ?>
 <script>
 (function () {
     $('#text').on('change', function (e) {
@@ -280,4 +290,3 @@ $(document).ready(function () {
 });
 </script>
 <?php endif; ?>
-

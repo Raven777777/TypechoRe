@@ -64,7 +64,7 @@ class ByteBuffer implements \JsonSerializable, \Serializable {
 
     /**
      * create a random ByteBuffer
-     * @param string $length
+     * @param int<1, max> $length
      * @return ByteBuffer
      */
     public static function randomBuffer($length): ByteBuffer {
@@ -186,17 +186,16 @@ class ByteBuffer implements \JsonSerializable, \Serializable {
     }
 
     /**
-     * @param string|ByteBuffer $buffer
+     * @param mixed $buffer ByteBuffer 或二进制字符串 (运行时校验)
      * @return bool
      */
     public function equals($buffer): bool {
-        if (is_object($buffer) && $buffer instanceof ByteBuffer) {
+        if ($buffer instanceof ByteBuffer) {
             return $buffer->getBinaryString() === $this->getBinaryString();
-
-        } else if (is_string($buffer)) {
+        } elseif (is_string($buffer)) {
             return $buffer === $this->getBinaryString();
         }
-        
+
         return false;
     }
 
@@ -220,6 +219,7 @@ class ByteBuffer implements \JsonSerializable, \Serializable {
      * return binary data in RFC 1342-Like serialized string
      * @return string
      */
+    #[\Override]
     public function jsonSerialize(): string {
         if (ByteBuffer::$useBase64UrlEncoding) {
             return self::_base64url_encode($this->_data);
@@ -233,6 +233,7 @@ class ByteBuffer implements \JsonSerializable, \Serializable {
      * Serializable-Interface
      * @return string
      */
+    #[\Override]
     public function serialize(): string {
         return \serialize($this->_data);
     }
@@ -241,6 +242,7 @@ class ByteBuffer implements \JsonSerializable, \Serializable {
      * Serializable-Interface
      * @param string $serialized
      */
+    #[\Override]
     public function unserialize($serialized) {
         $this->_data = \unserialize($serialized);
         $this->_length = \strlen($this->_data);
@@ -260,6 +262,7 @@ class ByteBuffer implements \JsonSerializable, \Serializable {
      * object to string
      * @return string
      */
+    #[\Override]
     public function __toString(): string {
         return $this->getHex();
     }
@@ -285,7 +288,10 @@ class ByteBuffer implements \JsonSerializable, \Serializable {
      * @param string $data
      * @return string
      */
-    protected static function _base64url_decode($data): string {
+    /**
+     * @return string|false
+     */
+    protected static function _base64url_decode($data) {
         return \base64_decode(\strtr($data, '-_', '+/') . \str_repeat('=', 3 - (3 + \strlen($data)) % 4));
     }
 

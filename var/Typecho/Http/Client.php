@@ -449,6 +449,6 @@ class Client
      */
     public static function get(): ?Client
     {
-        return extension_loaded('curl') ? new static() : null;
+        return extension_loaded('curl') ? new self() : null;
     }
 }

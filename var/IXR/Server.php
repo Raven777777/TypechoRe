@@ -12,9 +12,9 @@ use Typecho\Widget\Exception as WidgetException;
 class Server
 {
     /**
-     * 回调函数
+     * 回调函数表
      *
-     * @var array
+     * @var array<string, array{0: object|string, 1: string}>
      */
     private array $callbacks;
 
@@ -84,7 +84,7 @@ class Server
             } else {
                 $result = $this->call($method, $params);
             }
-            if (is_a($result, 'Error')) {
+            if ($result instanceof Error) {
                 $return[] = [
                     'faultCode'   => $result->code,
                     'faultString' => $result->message
@@ -140,6 +140,8 @@ class Server
         }
         $method = $this->callbacks[$methodName];
 
+        // 回调统一以 [对象/类名, 方法名] 形式注册 (见 setCallbacks 与 Widget\XmlRpc),
+        // 先确认结构再交给 is_callable, 避免对字符串 callable 做解构。
         if (!is_callable($method)) {
             return new Error(
                 -32601,
@@ -160,7 +162,25 @@ class Server
             }
 
             foreach ($ref->getParameters() as $key => $parameter) {
-                if ($parameter->hasType() && !settype($args[$key], $parameter->getType()->getName())) {
+                // XML-RPC 的参数可能少于形参数量 (可选参数), 缺失时交给被调函数自己处理
+                if (!array_key_exists($key, $args)) {
+                    continue;
+                }
+
+                $type = $parameter->getType();
+
+                // 只对标量内置类型做 settype 强弱化。联合/交集类型没有单一名称,
+                // 类类型也不能交给 settype, 这些交给被调函数的原生类型声明处理。
+                if (!$type instanceof \ReflectionNamedType || !$type->isBuiltin()) {
+                    continue;
+                }
+
+                $typeName = $type->getName();
+                if ('mixed' === $typeName) {
+                    continue;
+                }
+
+                if (!settype($args[$key], $typeName)) {
                     return new Error(
                         -32602,
                         'server error. requested class method "'

@@ -66,19 +66,22 @@ class Feedback extends Comments implements ActionInterface
     {
         /** 回调方法 */
         $callback = $this->request->get('type');
-        $this->content = Router::match($this->request->get('permalink'));
+        $content = Router::match($this->request->get('permalink'));
 
         /** 判断内容是否存在 */
         if (
-            $this->content instanceof Archive &&
-            $this->content->have() && $this->content->is('single') &&
+            $content instanceof Archive &&
+            $content->have() && $content->is('single') &&
             in_array($callback, ['comment', 'trackback'])
         ) {
+
+            /** 记录当前内容, 供 comment()/trackback() 使用 */
+            $this->content = $content;
 
             /** 如果文章不允许反馈 */
             if ('comment' == $callback) {
                 /** 评论关闭 */
-                if (!$this->content->allow('comment')) {
+                if (!$content->allow('comment')) {
                     throw new Exception(_t('对不起,此内容的反馈被禁止.'), 403);
                 }
 
@@ -91,7 +94,7 @@ class Feedback extends Comments implements ActionInterface
                     }
 
                     $refererPart = parse_url($referer);
-                    $currentPart = parse_url($this->content->permalink);
+                    $currentPart = parse_url($content->permalink);
 
                     $refererHost = $refererPart['host'] ?? '';
                     $currentHost = $currentPart['host'] ?? '';
@@ -101,7 +104,7 @@ class Feedback extends Comments implements ActionInterface
                         0 !== strpos(($refererPart['path'] ?? ''), ($currentPart['path'] ?? ''))
                     ) {
                         //自定义首页支持
-                        if ('page:' . $this->content->cid == $this->options->frontPage) {
+                        if ('page:' . $content->cid == $this->options->frontPage) {
                             $currentPart = parse_url(rtrim($this->options->siteUrl, '/') . '/');
 
                             if (
@@ -118,11 +121,11 @@ class Feedback extends Comments implements ActionInterface
 
                 /** 检查ip评论间隔 */
                 if (
-                    !$this->user->pass('editor', true) && $this->content->authorId != $this->user->uid &&
+                    !$this->user->pass('editor', true) && $content->authorId != $this->user->uid &&
                     $this->options->commentsPostIntervalEnable
                 ) {
                     $latestComment = $this->db->fetchRow($this->db->select('created')->from('table.comments')
-                        ->where('cid = ? AND ip = ?', $this->content->cid, $this->request->getIp())
+                        ->where('cid = ? AND ip = ?', $content->cid, $this->request->getIp())
                         ->order('created', Db::SORT_DESC)
                         ->limit(1));
 
@@ -136,7 +139,7 @@ class Feedback extends Comments implements ActionInterface
             }
 
             /** 如果文章不允许引用 */
-            if ('trackback' == $callback && !$this->content->allow('ping')) {
+            if ('trackback' == $callback && !$content->allow('ping')) {
                 throw new Exception(_t('对不起,此内容的引用被禁止.'), 403);
             }
 

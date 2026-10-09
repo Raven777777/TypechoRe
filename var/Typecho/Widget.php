@@ -10,11 +10,11 @@ use Typecho\Widget\Terminal;
 /**
  * Typecho组件基类
  *
- * @property $sequence
- * @property $length
- * @property-read $request
- * @property-read $response
- * @property-read $parameter
+ * @property int $sequence 当前队列指针顺序值
+ * @property int $length 队列长度
+ * @property-read WidgetRequest $request request对象
+ * @property-read WidgetResponse $response response对象
+ * @property-read Config $parameter 参数对象
  */
 abstract class Widget
 {
@@ -186,11 +186,19 @@ abstract class Widget
      * @param mixed $params
      * @param mixed $request
      * @param bool|callable $disableSandboxOrCallback
-     * @return $this
+     * @return static
      */
     public static function alloc($params = null, $request = null, $disableSandboxOrCallback = true): Widget
     {
-        return self::widget(static::class, $params, $request, $disableSandboxOrCallback);
+        $widget = self::widget(static::class, $params, $request, $disableSandboxOrCallback);
+
+        // 别名表理论上只做「同一继承层级内」的重映射, 这里显式校验,
+        // 避免异常配置把不兼容的实例返回给调用方
+        if (!$widget instanceof static) {
+            throw new Widget\Exception(_t('组件别名映射到了不兼容的类'), 500);
+        }
+
+        return $widget;
     }
 
     /**
@@ -200,7 +208,7 @@ abstract class Widget
      * @param mixed $params
      * @param mixed $request
      * @param bool|callable $disableSandboxOrCallback
-     * @return $this
+     * @return static
      */
     public static function allocWithAlias(
         ?string $alias,
@@ -208,12 +216,18 @@ abstract class Widget
         $request = null,
         $disableSandboxOrCallback = true
     ): Widget {
-        return self::widget(
+        $widget = self::widget(
             static::class . (isset($alias) ? '@' . $alias : ''),
             $params,
             $request,
             $disableSandboxOrCallback
         );
+
+        if (!$widget instanceof static) {
+            throw new Widget\Exception(_t('组件别名映射到了不兼容的类'), 500);
+        }
+
+        return $widget;
     }
 
     /**
@@ -222,6 +236,7 @@ abstract class Widget
      * @param string $alias 组件名称
      * @deprecated alias for destroy
      */
+    #[\Deprecated(message: 'use destroy() instead, destory() is a historical typo', since: '1.3.2')]
     public static function destory(string $alias)
     {
         self::destroy($alias);
@@ -248,6 +263,11 @@ abstract class Widget
 
     /**
      * execute function.
+     *
+     * 组件入口的扩展点: 子类会重载并产生副作用, 因此标记为 impure,
+     * 避免静态分析把父类的空实现当成无副作用调用。
+     *
+     * @phpstan-impure
      */
     public function execute()
     {

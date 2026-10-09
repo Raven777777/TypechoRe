@@ -170,12 +170,10 @@ class Service extends BaseOptions implements ActionInterface
                     'token' => Common::timeToken($this->options->secret)
                 ];
 
+                // preg_match_all() 返回真值即表示至少匹配到一组链接,
+                // 这里不会再出现空数组, 无需额外判空
                 if (preg_match_all("|<a[^>]*href=[\"'](.*?)[\"'][^>]*>(.*?)</a>|", $content->content, $matches)) {
-                    $pingback = array_unique($matches[1]);
-
-                    if (!empty($pingback)) {
-                        $input['pingback'] = $pingback;
-                    }
+                    $input['pingback'] = array_values(array_unique($matches[1]));
                 }
 
                 if (!empty($trackback)) {

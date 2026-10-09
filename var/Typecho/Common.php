@@ -71,7 +71,7 @@ namespace {
      */
     function _n(string $single, string $plural, int $number): string
     {
-        return str_replace('%d', $number, I18n::ngettext($single, $plural, $number));
+        return str_replace('%d', (string) $number, I18n::ngettext($single, $plural, $number));
     }
 }
 
@@ -79,9 +79,12 @@ namespace Typecho {
     const PLUGIN_NAMESPACE = 'TypechoPlugin';
 
     spl_autoload_register(function (string $className) {
-        $isDefinedAlias = defined('__TYPECHO_CLASS_ALIASES__');
+        // 站点可在 config.inc.php 中预先定义 __TYPECHO_CLASS_ALIASES__ 覆盖别名表;
+        // 未定义时直接使用 Common::CLASS_ALIASES, 这样安装向导/CLI 等
+        // 尚未执行 Widget\Init 的场景下遗留类名也能被解析。
+        $aliases = defined('__TYPECHO_CLASS_ALIASES__') ? __TYPECHO_CLASS_ALIASES__ : Common::CLASS_ALIASES;
         $isNamespace = str_contains($className, '\\');
-        $isAlias = $isDefinedAlias && isset(__TYPECHO_CLASS_ALIASES__[$className]);
+        $isAlias = isset($aliases[$className]);
         $isPlugin = false;
 
         // detect if class is predefined
@@ -93,9 +96,7 @@ namespace Typecho {
                 $alias = Common::nativeClassName($realClassName);
                 $path = str_replace('\\', '/', $realClassName);
             } else {
-                if ($isDefinedAlias) {
-                    $alias = array_search('\\' . ltrim($className, '\\'), __TYPECHO_CLASS_ALIASES__);
-                }
+                $alias = array_search('\\' . ltrim($className, '\\'), $aliases);
 
                 $alias = empty($alias) ? Common::nativeClassName($className) : $alias;
                 $path = str_replace('\\', '/', $className);
@@ -107,7 +108,7 @@ namespace Typecho {
                 $alias = '\\TypechoPlugin\\' . str_replace('_', '\\', $className);
                 $path = str_replace('_', '/', $className);
             } else {
-                $alias = $isAlias ? __TYPECHO_CLASS_ALIASES__[$className]
+                $alias = $isAlias ? $aliases[$className]
                     : '\\' . str_replace('_', '\\', $className);
 
                 $path = str_replace('\\', '/', $alias);
@@ -170,10 +171,41 @@ namespace Typecho {
     class Common
     {
         /** 程序版本 */
-        public const VERSION = '1.3.1';
+        public const VERSION = '1.3.2';
 
         /** 程序名称 (Fork 版本) */
         public const SOFTWARE = 'TypechoRe';
+
+        /**
+         * 遗留类名 -> 命名空间类名 的兼容映射
+         *
+         * 运行时会被 Widget\Init 定义为常量 __TYPECHO_CLASS_ALIASES__
+         * (站点可用同名常量覆盖), 自动加载器与插件句柄都依赖它。
+         *
+         * @var array<string, string>
+         */
+        public const CLASS_ALIASES = [
+            'Typecho_Plugin_Interface'    => '\Typecho\Plugin\PluginInterface',
+            'Typecho_Widget_Helper_Empty' => '\Typecho\Widget\Helper\EmptyClass',
+            'Typecho_Db_Adapter_Mysql'    => '\Typecho\Db\Adapter\Mysqli',
+            'Widget_Abstract'             => '\Widget\Base',
+            'Widget_Abstract_Contents'    => '\Widget\Base\Contents',
+            'Widget_Abstract_Comments'    => '\Widget\Base\Comments',
+            'Widget_Abstract_Metas'       => '\Widget\Base\Metas',
+            'Widget_Abstract_Options'     => '\Widget\Base\Options',
+            'Widget_Abstract_Users'       => '\Widget\Base\Users',
+            'Widget_Metas_Category_List'  => '\Widget\Metas\Category\Rows',
+            'Widget_Contents_Page_List'   => '\Widget\Contents\Page\Rows',
+            'Widget_Plugins_List'         => '\Widget\Plugins\Rows',
+            'Widget_Themes_List'          => '\Widget\Themes\Rows',
+            'Widget_Interface_Do'         => '\Widget\ActionInterface',
+            'Widget_Do'                   => '\Widget\Action',
+            'AutoP'                       => '\Utils\AutoP',
+            'Markdown'                    => '\Utils\Markdown',
+            'HyperDown'                   => '\Utils\HyperDown',
+            'Helper'                      => '\Utils\Helper',
+            'Upgrade'                     => '\Utils\Upgrade'
+        ];
 
         /** Fork 项目地址 */
         public const PROJECT_URL = 'https://github.com/Raven777777/TypechoRe';
@@ -463,9 +495,8 @@ EOF;
             preg_match_all("/<([_0-9a-zA-Z-:]+)\s*([^>]*)>/is", $string, $startTags);
             preg_match_all("/<\/([_0-9a-zA-Z-:]+)>/is", $string, $closeTags);
 
-            if (!empty($startTags[1]) && is_array($startTags[1])) {
+            if (!empty($startTags[1])) {
                 krsort($startTags[1]);
-                $closeTagsIsArray = is_array($closeTags[1]);
                 foreach ($startTags[1] as $key => $tag) {
                     $attrLength = strlen($startTags[2][$key]);
                     if ($attrLength > 0 && "/" == trim($startTags[2][$key][$attrLength - 1])) {
@@ -482,7 +513,7 @@ EOF;
                         continue;
                     }
 
-                    if (!empty($closeTags[1]) && $closeTagsIsArray) {
+                    if (!empty($closeTags[1])) {
                         if (false !== ($index = array_search($tag, $closeTags[1]))) {
                             unset($closeTags[1][$index]);
                             continue;
@@ -565,7 +596,7 @@ EOF;
          */
         public static function filterSearchQuery(?string $query): string
         {
-            return isset($query) ? str_replace('-', ' ', self::slugName($query) ?? '') : '';
+            return isset($query) ? str_replace('-', ' ', self::slugName($query)) : '';
         }
 
         /**
@@ -1146,6 +1177,11 @@ EOF;
             [$type, $headerLen, $bodyLen]
                 = array_values(unpack($version == 'FILE' ? 'v3' : 'v1type/v1headerLen/V1bodyLen', $meta));
 
+            // unpack() 的结果在 PHPStan 中是 int|float (可能超出 int 范围),
+            // 这里全部归一为 int, 避免 $offset 被推断成 float
+            $headerLen = (int) $headerLen;
+            $bodyLen = (int) $bodyLen;
+
             $header = @fread($fp, $headerLen);
             $offset += $headerLen;
 
@@ -1154,7 +1190,7 @@ EOF;
             }
 
             if ('FILE' == $version) {
-                $bodyLen = array_reduce(json_decode($header, true), function ($carry, $len) {
+                $bodyLen = (int) array_reduce(json_decode($header, true), function ($carry, $len) {
                     return null === $len ? $carry : $carry + $len;
                 }, 0);
             }
@@ -1226,7 +1262,7 @@ EOF;
 
             $address = gethostbyname($host);
 
-            if (false !== $address && $address !== $host) {
+            if ($address !== $host) {
                 return filter_var($address, FILTER_VALIDATE_IP, $flags) ?: null;
             }
 

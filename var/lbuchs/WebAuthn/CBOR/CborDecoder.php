@@ -41,6 +41,7 @@ class CborDecoder {
      * @param ByteBuffer|string $bufOrBin
      * @param int $startOffset
      * @param int|null $endOffset
+     * @param-out int $endOffset
      * @return mixed
      */
     public static function decodeInPlace($bufOrBin, $startOffset, &$endOffset = null) {

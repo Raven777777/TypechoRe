@@ -16,6 +16,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 /**
  * 后台成员列表组件
  *
+ * @property-read int $postsNum 文章数
+ *
  * @author qining
  * @category typecho
  * @package Widget

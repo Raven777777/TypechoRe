@@ -33,6 +33,13 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property-read string $feedUrl
  * @property-read string $feedRssUrl
  * @property-read string $feedAtomUrl
+ *
+ * @method void uid()
+ * @method void name()
+ * @method void screenName()
+ * @method void mail()
+ * @method void permalink()
+ * @method void postsNum()
  */
 class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryKeyInterface, ParamsDelegateInterface
 {
@@ -79,7 +86,7 @@ class Users extends Base implements QueryInterface, RowFilterInterface, PrimaryK
     {
         switch ($key) {
             case 'uid':
-                return $this->uid;
+                return (string) $this->uid;
             default:
                 return '{' . $key . '}';
         }

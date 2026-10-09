@@ -4,6 +4,13 @@ namespace Widget\Base;
 
 use Typecho\Config;
 
+/**
+ * 树状数据结构的前台输出
+ *
+ * @property-read int $levels 节点层级深度
+ * @property-read array $children 子节点列表
+ * @property-read int $count 节点计数
+ */
 trait TreeViewTrait
 {
     use TreeTrait;
@@ -11,7 +18,7 @@ trait TreeViewTrait
     /**
      * treeViewRows
      *
-     * @param mixed $rowOptions 输出选项
+     * @param Config $rowOptions 输出选项
      * @param string $type 类型
      * @param string $func 回调函数
      * @param int $current 当前项

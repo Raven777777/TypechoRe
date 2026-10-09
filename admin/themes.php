@@ -1,4 +1,11 @@
 <?php
+/**
+ * 后台模板作用域变量: 由 admin/common.php (以及 header.php / menu.php) 通过 include 注入。
+ * PHPStan 无法跨 include 传播局部变量, 这里按实际作用域显式声明。
+ *
+ * @var Widget\Options $options
+ * @var Widget\Security $security
+ */
 include 'common.php';
 include 'header.php';
 include 'menu.php';
@@ -23,7 +30,7 @@ include 'menu.php';
 
                     <tbody>
                     <?php if ($options->missingTheme): ?>
-                        <tr id="theme-<?php $options->missingTheme; ?>" class="current">
+                        <tr id="theme-<?php echo $options->missingTheme; ?>" class="current">
                             <td colspan="2" class="warning">
                                 <p><strong><?php _e('检测到您之前使用的 "%s" 外观文件不存在，您可以重新上传此外观或者启用其他外观。', $options->missingTheme); ?></strong></p>
                                 <ul>

@@ -1,7 +1,20 @@
 <?php if (!defined('__TYPECHO_ADMIN__')) exit; ?>
 <?php
-$fields = isset($post) ? $post->getFieldItems() : $page->getFieldItems();
-$defaultFields = isset($post) ? $post->getDefaultFieldItems() : $page->getDefaultFieldItems();
+/**
+ * 后台模板作用域变量: 由 admin/common.php (以及 header.php / menu.php) 通过 include 注入。
+ * PHPStan 无法跨 include 传播局部变量, 这里按实际作用域显式声明。
+ *
+ * @var Widget\Contents\Page\Edit|null $page
+ * @var Widget\Contents\Post\Edit|null $post
+ */
+$content = $post ?? $page;
+
+if (null === $content) {
+    return;
+}
+
+$fields = $content->getFieldItems();
+$defaultFields = $content->getDefaultFieldItems();
 ?>
 <details id="custom-field"
          class="typecho-post-option" <?php if (!empty($defaultFields) || !empty($fields)): ?>open<?php endif; ?>>

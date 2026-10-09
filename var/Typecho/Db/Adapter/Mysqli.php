@@ -100,23 +100,24 @@ class Mysqli implements Adapter
     /**
      * 获取数据库版本
      *
-     * @param mixed $handle
+     * @param \mysqli $handle
      * @return string
      */
     #[\Override]
     public function getVersion($handle): string
     {
-        return $this->dbLink->server_version;
+        return (string) $this->dbLink->server_version;
     }
 
     /**
      * 执行数据库查询
      *
      * @param string $query 数据库查询SQL字符串
-     * @param mixed $handle 连接对象
+     * @param \mysqli $handle 连接对象
      * @param integer $op 数据库读写状态
      * @param string|null $action 数据库动作
      * @param string|null $table 数据表
+     * @return \mysqli_result|true 查询句柄对象
      * @throws SQLException
      */
     #[\Override]
@@ -204,7 +205,7 @@ class Mysqli implements Adapter
     /**
      * 取出最后一次查询影响的行数
      *
-     * @param mixed $resource 查询的资源数据
+     * @param \mysqli_result $resource 查询句柄对象
      * @param \mysqli $handle 连接对象
      * @return integer
      */
@@ -217,7 +218,7 @@ class Mysqli implements Adapter
     /**
      * 取出最后一次插入返回的主键值
      *
-     * @param mixed $resource 查询的资源数据
+     * @param \mysqli_result $resource 查询句柄对象
      * @param \mysqli $handle 连接对象
      * @return integer
      */

@@ -7,6 +7,10 @@ use Typecho\Db\Exception;
 
 /**
  * 处理树状数据结构
+ *
+ * @property-read int $levels 节点层级深度
+ * @property-read array $children 子节点列表
+ * @property-read array $directory 层级目录
  */
 trait TreeTrait
 {

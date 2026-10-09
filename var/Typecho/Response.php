@@ -294,7 +294,7 @@ class Response
      * @param mixed $value 设置的值
      * @param integer $timeout 过期时间,默认为0,表示随会话时间结束
      * @param string $path 路径信息
-     * @param string|null $domain 域名信息
+     * @param string $domain 域名信息
      * @param bool $secure 是否仅可通过安全的 HTTPS 连接传给客户端
      * @param bool $httponly 是否仅可通过 HTTP 协议访问
      * @return $this

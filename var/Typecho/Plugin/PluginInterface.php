@@ -17,7 +17,7 @@ interface PluginInterface
      *
      * @static
      * @access public
-     * @return void
+     * @return mixed 可选返回提示文本 (字符串); 无返回值时为 null。核心仅在提示中使用
      */
     public static function activate();
 
@@ -26,7 +26,7 @@ interface PluginInterface
      *
      * @static
      * @access public
-     * @return void
+     * @return mixed 可选返回提示文本 (字符串); 无返回值时为 null。核心仅在提示中使用
      */
     public static function deactivate();
 

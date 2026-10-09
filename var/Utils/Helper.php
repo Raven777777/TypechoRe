@@ -7,7 +7,11 @@ use Typecho\Db;
 use Typecho\I18n;
 use Typecho\Plugin;
 use Typecho\Widget;
+use Widget\Base\Comments;
+use Widget\Base\Contents;
+use Widget\Base\Metas;
 use Widget\Base\Options as BaseOptions;
+use Widget\Base\Users;
 use Widget\Options;
 use Widget\Plugins\Edit;
 use Widget\Security;
@@ -55,11 +59,22 @@ class Helper
             'Users'    => 'uid'
         ];
 
-        $className = '\Widget\Base\\' . $table;
+        $className = '\\Widget\\Base\\' . $table;
 
         $key = $keys[$table];
         $db = Db::get();
         $widget = Widget::widget($className . '@' . $pkId);
+
+        // Widget::widget() 返回基类类型, 这里按白名单收窄为具体的 Base 组件;
+        // 同时避开对不存在类型调用 select() 的风险。
+        if (
+            !$widget instanceof Contents
+            && !$widget instanceof Comments
+            && !$widget instanceof Metas
+            && !$widget instanceof Users
+        ) {
+            return null;
+        }
 
         $db->fetchRow(
             $widget->select()->where("{$key} = ?", $pkId)->limit(1),
@@ -101,15 +116,12 @@ class Helper
             /** 载入插件 */
             require_once $pluginFileName;
 
-            /** 判断实例化是否成功 */
-            if (
-                !isset($activatedPlugins[$pluginName]) || !class_exists($className)
-                || !method_exists($className, 'deactivate')
-            ) {
+            /** 判断实例化是否成功 (portal() 返回 class-string<PluginInterface>) */
+            if (!isset($activatedPlugins[$pluginName]) || !class_exists($className)) {
                 throw new Widget\Exception(_t('无法禁用插件'), 500);
             }
 
-            call_user_func([$className, 'deactivate']);
+            $className::deactivate();
         } catch (\Exception $e) {
             //nothing to do
         }

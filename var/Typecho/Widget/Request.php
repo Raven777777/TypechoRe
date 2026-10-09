@@ -14,7 +14,7 @@ class Request
      * 支持的过滤器列表
      *
      * @access private
-     * @var string
+     * @var array<string, callable|array{string, string}>
      */
     private const FILTERS = [
         'int'     => 'intval',
@@ -129,7 +129,7 @@ class Request
 
     /**
      * @param string $key
-     * @param null $default
+     * @param mixed $default 参数缺省值
      * @param bool|null $exists detect exists
      * @return mixed
      */

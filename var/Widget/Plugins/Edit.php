@@ -53,16 +53,13 @@ class Edit extends Options implements ActionInterface
             /** 载入插件 */
             require_once $pluginFileName;
 
-            /** 判断实例化是否成功 */
-            if (
-                isset($activatedPlugins[$pluginName]) || !class_exists($className)
-                || !method_exists($className, 'activate')
-            ) {
+            /** 判断实例化是否成功 (portal() 返回 class-string<PluginInterface>) */
+            if (isset($activatedPlugins[$pluginName]) || !class_exists($className)) {
                 throw new Exception(_t('无法启用插件'), 500);
             }
 
             try {
-                $result = call_user_func([$className, 'activate']);
+                $result = $className::activate();
                 Plugin::activate($pluginName);
                 $this->update(
                     ['value' => json_encode(Plugin::export())],
@@ -120,8 +117,9 @@ class Edit extends Options implements ActionInterface
         /** 获取插件入口 */
         [$pluginFileName, $className] = Plugin::portal($pluginName, $this->options->pluginDir);
 
+        // configCheck() / configHandle() 是插件可选实现的自有钩子, 不属于接口
         if (!$isInit && method_exists($className, 'configCheck')) {
-            $result = call_user_func([$className, 'configCheck'], $settings);
+            $result = $className::{'configCheck'}($settings);
 
             if (!empty($result) && is_string($result)) {
                 Notice::alloc()->set($result);
@@ -130,7 +128,7 @@ class Edit extends Options implements ActionInterface
         }
 
         if (method_exists($className, 'configHandle')) {
-            call_user_func([$className, 'configHandle'], $settings, $isInit);
+            $className::{'configHandle'}($settings, $isInit);
             return true;
         }
 
@@ -235,16 +233,13 @@ class Edit extends Options implements ActionInterface
             /** 载入插件 */
             require_once $pluginFileName;
 
-            /** 判断实例化是否成功 */
-            if (
-                !isset($activatedPlugins[$pluginName]) || !class_exists($className)
-                || !method_exists($className, 'deactivate')
-            ) {
+            /** 判断实例化是否成功 (portal() 返回 class-string<PluginInterface>) */
+            if (!isset($activatedPlugins[$pluginName]) || !class_exists($className)) {
                 throw new Exception(_t('无法禁用插件'), 500);
             }
 
             try {
-                $result = call_user_func([$className, 'deactivate']);
+                $result = $className::deactivate();
             } catch (Plugin\Exception $e) {
                 /** 截获异常 */
                 Notice::alloc()->set($e->getMessage(), 'error');

@@ -77,9 +77,10 @@ class GetTextMulti
     public function ngettext(string $single, string $plural, int $number): string
     {
         $count = - 1;
+        $string = $single;
 
         foreach ($this->handlers as $handler) {
-            $string = $handler->ngettext($single, $plural, $number, $count);
+            $string = $handler->ngettext($single, $plural, (string) $number, $count);
             if (- 1 != $count) {
                 break;
             }

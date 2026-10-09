@@ -15,6 +15,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 /**
  * 文件管理列表组件
  *
+ * @property-read Config $parentPost 附件所属内容
+ *
  * @category typecho
  * @package Widget
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)

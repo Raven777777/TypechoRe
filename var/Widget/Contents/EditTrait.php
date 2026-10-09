@@ -16,6 +16,8 @@ use Widget\Base\Metas;
  */
 trait EditTrait
 {
+    use PageOffsetTrait;
+
     /**
      * 删除自定义字段
      *
@@ -136,7 +138,7 @@ trait EditTrait
      * @param string $name
      * @param integer $value
      * @param integer $cid
-     * @return integer
+     * @return int|false 字段名非法时返回 false
      * @throws Exception
      */
     public function incrIntField(string $name, int $value, int $cid)
@@ -362,7 +364,11 @@ trait EditTrait
             $dstOffset = $this->request->get('dst', 0);
             $timezoneSymbol = $this->options->timezone >= 0 ? '+' : '-';
             $timezoneOffset = abs($this->options->timezone);
-            $timezone = $timezoneSymbol . str_pad($timezoneOffset / 3600, 2, '0', STR_PAD_LEFT) . ':00';
+            // 时区偏移可能是 30 分钟的整数倍 (如 UTC+5:30), 分别计算时和分
+            $timezone = $timezoneSymbol
+                . str_pad((string) intdiv($timezoneOffset, 3600), 2, '0', STR_PAD_LEFT)
+                . ':'
+                . str_pad((string) intdiv($timezoneOffset % 3600, 60), 2, '0', STR_PAD_LEFT);
             [$date, $time] = explode(' ', $this->request->get('date'));
 
             $created = strtotime("{$date}T{$time}{$timezone}") - $dstOffset;
@@ -397,7 +403,7 @@ trait EditTrait
      * @param boolean $afterCount 是否参与计数
      * @throws DbException
      */
-    protected function setCategories(int $cid, array $categories, bool $beforeCount = true, bool $afterCount = true)
+    public function setCategories(int $cid, array $categories, bool $beforeCount = true, bool $afterCount = true)
     {
         $categories = array_unique(array_map('trim', $categories));
 
@@ -702,47 +708,6 @@ trait EditTrait
         }
 
         return $this->draft['cid'];
-    }
-
-    /**
-     * 获取页面偏移
-     *
-     * @param string $column 字段名
-     * @param integer $offset 偏移值
-     * @param string $type 类型
-     * @param string|null $status 状态值
-     * @param integer $authorId 作者
-     * @param integer $pageSize 分页值
-     * @return integer
-     * @throws DbException
-     */
-    protected function getPageOffset(
-        string $column,
-        int $offset,
-        string $type,
-        ?string $status = null,
-        int $authorId = 0,
-        int $pageSize = 20
-    ): int {
-        $select = $this->db->select(['COUNT(table.contents.cid)' => 'num'])->from('table.contents')
-            ->where("table.contents.{$column} > {$offset}")
-            ->where(
-                "table.contents.type = ? OR (table.contents.type = ? AND table.contents.parent = ?)",
-                $type,
-                $type . '_draft',
-                0
-            );
-
-        if (!empty($status)) {
-            $select->where("table.contents.status = ?", $status);
-        }
-
-        if ($authorId > 0) {
-            $select->where('table.contents.authorId = ?', $authorId);
-        }
-
-        $count = $this->db->fetchObject($select)->num + 1;
-        return ceil($count / $pageSize);
     }
 
     /**

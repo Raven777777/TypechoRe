@@ -1,5 +1,13 @@
 <?php
 /**
+ * 主题模板作用域变量
+ *
+ * 模板由 Widget\Archive::render()/need() 通过 require 载入, 因此 $this 是当前归档组件;
+ * 其余局部变量 (如 $comments) 由模板内部赋值。PHPStan 无法推断 include 作用域, 这里显式声明。
+ *
+ * @var Widget\Archive $this
+ */
+/**
  * Default theme for Typecho
  *
  * @package Typecho Replica Theme

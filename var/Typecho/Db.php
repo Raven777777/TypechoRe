@@ -449,7 +449,7 @@ class Db
      * 一次取出一个对象
      *
      * @param mixed $query 查询对象
-     * @param array|null $filter 行过滤器函数,将查询的每一行作为第一个参数传入指定的过滤器中
+     * @param callable|null $filter 行过滤器函数,将查询的每一行作为第一个参数传入指定的过滤器中
      * @return \stdClass|null
      * @throws DbException
      */

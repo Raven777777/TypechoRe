@@ -1,4 +1,13 @@
 <?php if (!defined('__TYPECHO_ADMIN__')) exit; ?>
+<?php
+/**
+ * 后台模板作用域变量: 由 admin/common.php (以及 header.php / menu.php) 通过 include 注入。
+ * PHPStan 无法跨 include 传播局部变量, 这里按实际作用域显式声明。
+ *
+ * @var Widget\Menu $menu
+ * @var Widget\Options $options
+ */
+?>
 <ul class="typecho-option-tabs fix-tabs">
     <li<?php if ($menu->getCurrentMenuUrl() === 'themes.php'): ?> class="current"<?php endif; ?>><a href="<?php $options->adminUrl('themes.php'); ?>"><?php _e('可以使用的外观'); ?></a></li>
     <?php if (\Widget\Themes\Files::isWriteable()): ?>

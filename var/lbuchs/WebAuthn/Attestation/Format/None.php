@@ -15,15 +15,17 @@ class None extends FormatBase {
 
     /*
      * returns the key certificate in PEM format
-     * @return string
+     * @return string|null
      */
-    public function getCertificatePem() {
+    #[\Override]
+    public function getCertificatePem(): ?string {
         return null;
     }
 
     /**
      * @param string $clientDataHash
      */
+    #[\Override]
     public function validateAttestation($clientDataHash) {
         return true;
     }
@@ -35,6 +37,7 @@ class None extends FormatBase {
      * @return boolean
      * @throws WebAuthnException
      */
+    #[\Override]
     public function validateRootCertificate($rootCas) {
         return false;
     }

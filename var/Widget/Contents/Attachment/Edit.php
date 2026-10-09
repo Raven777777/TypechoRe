@@ -8,6 +8,7 @@ use Typecho\Widget\Helper\Form;
 use Typecho\Widget\Helper\Layout;
 use Widget\ActionInterface;
 use Widget\Base\Contents;
+use Widget\Contents\PageOffsetTrait;
 use Widget\Contents\PrepareEditTrait;
 use Widget\Notice;
 use Widget\Upload;
@@ -28,6 +29,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 class Edit extends Contents implements ActionInterface
 {
     use PrepareEditTrait;
+    use PageOffsetTrait;
 
     /**
      * 执行函数

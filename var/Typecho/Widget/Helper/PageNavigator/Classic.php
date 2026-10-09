@@ -46,7 +46,7 @@ class Classic extends PageNavigator
         //输出上一页
         if ($this->total > 0 && $this->currentPage > 1) {
             echo '<a class="prev" href="'
-                . str_replace($this->pageHolder, $this->currentPage - 1, $this->pageTemplate)
+                . str_replace($this->pageHolder, (string) ($this->currentPage - 1), $this->pageTemplate)
                 . $this->anchor . '">'
                 . $prevWord . '</a>';
         }
@@ -64,7 +64,7 @@ class Classic extends PageNavigator
         //输出下一页
         if ($this->total > 0 && $this->currentPage < $this->totalPage) {
             echo '<a class="next" title="" href="'
-                . str_replace($this->pageHolder, $this->currentPage + 1, $this->pageTemplate)
+                . str_replace($this->pageHolder, (string) ($this->currentPage + 1), $this->pageTemplate)
                 . $this->anchor . '">'
                 . $nextWord . '</a>';
         }

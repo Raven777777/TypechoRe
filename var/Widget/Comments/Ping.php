@@ -112,11 +112,12 @@ class Ping extends Comments
     /**
      * 回响回调函数
      *
-     * @param string $singlePingOptions 单个回响自定义选项
+     * @param Config $singlePingOptions 单个回响自定义选项
      */
-    private function singlePingCallback(string $singlePingOptions): void
+    private function singlePingCallback(Config $singlePingOptions): void
     {
-        if ($this->customSinglePingCallback) {
+        // singlePing() 由主题 functions.php 提供 (见 initParameter()), 这里再次确认存在性
+        if ($this->customSinglePingCallback && function_exists('singlePing')) {
             singlePing($this, $singlePingOptions);
             return;
         }
@@ -125,15 +126,15 @@ class Ping extends Comments
         <li id="<?php $this->theId(); ?>" class="ping-body">
             <div class="ping-title">
                 <cite class="fn"><?php
-                    $singlePingOptions->beforeTitle();
+                    echo $singlePingOptions->beforeTitle;
                     $this->author(true);
-                    $singlePingOptions->afterTitle();
+                    echo $singlePingOptions->afterTitle;
                 ?></cite>
             </div>
             <div class="ping-meta">
-                <a href="<?php $this->permalink(); ?>"><?php $singlePingOptions->beforeDate();
+                <a href="<?php $this->permalink(); ?>"><?php echo $singlePingOptions->beforeDate;
                     $this->date($singlePingOptions->dateFormat);
-                    $singlePingOptions->afterDate(); ?></a>
+                    echo $singlePingOptions->afterDate; ?></a>
             </div>
             <?php $this->content(); ?>
         </li>

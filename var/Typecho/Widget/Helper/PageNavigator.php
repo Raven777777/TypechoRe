@@ -75,7 +75,7 @@ abstract class PageNavigator
         $pageSize = max(1, $pageSize);
 
         $this->total = $total;
-        $this->totalPage = ceil($total / $pageSize);
+        $this->totalPage = intdiv($total + $pageSize - 1, $pageSize);
         $this->currentPage = $currentPage;
         $this->pageSize = $pageSize;
         $this->pageTemplate = $pageTemplate;

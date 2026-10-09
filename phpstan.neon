@@ -1,14 +1,40 @@
-includes:
-    - phpstan-baseline.neon
-
 parameters:
-    level: 0
+    level: 5
     phpVersion: 80500
-    # index.php only loads the generated, Git-ignored config.inc.php; it is still syntax-checked.
+    # index.php 只加载生成的、被 Git 忽略的 config.inc.php; 这里仍做语法检查。
     paths:
         - admin
         - install
         - var
+        - usr
+        - tests
+        - tools
         - install.php
     bootstrapFiles:
         - tools/phpstan-bootstrap.php
+
+    # 运行时的动态属性容器: 属性名分别由请求参数和插件钩子决定,
+    # 无法用 @property 穷举, 这里声明为 stdClass 语义。
+    universalObjectCratesClasses:
+        - Typecho\Plugin
+        - Typecho\Widget\Request
+
+    ignoreErrors:
+        # 主题模板由 Widget\Archive::render() 以 require 载入, 运行在组件内部作用域,
+        # 因此 $this->options / $this->user 等 protected 成员的访问是合法的
+        # (PHP 会回退到 Typecho\Widget::__get)。
+        -
+            identifier: property.protected
+            message: '#^Access to protected property Widget\\Archive::#'
+            paths:
+                - usr/themes/*
+        # Plugin::$signal 通过 trigger(?bool &$signal) 以引用方式绑定到调用方变量,
+        # 只写不读是预期行为: call()/filter() 里的赋值会直接更新调用方变量。
+        -
+            identifier: property.onlyWritten
+            message: '#^Property Typecho\\Plugin::\$signal is never read, only written\.$#'
+        # IXR\Client::__call() 是 XML-RPC 方法名的通用派发 (如 pingback.ping),
+        # 方法名由远端接口决定, 无法穷举。
+        -
+            identifier: method.notFound
+            message: '#^Call to an undefined method IXR\\Client::#'

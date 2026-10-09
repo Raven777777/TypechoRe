@@ -48,7 +48,7 @@ class AuthenticatorData {
 
     /**
      * Parsing the authenticatorData binary.
-     * @param string $binary
+     * @param mixed $binary 二进制 authenticatorData (运行时校验)
      * @throws WebAuthnException
      */
     public function __construct($binary) {
@@ -259,7 +259,7 @@ class AuthenticatorData {
 
     /**
      * reads the flags from flag byte
-     * @param string $binFlag
+     * @param int $binFlag
      * @return \stdClass
      */
     private function _readFlags($binFlag) {
@@ -287,7 +287,8 @@ class AuthenticatorData {
     /**
      * read attested data
      * @param string $binary
-     * @param int $endOffset
+     * @param int|null $endOffset
+     * @param-out int $endOffset
      * @return \stdClass
      * @throws WebAuthnException
      */
@@ -301,7 +302,7 @@ class AuthenticatorData {
         $attestedCData->aaguid = \substr($binary, 37, 16);
 
         //Byte length L of Credential ID, 16-bit unsigned big-endian integer.
-        $length = \unpack('nlength', \substr($binary, 53, 2))['length'];
+        $length = (int) \unpack('nlength', \substr($binary, 53, 2))['length'];
         $attestedCData->credentialId = \substr($binary, 55, $length);
 
         // set end offset
@@ -316,7 +317,9 @@ class AuthenticatorData {
     /**
      * reads COSE key-encoded elliptic curve public key in EC2 format
      * @param string $binary
-     * @param int $endOffset
+     * @param int $offset
+     * @param int|null $endOffset
+     * @param-out int $endOffset
      * @return \stdClass
      * @throws WebAuthnException
      */

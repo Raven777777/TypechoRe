@@ -26,7 +26,7 @@ class AutoP
      * 存储的段落
      *
      * @access private
-     * @var array
+     * @var array<string, string>
      */
     private array $blocks = [];
 
@@ -69,6 +69,17 @@ class AutoP
 
         $this->blocks[$key] = "<{$matches[1]}{$matches[3]}>{$text}</{$matches[1]}>";
         return $key;
+    }
+
+    /**
+     * replaceBlockCallback() 是 preg_replace_callback() 的回调, PHPStan 无法看到
+     * 它对 $this->blocks 的写入, 这里用取值方法返回声明的类型。
+     *
+     * @return array<string, string>
+     */
+    private function getBlocks(): array
+    {
+        return $this->blocks;
     }
 
     /**
@@ -182,7 +193,7 @@ class AutoP
         }
 
         $text = $this->cutByBlock($text);
-        $blocks = array_reverse($this->blocks);
+        $blocks = array_reverse($this->getBlocks());
 
         foreach ($blocks as $blockKey => $blockValue) {
             $text = str_replace($blockKey, $blockValue, $text);
@@ -198,7 +209,7 @@ class AutoP
      */
     private function makeUniqueId(): string
     {
-        return ':' . str_pad($this->uniqueId ++, 4, '0', STR_PAD_LEFT);
+        return ':' . str_pad((string) $this->uniqueId++, 4, '0', STR_PAD_LEFT);
     }
 }
 

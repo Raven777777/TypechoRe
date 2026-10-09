@@ -118,14 +118,96 @@ try {
     $adapter = new \Typecho\Db\Adapter\SQLite();
     $config = new \Typecho\Config(['file' => $dbFile]);
     $handle = $adapter->connect($config);
-    check($adapter->query('CREATE TABLE smoke (id INTEGER PRIMARY KEY, value TEXT)', $handle) instanceof \SQLite3Result, 'SQLite DDL failed');
-    check($adapter->query("INSERT INTO smoke (value) VALUES ('ok')", $handle) instanceof \SQLite3Result, 'SQLite insert failed');
+    check(
+        \SQLite3Result::class === $adapter->query(
+            'CREATE TABLE smoke (id INTEGER PRIMARY KEY, value TEXT)',
+            $handle
+        )::class,
+        'SQLite DDL failed'
+    );
+    check(
+        \SQLite3Result::class === $adapter->query("INSERT INTO smoke (value) VALUES ('ok')", $handle)::class,
+        'SQLite insert failed'
+    );
     $result = $adapter->query('SELECT value FROM smoke', $handle);
     check($adapter->fetch($result)['value'] === 'ok', 'SQLite fetch failed');
     $handle->close();
 } finally {
     @unlink($dbFile);
 }
+
+// 遗留类名别名表: 每个目标都必须能加载, 自动加载器也必须能解析遗留名
+foreach (\Typecho\Common::CLASS_ALIASES as $legacyName => $target) {
+    check(
+        class_exists($target) || interface_exists($target),
+        "legacy alias target {$target} ({$legacyName}) does not exist"
+    );
+}
+check(
+    interface_exists('Typecho_Plugin_Interface'),
+    'legacy alias Typecho_Plugin_Interface failed to resolve to Typecho\\Plugin\\PluginInterface'
+);
+check(
+    class_exists('Widget_Abstract_Contents'),
+    'legacy alias Widget_Abstract_Contents failed to resolve to Widget\\Base\\Contents'
+);
+check(
+    class_exists('Typecho_Db_Adapter_Mysql'),
+    'legacy alias Typecho_Db_Adapter_Mysql failed to resolve to Typecho\\Db\\Adapter\\Mysqli'
+);
+
+// XmlRpc::mtSetPostCategories() 从外部调用 setCategories(), 必须保持 public
+check(
+    (new ReflectionMethod(\Widget\Contents\Post\Edit::class, 'setCategories'))->isPublic(),
+    'Post\Edit::setCategories() must be public for XmlRpc'
+);
+// 附件编辑需要分页定位方法 (先前缺失, 调用会被 __call 吞掉)
+check(
+    (new ReflectionMethod(\Widget\Contents\Attachment\Edit::class, 'getPageOffset'))->isProtected(),
+    'Attachment\Edit does not expose PageOffsetTrait::getPageOffset()'
+);
+// ceil(total/pageSize) 的整数等价实现
+$navigator = new \Typecho\Widget\Helper\PageNavigator\Box(10, 1, 5, '/page/{page}');
+check(
+    2 === (new ReflectionProperty($navigator, 'totalPage'))->getValue($navigator),
+    'PageNavigator totalPage should be 2 for 10 items / 5 per page'
+);
+$navigator = new \Typecho\Widget\Helper\PageNavigator\Box(10, 1, 4, '/page/{page}');
+check(
+    3 === (new ReflectionProperty($navigator, 'totalPage'))->getValue($navigator),
+    'PageNavigator totalPage should round up (10 items / 4 per page -> 3)'
+);
+
+// IXR: 联合类型参数不能触发 ReflectionType::getName() 致命错误, 错误必须被识别
+$ixrProbe = new class () {
+    public function union(int|string $value): string
+    {
+        return 'ok:' . get_debug_type($value);
+    }
+
+    public function boom(): string
+    {
+        throw new \IXR\Exception('boom', 42);
+    }
+};
+$ixrServer = new \IXR\Server([
+    'probe.union' => [$ixrProbe, 'union'],
+    'probe.boom'  => [$ixrProbe, 'boom'],
+]);
+$ixrResult = $ixrServer->multiCall([
+    ['methodName' => 'probe.union', 'params' => [42]],
+    ['methodName' => 'probe.boom', 'params' => []],
+    ['methodName' => 'probe.missing', 'params' => []],
+]);
+check($ixrResult[0] === ['ok:int'], 'IXR union-typed parameter call failed');
+check(
+    isset($ixrResult[1]['faultCode']) && 42 === $ixrResult[1]['faultCode'],
+    'IXR multiCall did not report a thrown IXR\Exception as a fault'
+);
+check(
+    isset($ixrResult[2]['faultCode']) && -32601 === $ixrResult[2]['faultCode'],
+    'IXR multiCall did not report an unknown method as a fault'
+);
 
 // 全量类加载: 任何 #[\Override] 签名漂移/类链接错误都会在此致命失败
 $classFiles = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(ROOT . '/var'));

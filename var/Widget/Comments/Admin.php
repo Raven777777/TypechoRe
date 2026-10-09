@@ -46,9 +46,9 @@ class Admin extends Comments
      * 所有文章个数
      *
      * @access private
-     * @var integer|null
+     * @var integer
      */
-    private ?int $total;
+    private int $total;
 
     /**
      * 获取菜单标题
@@ -60,7 +60,7 @@ class Admin extends Comments
     {
         $content = $this->parentContent;
 
-        if ($content) {
+        if ($content->have()) {
             return _t('%s的评论', $content->title);
         }
 

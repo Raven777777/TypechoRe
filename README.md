@@ -32,21 +32,25 @@
 
 ## 质量检查
 
-运行完整检查（PHP 语法、基础回归测试、PHPStan、Semgrep）：
+运行完整检查（PHP 语法、基础回归测试、`#[\Override]` 审计、数据库集成测试、PHPStan、Semgrep）：
 
 ```powershell
 .\tools\quality.ps1
 ```
 
-脚本首次运行会将 PHPStan 和 Semgrep 安装到被 Git 忽略的 `.tools/` 目录；本地默认使用项目内的 `php-8.5.10/php.exe`，也可通过 `PHP_EXE` 指定 PHP。GitHub Actions 会在 push 和 pull request 时运行相同检查。检查说明见 [`docs/guide/quality.md`](docs/guide/quality.md)。
+脚本首次运行会将 PHPStan 和 Semgrep 安装到被 Git 忽略的 `.tools/` 目录；本地默认使用项目内的 `php-8.5.10/php.exe`，也可通过 `PHP_EXE` 指定 PHP。GitHub Actions 会在 push 和 pull request 时运行相同检查，并用 MySQL/PostgreSQL service container 运行数据库集成测试（`Mysqli`、`Pdo_Mysql`、`Pgsql`、`Pdo_Pgsql`、`SQLite`、`Pdo_SQLite`）。
 
-仅运行基础回归测试：
+静态分析使用 **PHPStan level 5**（扫描 `admin`、`install`、`var`、`usr`、`tests`），当前 **0 告警且不使用 baseline**。检查说明与已知限制见 [`docs/guide/quality.md`](docs/guide/quality.md)。
+
+单独运行：
 
 ```bash
-php-8.5.10/php.exe tests/smoke.php
+php-8.5.10/php.exe tests/smoke.php           # 基础回归测试
+php-8.5.10/php.exe tests/integration.php     # 数据库集成测试（默认 SQLite）
+php-8.5.10/php.exe tools/audit-override.php  # #[\Override] 覆盖率审计
+php-8.5.10/php.exe tools/e2e.php             # 真实站点端到端测试
+php-8.5.10/php.exe .tools/phpstan/phpstan.phar analyse -c phpstan.neon
 ```
-
-测试覆盖密码哈希、authCode、CSRF/IP 基础行为、HTML 转义和 SQLite 读写。完整检查结果与已知限制见 [`docs/guide/quality.md`](docs/guide/quality.md)。
 
 ## Passkey 登录
 
@@ -63,6 +67,7 @@ Passkey 需要 HTTPS（`localhost` 除外），并且浏览器访问域名必须
 * [部署与恢复及生产包构建](docs/guide/deployment.md)
 * [Passkey / WebAuthn](docs/guide/passkey.md)
 * [代码质量与 PHP 8.5 检查报告](docs/guide/quality.md)
+* [更新日志](CHANGELOG.md)
 
 ## 反馈问题
 

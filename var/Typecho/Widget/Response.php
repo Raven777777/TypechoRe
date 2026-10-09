@@ -156,7 +156,7 @@ class Response
             $this->response->setContentType($contentType);
         }
 
-        $this->response->setHeader('Content-Length', filesize($file))
+        $this->response->setHeader('Content-Length', (string) filesize($file))
             ->addResponder(function () use ($file) {
                 readfile($file);
             })

@@ -73,6 +73,17 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property-read string $year
  * @property-read string $month
  * @property-read string $day
+ *
+ * @method void cid()
+ * @method void theId()
+ * @method void title()
+ * @method void content(mixed ...$args)
+ * @method void dateWord()
+ * @method void permalink()
+ * @method void password()
+ * @method void order()
+ * @method void respondId()
+ * @method void commentUrl()
  */
 class Contents extends Base implements QueryInterface, RowFilterInterface, PrimaryKeyInterface, ParamsDelegateInterface
 {
@@ -94,7 +105,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
     {
         switch ($key) {
             case 'cid':
-                return $this->cid;
+                return (string) $this->cid;
             case 'slug':
                 return urlencode($this->slug);
             case 'directory':
@@ -197,7 +208,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
         $draft = $this->db->fetchObject($this->db->select('type', 'parent')
             ->from('table.contents')->where('cid = ?', $cid));
 
-        if (isset($draft) && null !== $draft && 'revision' === $draft->type && $draft->parent) {
+        if (null !== $draft && 'revision' === $draft->type && $draft->parent) {
             $result = '@' . $result;
         }
 
@@ -514,18 +525,15 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
         $directory = Rows::alloc()->getAllParents($category['mid']);
         $directory[] = $category;
 
-        if ($directory) {
-            $result = [];
+        // getAllParents() + 当前分类, $directory 一定非空
+        $result = [];
 
-            foreach ($directory as $category) {
-                $result[] = $link ? '<a href="' . $category['permalink'] . '">'
-                    . $category['name'] . '</a>' : $category['name'];
-            }
-
-            echo implode($split, $result);
-        } else {
-            echo $default;
+        foreach ($directory as $category) {
+            $result[] = $link ? '<a href="' . $category['permalink'] . '">'
+                . $category['name'] . '</a>' : $category['name'];
         }
+
+        echo implode($split, $result);
     }
 
     /**
@@ -701,7 +709,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      */
     protected function ___categories(): array
     {
-        return CategoryRelated::allocWithAlias($this->cid, ['cid' => $this->cid])
+        return CategoryRelated::allocWithAlias((string) $this->cid, ['cid' => $this->cid])
             ->toArray(['mid', 'name', 'slug', 'description', 'order', 'parent', 'count', 'permalink']);
     }
 
@@ -712,7 +720,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      */
     protected function ___tags(): array
     {
-        return TagRelated::allocWithAlias($this->cid, ['cid' => $this->cid])
+        return TagRelated::allocWithAlias((string) $this->cid, ['cid' => $this->cid])
             ->toArray(['mid', 'name', 'slug', 'description', 'count', 'permalink']);
     }
 
@@ -723,7 +731,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
      */
     protected function ___author(): Users
     {
-        return Author::allocWithAlias($this->cid, ['uid' => $this->authorId]);
+        return Author::allocWithAlias((string) $this->cid, ['uid' => $this->authorId]);
     }
 
     /**

@@ -89,7 +89,7 @@ class Box extends PageNavigator
         if ($this->currentPage > 1) {
             echo $itemPrevBegin . sprintf(
                 $linkPrevBegin,
-                str_replace($this->pageHolder, $this->currentPage - 1, $this->pageTemplate) . $this->anchor
+                str_replace($this->pageHolder, (string) ($this->currentPage - 1), $this->pageTemplate) . $this->anchor
             )
                 . $prevWord . $linkEnd . $itemEnd;
         }
@@ -97,7 +97,7 @@ class Box extends PageNavigator
         //输出第一页
         if ($from > 1) {
             echo $itemBegin
-                . sprintf($linkBegin, str_replace($this->pageHolder, 1, $this->pageTemplate) . $this->anchor)
+                . sprintf($linkBegin, str_replace($this->pageHolder, '1', $this->pageTemplate) . $this->anchor)
                 . '1' . $linkEnd . $itemEnd;
 
             if ($from > 2) {
@@ -112,7 +112,7 @@ class Box extends PageNavigator
 
             echo ($current ? $itemCurrentBegin : $itemBegin) . sprintf(
                 ($current ? $linkCurrentBegin : $linkBegin),
-                str_replace($this->pageHolder, $i, $this->pageTemplate) . $this->anchor
+                str_replace($this->pageHolder, (string) $i, $this->pageTemplate) . $this->anchor
             )
                 . $i . $linkEnd . $itemEnd;
         }
@@ -126,7 +126,7 @@ class Box extends PageNavigator
             echo $itemBegin
                 . sprintf(
                     $linkBegin,
-                    str_replace($this->pageHolder, $this->totalPage, $this->pageTemplate) . $this->anchor
+                    str_replace($this->pageHolder, (string) $this->totalPage, $this->pageTemplate) . $this->anchor
                 )
                 . $this->totalPage . $linkEnd . $itemEnd;
         }
@@ -135,7 +135,7 @@ class Box extends PageNavigator
         if ($this->currentPage < $this->totalPage) {
             echo $itemNextBegin . sprintf(
                 $linkNextBegin,
-                str_replace($this->pageHolder, $this->currentPage + 1, $this->pageTemplate) . $this->anchor
+                str_replace($this->pageHolder, (string) ($this->currentPage + 1), $this->pageTemplate) . $this->anchor
             )
                 . $nextWord . $linkEnd . $itemEnd;
         }

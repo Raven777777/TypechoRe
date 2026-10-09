@@ -11,7 +11,7 @@ class Value
 {
     private $data;
 
-    private ?string $type;
+    private string $type;
 
     /**
      * @param mixed $data

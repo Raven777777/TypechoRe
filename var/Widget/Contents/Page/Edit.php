@@ -101,7 +101,7 @@ class Edit extends Contents implements ActionInterface
             self::pluginHandle()->call('finishSave', $contents, $this);
 
             /** 设置高亮 */
-            Notice::alloc()->highlight($this->cid);
+            Notice::alloc()->highlight((string) $this->cid);
 
             if ($this->request->isAjax()) {
                 $created = new Date($this->options->time);

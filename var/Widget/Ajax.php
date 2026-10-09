@@ -33,7 +33,7 @@ class Ajax extends BaseOptions implements ActionInterface
     /**
      * 自定义编辑器大小
      *
-     * @throws \Typecho\Db\Exception|Exception
+     * @throws \Typecho\Db\Exception
      */
     public function editorResize()
     {

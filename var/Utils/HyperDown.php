@@ -254,6 +254,7 @@ class HyperDown
      */
     private function parse(string $text, bool $inline = false, int $offset = 0): string
     {
+        $lines = [];
         $blocks = $this->parseBlock($text, $lines);
         $html = '';
 
@@ -349,7 +350,7 @@ class HyperDown
                         $replace = $matches[0];
                     }
 
-                    $last = $matches[2] + 1;
+                    $last = (int) $matches[2] + 1;
                     return $replace;
                 }, $html) : $html;
     }
@@ -658,11 +659,11 @@ class HyperDown
      * parseBlock
      *
      * @param string $text
-     * @param array|null $lines
+     * @param array $lines
      *
      * @return array
      */
-    private function parseBlock(string $text, ?array &$lines): array
+    private function parseBlock(string $text, array &$lines): array
     {
         $lines = explode("\n", $text);
         $this->_blocks = [];
@@ -680,6 +681,7 @@ class HyperDown
             $block = $this->getBlock();
             $args = [$block, $key, $line, &$state, $lines];
 
+            // @phpstan-ignore notEqual.alwaysFalse (解析器回调会通过 setBlock()/setCurrent() 改写 _current)
             if ($this->_current != 'normal') {
                 $pass = call_user_func_array($this->_parsers[$this->_current], $args);
 
@@ -1031,7 +1033,7 @@ class HyperDown
      * @param int $key
      * @param string $line
      * @param array|null $state
-     * @param array|null $lines
+     * @param array $lines
      *
      * @return bool
      */

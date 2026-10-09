@@ -1,5 +1,12 @@
 <?php if(!defined('__TYPECHO_ADMIN__')) exit; ?>
 <?php
+/**
+ * 后台模板作用域变量: 由 admin/common.php (以及 header.php / menu.php) 通过 include 注入。
+ * PHPStan 无法跨 include 传播局部变量, 这里按实际作用域显式声明。
+ *
+ * @var Widget\Options $options
+ * @var Widget\Security $security
+ */
 $phpMaxFilesize = function_exists('ini_get') ? trim(ini_get('upload_max_filesize')) : '0';
 
 if (preg_match("/^([0-9]+)([a-z]{1,2})?$/i", $phpMaxFilesize, $matches)) {

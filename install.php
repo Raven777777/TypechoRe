@@ -1191,12 +1191,17 @@ function install_step_2_perform()
             }
         }
     } catch (\Typecho\Db\Exception $e) {
-        $code = $e->getCode();
+        // PDO 抛出的是 SQLSTATE 字符串 ('42S01' / 'HY000'), mysqli 抛出的是
+        // 数字错误码 (1050)。PHPStan 依据 Throwable::getCode(): int 推断为 int,
+        // 这里显式声明联合类型 (PDOException 实际会返回字符串)
+        /** @var int|string $rawCode */
+        $rawCode = $e->getCode();
+        $code = (string) $rawCode;
 
         if (
-            ('Mysql' == $type && (1050 == $code || '42S01' == $code)) ||
-            ('SQLite' == $type && ('HY000' == $code || 1 == $code)) ||
-            ('Pgsql' == $type && '42P07' == $code)
+            ('Mysql' == $type && in_array($code, ['1050', '42S01'], true)) ||
+            ('SQLite' == $type && in_array($code, ['HY000', '1'], true)) ||
+            ('Pgsql' == $type && in_array($code, ['42P07'], true))
         ) {
             if ($config['dbNext'] == 'keep') {
                 if (install_check('db_data')) {

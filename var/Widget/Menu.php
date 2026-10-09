@@ -205,7 +205,7 @@ class Menu extends Base
 
                 if (
                     $validate
-                    && basename($urlParts['path'] ?? '') == 'extending.php'
+                    && basename($urlParts['path']) == 'extending.php'
                     && !empty($currentUrlParams['panel']) && !empty($urlParams['panel'])
                     && $urlParams['panel'] != $currentUrlParams['panel']
                 ) {

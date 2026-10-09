@@ -3,6 +3,7 @@
 namespace Typecho;
 
 use Typecho\Plugin\Exception as PluginException;
+use Typecho\Plugin\PluginInterface;
 
 /**
  * 插件处理类
@@ -43,16 +44,12 @@ class Plugin
     private string $handle;
 
     /**
-     * 组件
-     *
-     * @var string
-     */
-    private $component;
-
-    /**
      * 是否触发插件的信号
      *
-     * @var boolean
+     * 通过 trigger() 以引用方式绑定到调用方变量, 因此只写不读是预期行为:
+     * call()/filter() 中的赋值会直接更新调用方的 $signal。
+     *
+     * @var bool
      */
     private bool $signal = false;
 
@@ -323,7 +320,7 @@ class Plugin
      *
      * @param string $pluginName 插件名
      * @param string $path 插件目录
-     * @return array
+     * @return array{string, class-string<PluginInterface>} [插件文件, 插件类名]
      * @throws PluginException
      */
     public static function portal(string $pluginName, string $path): array
@@ -390,7 +387,6 @@ class Plugin
      */
     public function __get(string $component)
     {
-        $this->component = $component;
         return $this;
     }
 
@@ -493,6 +489,7 @@ class Plugin
      * @param array $args
      * @return false|mixed|null
      */
+    #[\Deprecated(message: 'use call() instead', since: '1.3.2')]
     public function __call(string $component, array $args)
     {
         return $this->call($component, ... $args);

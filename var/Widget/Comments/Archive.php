@@ -17,6 +17,11 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 /**
  * 评论归档组件
  *
+ * @property-read array $children 子评论列表
+ * @property-read int $levels 嵌套层级
+ * @property-read int $order 同级中的顺序
+ * @property-read bool $isTopLevel 是否为顶层评论
+ *
  * @category typecho
  * @package Widget
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
@@ -101,7 +106,7 @@ class Archive extends Comments
             return;
         }
 
-        $unapprovedCommentId = intval(Cookie::get('__typecho_unapproved_comment', 0));
+        $unapprovedCommentId = intval(Cookie::get('__typecho_unapproved_comment', '0'));
         $select = $this->select()->where('cid = ?', $this->parameter->parentId)
             ->where(
                 'status = ? OR (coid = ? AND status <> ?)',
@@ -165,7 +170,8 @@ class Archive extends Comments
         /** 对评论进行分页 */
         if ($this->options->commentsPageBreak) {
             if ('last' == $this->options->commentsPageDisplay && !$this->parameter->commentPage) {
-                $this->currentPage = ceil($this->total / $this->options->commentsPageSize);
+                $pageSize = (int) $this->options->commentsPageSize;
+                $this->currentPage = intdiv($this->total + $pageSize - 1, $pageSize);
             } else {
                 $this->currentPage = $this->parameter->commentPage ? $this->parameter->commentPage : 1;
             }
@@ -350,21 +356,21 @@ class Archive extends Comments
                         $singleCommentOptions->avatarHighRes
                     ); ?>
                 </span>
-                <cite class="fn" itemprop="name"><?php $singleCommentOptions->beforeAuthor();
+                <cite class="fn" itemprop="name"><?php echo $singleCommentOptions->beforeAuthor;
                     $this->author();
-                    $singleCommentOptions->afterAuthor(); ?></cite>
+                    echo $singleCommentOptions->afterAuthor; ?></cite>
             </div>
             <div class="comment-meta">
                 <a href="<?php $this->permalink(); ?>">
                     <time itemprop="commentTime"
                           datetime="<?php $this->date('c'); ?>"><?php
-                            $singleCommentOptions->beforeDate();
+                            echo $singleCommentOptions->beforeDate;
                             $this->date($singleCommentOptions->dateFormat);
-                            $singleCommentOptions->afterDate();
+                            echo $singleCommentOptions->afterDate;
                             ?></time>
                 </a>
                 <?php if ('approved' !== $this->status) { ?>
-                    <em class="comment-awaiting-moderation"><?php $singleCommentOptions->commentStatus(); ?></em>
+                    <em class="comment-awaiting-moderation"><?php echo $singleCommentOptions->commentStatus; ?></em>
                 <?php } ?>
             </div>
             <div class="comment-content" itemprop="commentText">

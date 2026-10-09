@@ -4,6 +4,17 @@ namespace Typecho\Db\Adapter;
 
 use Typecho\Db;
 
+/**
+ * PostgreSQL 适配器共用实现
+ *
+ * 同时被原生 pgsql 扩展适配器 (Typecho\Db\Adapter\Pgsql) 和 PDO 适配器
+ * (Typecho\Db\Adapter\Pdo\Pgsql) 使用, 两者的查询句柄 (\PgSql\Result /
+ * \PDOStatement) 与连接对象 (\PgSql\Connection / \PDO) 不同, 因此通过
+ * 模板参数描述, 由使用方用 @use 绑定。
+ *
+ * @template TResult of object 查询句柄对象
+ * @template TConnection of object 连接对象
+ */
 trait PgsqlTrait
 {
     use QueryTrait;
@@ -27,7 +38,7 @@ trait PgsqlTrait
      * 清空数据表
      *
      * @param string $table
-     * @param resource $handle 连接对象
+     * @param TConnection $handle 连接对象
      * @throws SQLException
      */
     public function truncate(string $table, $handle)
@@ -61,7 +72,7 @@ trait PgsqlTrait
 
     /**
      * @param string $query
-     * @param $handle
+     * @param TConnection $handle
      * @param string|null $action
      * @param string|null $table
      * @throws SQLException
@@ -106,8 +117,8 @@ WHERE
     /**
      * 取出最后一次插入返回的主键值
      *
-     * @param resource $resource 查询的资源数据
-     * @param resource $handle 连接对象
+     * @param TResult $resource 查询句柄对象
+     * @param TConnection $handle 连接对象
      * @return integer
      * @throws SQLException
      */
@@ -161,6 +172,14 @@ WHERE
         return 'pgsql';
     }
 
+    /**
+     * @param string $query
+     * @param TConnection $handle
+     * @param int $op
+     * @param string|null $action
+     * @param string|null $table
+     * @return TResult
+     */
     abstract public function query(
         string $query,
         $handle,
@@ -171,5 +190,9 @@ WHERE
 
     abstract public function quoteValue(string $string): string;
 
+    /**
+     * @param TResult $resource
+     * @return array|null
+     */
     abstract public function fetch($resource): ?array;
 }

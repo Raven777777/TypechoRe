@@ -103,6 +103,31 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property bool $installed
  * @property bool $rewrite
  * @property string $postDateFormat
+ * @property bool $autoSave 用户级: 自动保存开关
+ * @property string $tagPicker 标签选择器配置 (JSON)
+ * 以下为默认主题 (Typecho Replica Theme) 配置项, 由主题 config 表单写入 options 表
+ * @property int $tagCloudLimit
+ * @property int $tagCloudMinSize
+ * @property int $tagCloudMaxSize
+ * @property string $faviconUrl
+ * @property string $logoUrl
+ * @property bool $showTagCloud
+ *
+ * @method void charset()
+ * @method void title()
+ * @method void description()
+ * @method void rootUrl()
+ * @method void feedUrl()
+ * @method void commentsFeedUrl()
+ * @method void timezone()
+ * @method void editorSize()
+ * @method void loginAction()
+ * @method void registerUrl()
+ * @method void registerAction()
+ * @method void logoutUrl()
+ * @method void profileUrl()
+ * @method void faviconUrl()
+ * @method void logoUrl()
  */
 class Options extends Base
 {
@@ -690,7 +715,7 @@ class Options extends Base
      */
     protected function ___gmtTime(): int
     {
-        return Date::gmtTime();
+        return Date::time();
     }
 
     /**

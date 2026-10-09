@@ -90,7 +90,7 @@ class WebAuthn {
 
     /**
      * add key hashes for android verification
-     * @param array<string> $hashes
+     * @param array $hashes 元素为字符串 (运行时校验)
      * @return void
      */
     public function addAndroidKeyHashes($hashes) {
@@ -154,8 +154,8 @@ class WebAuthn {
         if (\is_bool($requireUserVerification)) {
             $args->publicKey->authenticatorSelection->userVerification = $requireUserVerification ? 'required' : 'preferred';
 
-        } else if (\is_string($requireUserVerification) && \in_array(\strtolower($requireUserVerification), ['required', 'preferred', 'discouraged'])) {
-            $args->publicKey->authenticatorSelection->userVerification = \strtolower($requireUserVerification);
+        } else if (\in_array(\strtolower((string) $requireUserVerification), ['required', 'preferred', 'discouraged'])) {
+            $args->publicKey->authenticatorSelection->userVerification = \strtolower((string) $requireUserVerification);
         }
 
         // validate Resident Key Requirement
@@ -222,7 +222,7 @@ class WebAuthn {
         //prevent re-registration by specifying existing credentials
         $args->publicKey->excludeCredentials = [];
 
-        if (is_array($excludeCredentialIds)) {
+        if (\count($excludeCredentialIds) > 0) {
             foreach ($excludeCredentialIds as $id) {
                 $tmp = new \stdClass();
                 $tmp->id = $id instanceof ByteBuffer ? $id : new ByteBuffer($id);  // binary
@@ -259,8 +259,8 @@ class WebAuthn {
         // validate User Verification Requirement
         if (\is_bool($requireUserVerification)) {
             $requireUserVerification = $requireUserVerification ? 'required' : 'preferred';
-        } else if (\is_string($requireUserVerification) && \in_array(\strtolower($requireUserVerification), ['required', 'preferred', 'discouraged'])) {
-            $requireUserVerification = \strtolower($requireUserVerification);
+        } else if (\in_array(\strtolower((string) $requireUserVerification), ['required', 'preferred', 'discouraged'])) {
+            $requireUserVerification = \strtolower((string) $requireUserVerification);
         } else {
             $requireUserVerification = 'preferred';
         }
@@ -272,7 +272,7 @@ class WebAuthn {
         $args->publicKey->userVerification = $requireUserVerification;
         $args->publicKey->rpId = $this->_rpId;
 
-        if (\is_array($credentialIds) && \count($credentialIds) > 0) {
+        if (\count($credentialIds) > 0) {
             $args->publicKey->allowCredentials = [];
 
             foreach ($credentialIds as $id) {
@@ -572,7 +572,7 @@ class WebAuthn {
      * @return string
      * @throws WebAuthnException
      */
-    private function _createChallenge($length = 32) {
+    private function _createChallenge(int $length = 32) {
         if (!$this->_challenge) {
             $this->_challenge = ByteBuffer::randomBuffer($length);
         }

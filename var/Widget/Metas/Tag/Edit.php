@@ -365,30 +365,6 @@ class Edit extends Metas implements ActionInterface
 
 
     /**
-     * 清理没有任何内容的标签
-     *
-     * @throws Exception
-     */
-    public function clearTags()
-    {
-        // 取出count为0的标签
-        $tags = array_column($this->db->fetchAll($this->select('mid')
-            ->where('type = ? AND count = ?', 'tag', 0)), 'mid');
-
-        foreach ($tags as $tag) {
-            // 确认是否已经没有关联了
-            $content = $this->db->fetchRow($this->db->select('cid')
-                ->from('table.relationships')->where('mid = ?', $tag)
-                ->limit(1));
-
-            if (empty($content)) {
-                $this->db->query($this->db->delete('table.metas')
-                    ->where('mid = ?', $tag));
-            }
-        }
-    }
-
-    /**
      * 入口函数,绑定事件
      *
      * @access public

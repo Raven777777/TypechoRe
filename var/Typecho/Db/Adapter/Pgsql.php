@@ -17,6 +17,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  */
 class Pgsql implements Adapter
 {
+    /** @use PgsqlTrait<\PgSql\Result, \PgSql\Connection> */
     use PgsqlTrait;
 
     /**
@@ -35,7 +36,7 @@ class Pgsql implements Adapter
      * 数据库连接函数
      *
      * @param Config $config 数据库配置
-     * @return resource
+     * @return \PgSql\Connection
      * @throws ConnectionException
      */
     #[\Override]
@@ -69,7 +70,7 @@ class Pgsql implements Adapter
     /**
      * 获取数据库版本
      *
-     * @param mixed $handle
+     * @param \PgSql\Connection $handle
      * @return string
      */
     #[\Override]
@@ -83,11 +84,11 @@ class Pgsql implements Adapter
      * 执行数据库查询
      *
      * @param string $query 数据库查询SQL字符串
-     * @param resource $handle 连接对象
+     * @param \PgSql\Connection $handle 连接对象
      * @param integer $op 数据库读写状态
      * @param string|null $action 数据库动作
      * @param string|null $table 数据表
-     * @return resource
+     * @return \PgSql\Result
      * @throws SQLException
      */
     #[\Override]
@@ -108,7 +109,7 @@ class Pgsql implements Adapter
     /**
      * 将数据查询的其中一行作为数组取出,其中字段名对应数组键值
      *
-     * @param resource $resource 查询返回资源标识
+     * @param \PgSql\Result $resource 查询句柄对象
      * @return array|null
      */
     #[\Override]
@@ -120,7 +121,7 @@ class Pgsql implements Adapter
     /**
      * 将数据查询的其中一行作为对象取出,其中字段名对应对象属性
      *
-     * @param resource $resource 查询的资源数据
+     * @param \PgSql\Result $resource 查询句柄对象
      * @return \stdClass|null
      */
     #[\Override]
@@ -130,7 +131,7 @@ class Pgsql implements Adapter
     }
 
     /**
-     * @param resource $resource
+     * @param \PgSql\Result $resource
      * @return array
      */
     #[\Override]
@@ -142,8 +143,8 @@ class Pgsql implements Adapter
     /**
      * 取出最后一次查询影响的行数
      *
-     * @param resource $resource 查询的资源数据
-     * @param resource $handle 连接对象
+     * @param \PgSql\Result $resource 查询句柄对象
+     * @param \PgSql\Connection $handle 连接对象
      * @return integer
      */
     #[\Override]

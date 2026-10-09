@@ -111,6 +111,10 @@ limit_req_status 429;
 9. 测试登录、文章、评论、上传、Sitemap 和 Passkey
 10. 确认运行正常后删除部署压缩包
 
+发布包由 `tools/build_release.py` 构建（或由 GitHub Release 自动构建），已排除
+`config.inc.php`、`*.db`、`*.log`、`usr/uploads/` 与 `usr/backups/`。部署前仍建议
+确认 zip 内没有遗留的数据库或日志文件。
+
 已安装的网站不需要重复访问：
 
 ```text
@@ -159,6 +163,16 @@ TypechoRe 修改了：
 - 不要用原版 Typecho 直接回滚运行 TypechoRe 数据库
 - 数据库迁移前必须备份
 - 数据库备份和网站代码应保持版本对应
+
+### 从 1.3.1 升级到 1.3.2
+
+1.3.2 没有破坏性数据库变更：
+
+- 首次进入后台时版本号比对会引导执行升级脚本；
+  `Utils\Upgrade::v1_3_2()` 会为缺少 `typecho_passkeys` 的旧站点建表
+  （MySQL / PostgreSQL / SQLite 三种 DDL，重复执行安全）
+- 升级后可在数据库中确认该表已存在；不需要手动执行 SQL
+- `# [\Override]`、PHPStan level 5 等改动只涉及代码，不影响数据
 
 ### 从旧版本升级 authCode 列宽
 

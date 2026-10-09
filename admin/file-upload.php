@@ -1,14 +1,23 @@
 <?php if(!defined('__TYPECHO_ADMIN__')) exit; ?>
+<?php
+/**
+ * 后台模板作用域变量: 由 admin/common.php (以及 header.php / menu.php) 通过 include 注入。
+ * PHPStan 无法跨 include 传播局部变量, 这里按实际作用域显式声明。
+ *
+ * @var Widget\Options $options
+ * @var Widget\Security $security
+ */
+?>
 
 <?php
-if (isset($post) || isset($page)) {
-    $cid = isset($post) ? $post->cid : $page->cid;
+// $post / $page 由 write-post.php / write-page.php 注入; 两者都不存在时退回未归档附件列表,
+// 保证 $attachment 一定有值 (旧实现在这种情况下会使用未定义变量)
+$cid = isset($post) ? (int) $post->cid : (isset($page) ? (int) $page->cid : 0);
 
-    if ($cid) {
-        \Widget\Contents\Attachment\Related::alloc(['parentId' => $cid])->to($attachment);
-    } else {
-        \Widget\Contents\Attachment\Unattached::alloc()->to($attachment);
-    }
+if ($cid) {
+    \Widget\Contents\Attachment\Related::alloc(['parentId' => $cid])->to($attachment);
+} else {
+    \Widget\Contents\Attachment\Unattached::alloc()->to($attachment);
 }
 ?>
 

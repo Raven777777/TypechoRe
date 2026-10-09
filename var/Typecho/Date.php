@@ -111,6 +111,7 @@ class Date
      * @deprecated
      * @return int
      */
+    #[\Deprecated(message: 'use time() instead', since: '1.3.2')]
     public static function gmtTime(): int
     {
         return self::time();

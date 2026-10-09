@@ -120,7 +120,7 @@ class Pingback
         /** 此处将$target quote,留着后面用 (pattern 以 | 为分隔符, 需一并转义) */
         $pregLink = preg_quote($this->target, '|');
 
-        /** 找出含有target链接的最长的一行作为$finalText*/
+        /** 找出含有 target 链接的一行作为 $finalText (命中即 break, 因此取的是第一行) */
         $finalText = null;
         $lines = explode("\n", $text);
 
@@ -128,16 +128,14 @@ class Pingback
             $line = trim($line);
             if ('' !== $line) {
                 if (preg_match("|<a[^>]*href=[\"']{$pregLink}[\"'][^>]*>(.*?)</a>|", $line)) {
-                    if (null === $finalText || strlen($line) > strlen($finalText)) {
-                        /** <a>也要干掉，*/
-                        $finalText = Common::stripTags($line);
-                        break;
-                    }
+                    /** <a>也要干掉, */
+                    $finalText = Common::stripTags($line);
+                    break;
                 }
             }
         }
 
-        if (!isset($finalText)) {
+        if (null === $finalText) {
             throw new Exception("Source page doesn't have target url", 50);
         }
 

@@ -45,9 +45,9 @@ abstract class FormatBase {
 
     /**
      * returns the key X.509 certificate in PEM format
-     * @return string
+     * @return string|null
      */
-    public function getCertificatePem() {
+    public function getCertificatePem(): ?string {
         // need to be overwritten
         return null;
     }

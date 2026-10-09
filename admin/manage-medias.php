@@ -1,4 +1,12 @@
 <?php
+/**
+ * 后台模板作用域变量: 由 admin/common.php (以及 header.php / menu.php) 通过 include 注入。
+ * PHPStan 无法跨 include 传播局部变量, 这里按实际作用域显式声明。
+ *
+ * @var Widget\Options $options
+ * @var Typecho\Widget\Request $request
+ * @var Widget\Security $security
+ */
 include 'common.php';
 include 'header.php';
 include 'menu.php';
@@ -82,7 +90,7 @@ $attachments = \Widget\Contents\Attachment\Admin::alloc();
                                     <td class="kit-hidden-mb"><?php $attachments->author(); ?></td>
                                     <td class="kit-hidden-mb">
                                         <?php if ($attachments->parentPost->cid): ?>
-                                            <a href="<?php $options->adminUrl('write-' . (0 === strpos($attachments->parentPost->type, 'post') ? 'post' : 'page') . '.php?cid=' . $attachments->parentPost->cid); ?>"><?php $attachments->parentPost->title(); ?></a>
+                                            <a href="<?php $options->adminUrl('write-' . (0 === strpos($attachments->parentPost->type, 'post') ? 'post' : 'page') . '.php?cid=' . $attachments->parentPost->cid); ?>"><?php echo $attachments->parentPost->title; ?></a>
                                         <?php else: ?>
                                             <span class="description"><?php _e('未归档'); ?></span>
                                         <?php endif; ?>

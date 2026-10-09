@@ -13,6 +13,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 /**
  * 全局选项组件
  *
+ * @property-read string $tagPicker 标签选择器配置 (JSON)
+ *
  * @link typecho
  * @package Widget
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)

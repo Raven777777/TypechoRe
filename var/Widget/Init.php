@@ -57,28 +57,10 @@ class Init extends Widget
         }
 
         // init class
-        define('__TYPECHO_CLASS_ALIASES__', [
-            'Typecho_Plugin_Interface'    => '\Typecho\Plugin\PluginInterface',
-            'Typecho_Widget_Helper_Empty' => '\Typecho\Widget\Helper\EmptyClass',
-            'Typecho_Db_Adapter_Mysql'    => '\Typecho\Db\Adapter\Mysqli',
-            'Widget_Abstract'             => '\Widget\Base',
-            'Widget_Abstract_Contents'    => '\Widget\Base\Contents',
-            'Widget_Abstract_Comments'    => '\Widget\Base\Comments',
-            'Widget_Abstract_Metas'       => '\Widget\Base\Metas',
-            'Widget_Abstract_Options'     => '\Widget\Base\Options',
-            'Widget_Abstract_Users'       => '\Widget\Base\Users',
-            'Widget_Metas_Category_List'  => '\Widget\Metas\Category\Rows',
-            'Widget_Contents_Page_List'   => '\Widget\Contents\Page\Rows',
-            'Widget_Plugins_List'         => '\Widget\Plugins\Rows',
-            'Widget_Themes_List'          => '\Widget\Themes\Rows',
-            'Widget_Interface_Do'         => '\Widget\ActionInterface',
-            'Widget_Do'                   => '\Widget\Action',
-            'AutoP'                       => '\Utils\AutoP',
-            'Markdown'                    => '\Utils\Markdown',
-            'HyperDown'                   => '\Utils\HyperDown',
-            'Helper'                      => '\Utils\Helper',
-            'Upgrade'                     => '\Utils\Upgrade'
-        ]);
+        // 站点可在 config.inc.php 中预先定义 __TYPECHO_CLASS_ALIASES__ 覆盖默认别名表
+        if (!defined('__TYPECHO_CLASS_ALIASES__')) {
+            define('__TYPECHO_CLASS_ALIASES__', Common::CLASS_ALIASES);
+        }
 
         /** 对变量赋值 */
         $options = Options::alloc();

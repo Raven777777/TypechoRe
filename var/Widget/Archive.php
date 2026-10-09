@@ -292,6 +292,7 @@ class Archive extends Contents
      * @deprecated 1.3.0
      * @return string|null
      */
+    #[\Deprecated(message: 'use getArchiveDescription() instead', since: '1.3.2')]
     public function getDescription(): ?string
     {
         return $this->getArchiveDescription();
@@ -317,6 +318,7 @@ class Archive extends Contents
      * @deprecated 1.3.0
      * @return string|null
      */
+    #[\Deprecated(message: 'use getArchiveKeywords() instead', since: '1.3.2')]
     public function getKeywords(): ?string
     {
         return $this->getArchiveKeywords();
@@ -342,6 +344,7 @@ class Archive extends Contents
      * @deprecated 1.3.0
      * @return string
      */
+    #[\Deprecated(message: 'use getArchiveFeedAtomUrl() instead', since: '1.3.2')]
     public function getFeedAtomUrl(): string
     {
         return $this->getArchiveFeedAtomUrl();
@@ -367,6 +370,7 @@ class Archive extends Contents
      * @deprecated 1.3.0
      * @return string
      */
+    #[\Deprecated(message: 'use getArchiveFeedRssUrl() instead', since: '1.3.2')]
     public function getFeedRssUrl(): string
     {
         return $this->getArchiveFeedRssUrl();
@@ -392,6 +396,7 @@ class Archive extends Contents
      * @deprecated 1.3.0
      * @return string
      */
+    #[\Deprecated(message: 'use getArchiveFeedUrl() instead', since: '1.3.2')]
     public function getFeedUrl(): string
     {
         return $this->getArchiveFeedUrl();
@@ -412,6 +417,7 @@ class Archive extends Contents
      * @deprecated 1.3.0
      * @return null
      */
+    #[\Deprecated(message: 'feed 属性已移除', since: '1.3.2')]
     public function getFeed()
     {
         return null;
@@ -424,6 +430,7 @@ class Archive extends Contents
      * @deprecated 1.3.0
      * @param null $feed
      */
+    #[\Deprecated(message: 'feed 属性已移除', since: '1.3.2')]
     public function setFeed($feed)
     {
     }
@@ -469,7 +476,9 @@ class Archive extends Contents
      */
     public function getTotalPage(): int
     {
-        return ceil($this->getTotal() / $this->parameter->pageSize);
+        // ceil($total / $pageSize) 的整数实现, 避免 float -> int 的隐式转换
+        $pageSize = (int) $this->parameter->pageSize;
+        return intdiv($this->getTotal() + $pageSize - 1, $pageSize);
     }
 
     /**
@@ -663,7 +672,7 @@ class Archive extends Contents
             $handle = $handles[$this->parameter->type];
             $this->{$handle}($select, $hasPushed);
         } else {
-            $hasPushed = self::pluginHandle()->call('handle', $this->parameter->type, $this, $select);
+            $hasPushed = (bool) self::pluginHandle()->call('handle', $this->parameter->type, $this, $select);
         }
 
         /** 初始化皮肤函数 */
@@ -1501,7 +1510,7 @@ EOF;
                     {
                         switch ($key) {
                             case 'page':
-                                return $this->currentPage;
+                                return (string) $this->currentPage;
                             default:
                                 return $this->pageRow->getRouterParam($key);
                         }
@@ -1569,7 +1578,7 @@ EOF;
         $this->archiveType = 'archive';
 
         /** 设置归档缩略名 */
-        $this->archiveSlug = 404;
+        $this->archiveSlug = '404';
 
         /** 设置归档模板 */
         $this->themeFile = '404.php';
@@ -1717,7 +1726,7 @@ EOF;
 
         /** 设置归档类型 */
         if ($this->parameter->preview && $this->type === 'revision') {
-            $parent = ContentsFrom::allocWithAlias($this->parent, ['cid' => $this->parent]);
+            $parent = ContentsFrom::allocWithAlias((string) $this->parent, ['cid' => $this->parent]);
             $this->archiveType = $parent->type;
         } else {
             [$this->archiveType] = explode('_', $this->type);
@@ -1745,9 +1754,10 @@ EOF;
      * 处理分类
      *
      * @param Query $select 查询对象
+     * @param boolean $hasPushed 是否已经压入队列 (本处理函数只设置查询条件, 不使用该参数)
      * @throws WidgetException|Db\Exception
      */
-    private function categoryHandle(Query $select)
+    private function categoryHandle(Query $select, bool &$hasPushed)
     {
         /** 如果是分类 */
         $categorySelect = $this->db->select()
@@ -1836,9 +1846,10 @@ EOF;
      * 处理标签
      *
      * @param Query $select 查询对象
+     * @param boolean $hasPushed 是否已经压入队列 (本处理函数只设置查询条件, 不使用该参数)
      * @throws WidgetException|Db\Exception
      */
-    private function tagHandle(Query $select)
+    private function tagHandle(Query $select, bool &$hasPushed)
     {
         $tagSelect = $this->db->select()->from('table.metas')
             ->where('type = ?', 'tag')->limit(1);
@@ -1910,9 +1921,10 @@ EOF;
      * 处理作者
      *
      * @param Query $select 查询对象
+     * @param boolean $hasPushed 是否已经压入队列 (本处理函数只设置查询条件, 不使用该参数)
      * @throws WidgetException|Db\Exception
      */
-    private function authorHandle(Query $select)
+    private function authorHandle(Query $select, bool &$hasPushed)
     {
         $uid = $this->request->filter('int')->get('uid');
 
@@ -1953,7 +1965,7 @@ EOF;
         $this->archiveType = 'author';
 
         /** 设置归档缩略名 */
-        $this->archiveSlug = $author->uid;
+        $this->archiveSlug = (string) $author->uid;
 
         /** 设置归档地址 */
         $this->archiveUrl = $author->permalink;
@@ -1967,14 +1979,20 @@ EOF;
      *
      * @access private
      * @param Query $select 查询对象
+     * @param boolean $hasPushed 是否已经压入队列 (本处理函数只设置查询条件, 不使用该参数)
      * @return void
      */
-    private function dateHandle(Query $select)
+    private function dateHandle(Query $select, bool &$hasPushed)
     {
         /** 如果是按日期归档 */
-        $year = $this->request->filter('int')->get('year');
-        $month = $this->request->filter('int')->get('month');
-        $day = $this->request->filter('int')->get('day');
+        $year = (int) $this->request->filter('int')->get('year');
+        $month = (int) $this->request->filter('int')->get('month');
+        $day = (int) $this->request->filter('int')->get('day');
+
+        // 日期参数非法时 (例如 /archive/abc/) 不构造查询边界;
+        // mktime() 失败返回 false, 用它作为「未匹配」哨兵值
+        $from = false;
+        $to = false;
 
         if (!empty($year) && !empty($month) && !empty($day)) {
 
@@ -1991,7 +2009,7 @@ EOF;
 
             /** 如果按月归档 */
             $from = mktime(0, 0, 0, $month, 1, $year);
-            $to = mktime(23, 59, 59, $month, date('t', $from), $year);
+            $to = mktime(23, 59, 59, $month, (int) date('t', (int) $from), $year);
 
             /** 归档缩略名 */
             $this->archiveSlug = 'month';
@@ -2011,10 +2029,15 @@ EOF;
             $this->archiveTitle = _t('%d年', $year);
         }
 
+        // 日期参数非法 (例如 /archive/abc/): 不构造查询条件, 直接返回 404,
+        // 避免用未定义变量查询整张表
+        if (false === $from || false === $to) {
+            throw new WidgetException(_t('请求的地址不存在'), 404);
+        }
+
         $select->where('table.contents.created >= ?', $from - $this->options->timezone + $this->options->serverTimezone)
             ->where('table.contents.created <= ?', $to - $this->options->timezone + $this->options->serverTimezone)
             ->where('table.contents.type = ?', 'post');
-
         /** 设置归档类型 */
         $this->archiveType = 'date';
 
@@ -2035,11 +2058,11 @@ EOF;
             {
                 switch ($key) {
                     case 'year':
-                        return $this->year;
+                        return (string) $this->year;
                     case 'month':
-                        return str_pad($this->month, 2, '0', STR_PAD_LEFT);
+                        return str_pad((string) $this->month, 2, '0', STR_PAD_LEFT);
                     case 'day':
-                        return str_pad($this->day, 2, '0', STR_PAD_LEFT);
+                        return str_pad((string) $this->day, 2, '0', STR_PAD_LEFT);
                     default:
                         return '{' . $key . '}';
                 }
@@ -2078,9 +2101,14 @@ EOF;
         /** 增加自定义搜索引擎接口 */
         //~ fix issue 40
         $keywords = $this->request->filter('url', 'search')->get('keywords');
-        self::pluginHandle()->trigger($hasPushed)->call('search', $keywords, $this);
 
-        if (!$hasPushed) {
+        // 用局部变量接收插件信号, 避免把 $hasPushed 直接以引用交给 trigger()
+        $searchPlugged = false;
+        self::pluginHandle()->trigger($searchPlugged)->call('search', $keywords, $this);
+
+        if ($searchPlugged) {
+            $hasPushed = true;
+        } else {
             $searchQuery = '%' . str_replace(' ', '%', $keywords) . '%';
 
             /** 搜索无法进入隐私项保护归档 */

@@ -20,10 +20,13 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 /**
  * 评论基类
  *
+ * 除下列属性外, 还可以用方法形式直接输出同名属性值 (由 Widget::__call 实现),
+ * 例如 `$comments->theId()` 等价于 `echo $comments->theId`。
+ *
  * @property int $coid
  * @property int $cid
  * @property int $created
- * @property string author
+ * @property string $author
  * @property int $authorId
  * @property int $ownerId
  * @property string $mail
@@ -32,7 +35,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property string $agent
  * @property string $text
  * @property string $type
- * @property string status
+ * @property string $status
  * @property int $parent
  * @property int $commentPage
  * @property Date $date
@@ -42,6 +45,15 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property string $title
  * @property string $permalink
  * @property string $content
+ *
+ * @method void coid()
+ * @method void cid()
+ * @method void ip()
+ * @method void dateWord()
+ * @method void theId()
+ * @method void title()
+ * @method void permalink()
+ * @method void content()
  */
 class Comments extends Base implements QueryInterface, RowFilterInterface, PrimaryKeyInterface, ParamsDelegateInterface
 {
@@ -65,7 +77,7 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
             case 'permalink':
                 return $this->parentContent->path;
             case 'commentPage':
-                return $this->commentPage;
+                return (string) $this->commentPage;
             default:
                 return '{' . $key . '}';
         }
@@ -411,7 +423,7 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
      */
     protected function ___parentContent(): Contents
     {
-        return From::allocWithAlias($this->cid, ['cid' => $this->cid]);
+        return From::allocWithAlias((string) $this->cid, ['cid' => $this->cid]);
     }
 
     /**
@@ -475,7 +487,8 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
                 }
             }
 
-            return ceil($total / $this->options->commentsPageSize);
+            $pageSize = (int) $this->options->commentsPageSize;
+            return intdiv($total + $pageSize - 1, $pageSize);
         }
 
         return 0;

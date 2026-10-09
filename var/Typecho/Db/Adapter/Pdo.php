@@ -189,6 +189,6 @@ abstract class Pdo implements Adapter
     #[\Override]
     public function lastInsertId($resource, $handle): int
     {
-        return $handle->lastInsertId();
+        return (int) $handle->lastInsertId();
     }
 }
