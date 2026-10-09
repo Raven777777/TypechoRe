@@ -4,7 +4,7 @@
 
 **TypechoRe** 是 [Typecho](https://github.com/typecho/typecho) 的积极维护 Fork 版本。
 
-> TypechoRe 不再与原版 Typecho 数据库完全兼容。**
+> **TypechoRe 不再与原版 Typecho 数据库完全兼容。**
 > TypechoRe 修改了密码处理方式并调整了部分核心数据结构和行为。建议将 TypechoRe 视为独立分支使用。
 
 > **数据库支持范围：本项目只维护 SQLite。**
