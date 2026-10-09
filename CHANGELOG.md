@@ -3,6 +3,24 @@
 本文件记录 TypechoRe 各版本的代码级改动。主题改动见
 [`usr/themes/default/CHANGELOG.md`](usr/themes/default/CHANGELOG.md)。
 
+## 未发布
+
+### 新主题 Default 2026 (预览版)
+
+- 新增 `usr/themes/default-2026`: 现代、优雅、以性能为先的默认主题,
+  技术栈为 Tailwind CSS v4 + @tailwindcss/typography + Alpine.js + Swup,
+  用法与自定义说明见 [`usr/themes/default-2026/README.md`](usr/themes/default-2026/README.md)
+- **定位为未完成的预览版** (`0.1.0-preview`): 模板结构、主题设置项与前端实现
+  仍可能调整, 不建议用于正式站点, 升级也不保证向后兼容
+- 首页为统一的卡片列表 (整张卡片可点击), 桌面端正文可读宽度约 930px,
+  内容图片与代码块不做圆角与描边
+- 无 JavaScript 时功能完整: 移动端导航使用原生 `<details>`, 评论表单为普通 POST,
+  正文与目录均为服务端渲染; 省流模式 (`saveData` / 2G) 下自动关闭无刷新切页与预取
+- 构建产物 (单 CSS + 单 JS) 随仓库分发, 部署无需 Node; 仅在修改前端源码时需要
+  `npm install && npm run build`
+- `tools/build_release.py` 新增排除 `node_modules`, 避免主题前端依赖进入发布包
+- `.gitignore` 放行 `usr/themes/*/dist/`, 让主题构建产物可以随仓库提交
+
 ## 1.3.2
 
 本版本不改变前台行为，重点是「把静态分析提升到 PHPStan level 5 并清零」，

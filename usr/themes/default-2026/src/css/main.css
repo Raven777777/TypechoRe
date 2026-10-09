@@ -1,0 +1,571 @@
+/* =============================================================================
+   TypechoRe · Default 2026 主题样式入口
+   Tailwind CSS v4 + @tailwindcss/typography
+   构建: npm run build  →  dist/style.css
+   ============================================================================= */
+
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* 内容探测: Tailwind v4 以本目录 (package.json) 为项目根自动扫描模板与脚本;
+   node_modules/ 与 dist/ 都在 .gitignore 中, 不会被当成内容源。
+   注意: 不要在此处使用 @source, 4.3.x 中它与 Vite/CLI 的路径解析不一致。 */
+
+
+/* 深色模式: class 驱动 (html.dark), 由 header.php 的内联脚本无闪烁初始化 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ---------- 字体 ---------- */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", "Songti SC", "Noto Serif CJK SC",
+    "Source Han Serif SC", serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+
+  /* ---------- 强调色 ----------
+     可在主题设置里指定, PHP 会把值写到 <html style="--theme-accent: #xxx">,
+     这里只提供默认值与派生色, 保证不配置时也能正常显示。 */
+  --color-accent: var(--theme-accent, #4f6bf5);
+  --color-accent-soft: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  --color-accent-ring: color-mix(in oklab, var(--color-accent) 35%, transparent);
+
+  /* ---------- 阴影 / 动效 ---------- */
+  --shadow-card: 0 1px 2px oklch(0.24 0.02 265 / 0.05), 0 10px 30px -18px oklch(0.24 0.02 265 / 0.35);
+  --shadow-card-hover: 0 2px 6px oklch(0.24 0.02 265 / 0.07), 0 18px 46px -20px oklch(0.24 0.02 265 / 0.42);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --container-page: 78rem;
+}
+
+/* =============================================================================
+   基础层
+   ============================================================================= */
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-accent) 24%, transparent);
+  }
+
+  /* 统一的键盘焦点样式 */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent;
+  }
+
+  /* Alpine 未初始化前隐藏 (避免闪烁) */
+  [x-cloak] {
+    display: none !important;
+  }
+
+  /* 长单词与代码不撑破布局 */
+  .break-anywhere {
+    overflow-wrap: anywhere;
+  }
+
+  /* Firefox 滚动条 */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-zinc-300) transparent;
+  }
+
+  .dark * {
+    scrollbar-color: var(--color-zinc-700) transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* =============================================================================
+   组件层: 可复用的语义类 (避免模板里重复长串原子类)
+   ============================================================================= */
+
+@utility card {
+  @apply rounded-2xl border border-zinc-200/90 bg-white shadow-card transition duration-300 dark:border-zinc-800/90 dark:bg-zinc-900/40;
+}
+
+@utility card-hover {
+  @apply hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-card-hover dark:hover:border-zinc-700;
+}
+
+@utility chip {
+  @apply inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:border-accent/50 hover:bg-accent-soft hover:text-accent dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition duration-200 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+@utility btn-primary {
+  @apply bg-accent text-white shadow-sm hover:brightness-110 active:brightness-95;
+}
+
+@utility btn-ghost {
+  @apply border border-zinc-200 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-900;
+}
+
+@utility icon-btn {
+  @apply inline-flex size-9 items-center justify-center rounded-full text-zinc-500 transition duration-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100;
+}
+
+@utility meta-text {
+  @apply flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400;
+}
+
+@utility widget-title {
+  @apply mb-4 flex items-center gap-2 text-sm font-semibold tracking-wide text-zinc-900 uppercase dark:text-zinc-100;
+}
+
+@layer components {
+  /* ---------- 主题切换按钮: 图标状态完全由 html[data-theme-mode] 驱动 ----------
+     这样 Swup 替换容器后无需重新同步图标, 也不会出现状态闪烁。 */
+  .theme-icon {
+    display: none;
+  }
+
+  html[data-theme-mode="light"] .theme-icon-light,
+  html[data-theme-mode="dark"] .theme-icon-dark,
+  html[data-theme-mode="auto"] .theme-icon-auto,
+  html:not([data-theme-mode]) .theme-icon-auto {
+    display: inline-flex;
+  }
+
+  /* 代码块语言徽标与复制按钮 (按钮由 app.js 注入)
+     注: 正文排版相关的 .prose-theme 规则统一放在文件末尾的「层外」区块,
+     因为 @tailwindcss/typography 的规则在 utilities 层, 在 components 层里覆盖不掉。 */
+  .code-block-tools {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    opacity: 0;
+    transition: opacity 0.2s var(--ease-out-quint);
+  }
+
+  .prose-theme pre:hover .code-block-tools,
+  .code-block-tools:focus-within {
+    opacity: 1;
+  }
+
+  .code-lang {
+    padding: 0.1rem 0.45rem;
+    border-radius: 9999px;
+    background-color: oklch(1 0 0 / 0.08);
+    color: var(--color-zinc-400);
+    font-size: 0.6875rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .code-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.5rem;
+    background-color: oklch(1 0 0 / 0.08);
+    color: var(--color-zinc-300);
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  .code-copy:hover {
+    background-color: oklch(1 0 0 / 0.16);
+    color: #fff;
+  }
+
+  .code-copy .code-copy-done {
+    display: none;
+  }
+
+  .code-copy[data-copied] .code-copy-idle {
+    display: none;
+  }
+
+  .code-copy[data-copied] .code-copy-done {
+    display: inline-flex;
+  }
+
+  /* 表格横向滚动 (容器类由 app.js 注入) */
+  .prose-theme .table-wrap {
+    overflow-x: auto;
+  }
+
+  /* 阅读进度条 */
+  .reading-progress {
+    position: fixed;
+    inset-inline: 0;
+    top: 0;
+    z-index: 60;
+    height: 2px;
+    background-color: transparent;
+    pointer-events: none;
+  }
+
+  .reading-progress > span {
+    display: block;
+    height: 100%;
+    width: 0;
+    background-color: var(--color-accent);
+    transition: width 0.1s linear;
+  }
+
+  /* Swup 内置进度条
+     @swup/progress-plugin 会把默认样式 prepend 到 head, 元素本身就是那条进度条,
+     所以这里只能覆盖高度与颜色, 不要改 height: 100% (会变成全屏遮罩)。 */
+  .swup-progress-bar {
+    height: 2px;
+    background-color: var(--color-accent);
+  }
+
+  /* ---------- 页面过渡 (Swup) ---------- */
+  html.is-changing .transition-fade {
+    transition: opacity 0.24s var(--ease-out-quint), transform 0.24s var(--ease-out-quint);
+    opacity: 1;
+    transform: none;
+  }
+
+  html.is-animating .transition-fade {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  html.is-rendering .transition-fade {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  /* 原生 View Transitions 模式下改由浏览器负责动画 */
+  html.swup-native.is-changing #main {
+    view-transition-name: main-content;
+  }
+
+  ::view-transition-old(main-content) {
+    animation: 0.24s var(--ease-out-quint) both vt-fade-out;
+  }
+
+  ::view-transition-new(main-content) {
+    animation: 0.28s var(--ease-out-quint) both vt-fade-in;
+  }
+
+  @keyframes vt-fade-out {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+
+  @keyframes vt-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* ---------- 整张卡片可点击 ----------
+     标题链接用伪元素铺满卡片, 卡片内其它链接需要 relative z-10 才能保持可点击。 */
+  .card-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+  }
+
+  /* ---------- 返回顶部 ---------- */
+  .back-to-top {
+    @apply fixed right-5 bottom-5 z-40 inline-flex size-11 items-center justify-center rounded-full border border-zinc-200 bg-white/90 text-zinc-600 shadow-card backdrop-blur transition duration-200 hover:text-accent dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-zinc-300;
+  }
+
+  /* ---------- 目录 (TOC) ---------- */
+  .toc-link {
+    @apply block border-l-2 border-transparent py-1 pl-3 text-sm text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-100;
+  }
+
+  .toc-link.is-active {
+    @apply border-accent font-medium text-accent;
+  }
+
+  /* ---------- 评论 ---------- */
+  .comment-list,
+  .comment-children {
+    @apply m-0 list-none p-0;
+  }
+
+  .comment-children {
+    @apply mt-4 space-y-4 border-l border-zinc-200 pl-4 dark:border-zinc-800;
+  }
+
+  .comment-body {
+    @apply relative py-4;
+  }
+
+  .comment-list > .comment-body + .comment-body {
+    @apply border-t border-zinc-200/80 dark:border-zinc-800/80;
+  }
+
+  .comment-body .comment-author {
+    @apply flex items-center gap-3;
+  }
+
+  .comment-body .comment-author img {
+    @apply size-9 shrink-0 rounded-full;
+  }
+
+  .comment-body .comment-author .fn {
+    @apply text-sm font-semibold not-italic;
+  }
+
+  .comment-body .comment-meta {
+    @apply mt-1 text-xs text-zinc-500 dark:text-zinc-400;
+  }
+
+  .comment-body .comment-content {
+    @apply mt-3 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300;
+  }
+
+  .comment-body .comment-content p {
+    @apply my-2;
+  }
+
+  .comment-body .comment-reply {
+    @apply mt-2 text-xs;
+  }
+
+  .comment-body .comment-reply a {
+    @apply text-zinc-500 transition-colors hover:text-accent dark:text-zinc-400;
+  }
+
+  .comment-body.comment-by-author > .comment-author .fn::after {
+    content: "作者";
+    @apply ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-[0.6875rem] font-normal text-accent;
+  }
+
+  .comment-awaiting-moderation {
+    @apply ml-2 not-italic text-amber-600 dark:text-amber-400;
+  }
+
+  /* ---------- 表单控件 ---------- */
+  .field {
+    @apply w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 transition placeholder:text-zinc-400 focus:border-accent focus:ring-2 focus:ring-accent-ring focus:outline-none dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-500;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300;
+  }
+
+  /* ---------- 分页 ---------- */
+  .page-navigator {
+    @apply mt-10 flex list-none flex-wrap items-center justify-center gap-2 p-0;
+  }
+
+  .page-navigator li a,
+  .page-navigator li span {
+    @apply inline-flex h-9 min-w-9 items-center justify-center rounded-full px-3 text-sm text-zinc-600 transition dark:text-zinc-300;
+  }
+
+  .page-navigator li a:hover {
+    @apply bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100;
+  }
+
+  .page-navigator li.current a,
+  .page-navigator li.current span {
+    @apply bg-accent font-medium text-white;
+  }
+
+  /* ---------- 归档列表 (分类 / 标签 / 归档页) ---------- */
+  .archive-list {
+    @apply m-0 list-none space-y-1 p-0;
+  }
+
+  .archive-list li {
+    @apply flex items-baseline gap-3 border-b border-dashed border-zinc-200/80 py-2 text-sm dark:border-zinc-800/80;
+  }
+
+  .archive-list a {
+    @apply text-zinc-700 transition-colors hover:text-accent dark:text-zinc-300;
+  }
+
+  .archive-list time {
+    @apply ml-auto shrink-0 text-xs text-zinc-400 dark:text-zinc-500;
+  }
+
+  /* 侧边栏分类树缩进 */
+  .widget-list {
+    @apply m-0 list-none space-y-1.5 p-0 text-sm;
+  }
+
+  .widget-list a {
+    @apply text-zinc-600 transition-colors hover:text-accent dark:text-zinc-400;
+  }
+
+  .widget-list .category-level-1 {
+    @apply pl-4;
+  }
+
+  .widget-list .category-level-2 {
+    @apply pl-8;
+  }
+}
+
+/* =============================================================================
+   正文排版覆盖 (必须写在层外)
+
+   @tailwindcss/typography 的规则位于 utilities 层, 而本文件的自定义样式在
+   components 层。CSS 级联层级的优先级高于选择器优先级, 所以这些 .prose-theme
+   规则必须放在任何 @layer 之外, 否则永远覆盖不掉插件默认值
+   (链接颜色、行内代码反引号、引用块引号、pre 圆角等)。
+   ============================================================================= */
+
+.prose-theme {
+  --tw-prose-links: var(--color-accent);
+  --tw-prose-quote-borders: var(--color-accent);
+  --tw-prose-bullets: var(--color-zinc-300);
+  --tw-prose-hr: var(--color-zinc-200);
+  --tw-prose-th-borders: var(--color-zinc-300);
+  --tw-prose-td-borders: var(--color-zinc-200);
+  --tw-prose-pre-code: var(--color-zinc-100);
+  --tw-prose-pre-bg: oklch(0.21 0.015 265);
+  word-break: break-word;
+}
+
+.dark .prose-theme {
+  --tw-prose-bullets: var(--color-zinc-700);
+  --tw-prose-hr: var(--color-zinc-800);
+  --tw-prose-th-borders: var(--color-zinc-700);
+  --tw-prose-td-borders: var(--color-zinc-800);
+  --tw-prose-pre-bg: oklch(0.16 0.012 265);
+}
+
+/* 标题锚点: 顶部固定导航的滚动补偿 */
+.prose-theme :where(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 6rem;
+  text-wrap: balance;
+}
+
+/* 行内代码: 去掉 typography 默认的反引号, 换成胶囊底 */
+.prose-theme :not(pre) > code {
+  padding: 0.15em 0.4em;
+  border-radius: 0.4rem;
+  background-color: var(--color-zinc-100);
+  font-weight: 500;
+  font-size: 0.875em;
+}
+
+.prose-theme :not(pre) > code::before,
+.prose-theme :not(pre) > code::after {
+  content: none;
+}
+
+.dark .prose-theme :not(pre) > code {
+  background-color: var(--color-zinc-800);
+  color: var(--color-zinc-100);
+}
+
+/* 代码块: 直角 + 无描边 */
+.prose-theme pre {
+  position: relative;
+  border-radius: 0;
+  padding: 1.15rem 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  tab-size: 4;
+}
+
+.prose-theme pre code {
+  background: none;
+  padding: 0;
+  font-weight: 400;
+  font-size: inherit;
+}
+
+/* 引用块: 去掉插件自带的引号与圆角, 保留左侧强调色竖线 */
+.prose-theme blockquote {
+  font-style: normal;
+  quotes: none;
+  border-radius: 0;
+  background-color: var(--color-zinc-50);
+  padding: 0.25rem 1.25rem;
+}
+
+.dark .prose-theme blockquote {
+  background-color: color-mix(in oklab, var(--color-zinc-900) 70%, transparent);
+}
+
+.prose-theme blockquote p::before,
+.prose-theme blockquote p::after {
+  content: none;
+}
+
+/* 内容图片: 不做圆角与描边, 保持原始矩形 */
+.prose-theme :where(img, figure, video, iframe) {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* =============================================================================
+   打印样式
+   ============================================================================= */
+
+@media print {
+  #site-nav,
+  #sidebar,
+  #toc,
+  #comments,
+  .back-to-top,
+  .reading-progress,
+  .swup-progress-container,
+  .post-nav,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 12pt;
+  }
+
+  .prose-theme a::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #555;
+  }
+
+  .card {
+    border: 1px solid #ddd;
+    box-shadow: none;
+  }
+}

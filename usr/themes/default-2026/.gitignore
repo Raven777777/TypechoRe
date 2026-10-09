@@ -1,0 +1,6 @@
+# 前端依赖 (仅构建时需要, 不随主题分发)
+node_modules/
+
+# 构建缓存
+.vite/
+*.tsbuildinfo

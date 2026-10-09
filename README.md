@@ -20,6 +20,8 @@
 * Markdown 支持
 * 插件支持
 * 主题支持
+  * `usr/themes/default`：经典默认主题
+  * [`usr/themes/default-2026`](usr/themes/default-2026/README.md)：现代主题，**未完成的预览版**（Tailwind CSS v4 + Alpine.js + Swup）
 * 自定义字段
 * 自定义页面
 

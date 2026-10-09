@@ -17,7 +17,7 @@ REQUIRED = {
     "index.php",
     "install.php",
 }
-SKIP_DIRS = {"backups", "cache", "tmp"}
+SKIP_DIRS = {"backups", "cache", "tmp", "node_modules"}
 SKIP_SUFFIXES = {".db", ".sqlite", ".sqlite3", ".log"}
 
 
@@ -103,7 +103,7 @@ def build() -> Path:
 
     size_mib = output.stat().st_size / (1024 * 1024)
     print(f"Built {output.relative_to(ROOT)} ({len(files)} files, {size_mib:.1f} MiB)")
-    print("Excluded config, databases, logs, uploads, backups, caches, and development tools.")
+    print("Excluded config, databases, logs, uploads, backups, caches, node_modules, and development tools.")
     return output
 
 
