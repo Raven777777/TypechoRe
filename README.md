@@ -1,30 +1,15 @@
-# TypechoRe 博客平台 
+![TypechoRe](./TypechoRe.svg)
 
-**设计哲学：安全，简约，必要功能**
+**安全，简约，实用主义**
 
-**TypechoRe** 是 [Typecho](https://github.com/typecho/typecho) 的积极维护 Fork 版本 —— 一款基于 PHP 的博客程序。
+**TypechoRe** 是 [Typecho](https://github.com/typecho/typecho) 的积极维护 Fork 版本。
 
-> **重要兼容性说明：TypechoRe 不再与原版 Typecho 数据库完全兼容。**
-> TypechoRe 已修改密码/authCode 处理、增加 `typecho_passkeys` 表，并调整了部分核心数据结构和行为。升级或使用 TypechoRe 数据库后，请不要再让原版 Typecho 直接连接同一个数据库。迁移前请务必备份数据库；建议将 TypechoRe 视为独立分支使用。
+> TypechoRe 不再与原版 Typecho 数据库完全兼容。**
+> TypechoRe 修改了密码处理方式并调整了部分核心数据结构和行为。建议将 TypechoRe 视为独立分支使用。
 
 > **数据库支持范围：本项目只维护 SQLite。**
-> `Mysqli` / `Pdo_Mysql` / `Pgsql` / `Pdo_Pgsql` 适配器代码虽然保留（沿用上游 Typecho），
-> 但**不维护、不测试**：CI 不覆盖，不保证可用，也不保证与后续改动同步，相关 Issue / PR
-> 可能不会被处理（已知问题：`Pgsql` 适配器会把字符串形式的 `sslVerify`（如 `'off'`）
-> 当作真值，从而强制 `sslmode=require`，导致连接失败）。
+> `Mysqli` / `Pdo_Mysql` / `Pgsql` / `Pdo_Pgsql` 适配器代码虽然保留
 > 请使用 SQLite；如确需其他数据库，请自行测试验证并自行承担风险，或改用原版 Typecho。
-
-## 主要特性
-
-* 数据库：**只维护 SQLite**（MariaDB / MySQL / PostgreSQL 适配器保留但不维护，见上方说明）
-* Markdown 支持
-* 插件支持
-* 主题支持
-  * `usr/themes/default`：经典默认主题
-  * [`usr/themes/default-2026`](usr/themes/default-2026/README.md)：现代主题，**未完成的预览版**（Tailwind CSS v4 + Alpine.js + Swup）
-* 自定义字段
-* 自定义页面
-
 
 ## 环境要求
 
@@ -32,44 +17,13 @@
 * 必需扩展：`mbstring`、`json`、`Reflection`，以及 SQLite 扩展（`sqlite3` 或 `pdo_sqlite`）
 * 推荐扩展：`fileinfo`（基于内容的 MIME 探测）、`curl`（远程 HTTP 请求）、`gd`（图片处理）、`zip`
 * Passkey/WebAuthn：需要 `openssl`、`mbstring`、`sodium`、`session`，以及 SQLite 扩展
-* 生产环境建议启用 OPcache（PHP 8.5 已内置），并参考 [`docs/guide/deployment.md`](docs/guide/deployment.md) 配置 `session.use_strict_mode` 等选项
-* 数据库：SQLite 3.7.11 或更高（**唯一维护的数据库**；MariaDB / MySQL / PostgreSQL
-  适配器保留但不维护，见上方说明）
-
-
-## 质量检查
-
-运行完整检查（PHP 语法、基础回归测试、`#[\Override]` 审计、数据库集成测试、PHPStan、Semgrep）：
-
-```powershell
-.\tools\quality.ps1
-```
-
-脚本首次运行会将 PHPStan 和 Semgrep 安装到被 Git 忽略的 `.tools/` 目录；本地默认使用项目内的 `php-8.5.10/php.exe`，也可通过 `PHP_EXE` 指定 PHP。GitHub Actions 会在 push 和 pull request 时运行相同检查，数据库集成测试只覆盖 SQLite（`SQLite`、`Pdo_SQLite`）。
-
-静态分析使用 **PHPStan level 5**（扫描 `admin`、`install`、`var`、`usr`、`tests`），当前 **0 告警且不使用 baseline**。检查说明与已知限制见 [`docs/guide/quality.md`](docs/guide/quality.md)。
-
-单独运行：
-
-```bash
-php-8.5.10/php.exe tests/smoke.php           # 基础回归测试
-php-8.5.10/php.exe tests/integration.php     # 数据库集成测试（默认 SQLite）
-php-8.5.10/php.exe tools/audit-override.php  # #[\Override] 覆盖率审计
-php-8.5.10/php.exe tools/e2e.php             # 真实站点端到端测试
-php-8.5.10/php.exe .tools/phpstan/phpstan.phar analyse -c phpstan.neon
-```
-
-## Passkey 登录
-
-TypechoRe 支持现代浏览器的 Passkey/WebAuthn 登录，包括 Windows Hello、手机同步 Passkey 和 FIDO2 安全密钥。首次使用时请使用密码登录后台，在个人资料中注册 Passkey，然后再在登录页使用 Passkey。
-
-Passkey 需要 HTTPS（`localhost` 除外），并且浏览器访问域名必须与站点配置的 RP ID 匹配。
+* 数据库：SQLite 3.7.11 或更高
 
 ## 文档
 
 文档位于 [`docs/`](docs/)，来源：https://github.com/benzBrake/typecho-docs ，并已根据本仓库代码现状核验更新。
 
-重点文档：
+文档：
 
 * [部署与恢复及生产包构建](docs/guide/deployment.md)
 * [Passkey / WebAuthn](docs/guide/passkey.md)
