@@ -14,8 +14,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
+          # zip 供 tools/e2e.php 解压发布包
           php-version: '8.5'
-          extensions: pdo_sqlite, sqlite3, mysqli, pdo_mysql, pgsql, pdo_pgsql
+          extensions: pdo_sqlite, sqlite3, mysqli, pdo_mysql, pgsql, pdo_pgsql, zip
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
