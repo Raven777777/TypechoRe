@@ -7,9 +7,16 @@
 > **重要兼容性说明：TypechoRe 不再与原版 Typecho 数据库完全兼容。**
 > TypechoRe 已修改密码/authCode 处理、增加 `typecho_passkeys` 表，并调整了部分核心数据结构和行为。升级或使用 TypechoRe 数据库后，请不要再让原版 Typecho 直接连接同一个数据库。迁移前请务必备份数据库；建议将 TypechoRe 视为独立分支使用。
 
+> **数据库支持范围：本项目只维护 SQLite。**
+> `Mysqli` / `Pdo_Mysql` / `Pgsql` / `Pdo_Pgsql` 适配器代码虽然保留（沿用上游 Typecho），
+> 但**不维护、不测试**：CI 不覆盖，不保证可用，也不保证与后续改动同步，相关 Issue / PR
+> 可能不会被处理（已知问题：`Pgsql` 适配器会把字符串形式的 `sslVerify`（如 `'off'`）
+> 当作真值，从而强制 `sslmode=require`，导致连接失败）。
+> 请使用 SQLite；如确需其他数据库，请自行测试验证并自行承担风险，或改用原版 Typecho。
+
 ## 主要特性
 
-* 支持多种数据库（MariaDB、MySQL、SQLite、PostgreSQL）
+* 数据库：**只维护 SQLite**（MariaDB / MySQL / PostgreSQL 适配器保留但不维护，见上方说明）
 * Markdown 支持
 * 插件支持
 * 主题支持
@@ -20,14 +27,12 @@
 ## 环境要求
 
 * PHP 8.5 或更高
-* 必需扩展：`mbstring`、`json`、`Reflection`，以及至少一种数据库扩展
+* 必需扩展：`mbstring`、`json`、`Reflection`，以及 SQLite 扩展（`sqlite3` 或 `pdo_sqlite`）
 * 推荐扩展：`fileinfo`（基于内容的 MIME 探测）、`curl`（远程 HTTP 请求）、`gd`（图片处理）、`zip`
-* Passkey/WebAuthn：需要 `openssl`、`mbstring`、`sodium`、`session`，以及当前使用的数据库扩展
+* Passkey/WebAuthn：需要 `openssl`、`mbstring`、`sodium`、`session`，以及 SQLite 扩展
 * 生产环境建议启用 OPcache（PHP 8.5 已内置），并参考 [`docs/guide/deployment.md`](docs/guide/deployment.md) 配置 `session.use_strict_mode` 等选项
-* 数据库（MariaDB、MySQL、SQLite、PostgreSQL）
-  * MariaDB 或 MySQL 5.5.3 或更高
-  * SQLite 3.7.11 或更高
-  * PostgreSQL 9.1 或更高
+* 数据库：SQLite 3.7.11 或更高（**唯一维护的数据库**；MariaDB / MySQL / PostgreSQL
+  适配器保留但不维护，见上方说明）
 
 
 ## 质量检查
@@ -38,7 +43,7 @@
 .\tools\quality.ps1
 ```
 
-脚本首次运行会将 PHPStan 和 Semgrep 安装到被 Git 忽略的 `.tools/` 目录；本地默认使用项目内的 `php-8.5.10/php.exe`，也可通过 `PHP_EXE` 指定 PHP。GitHub Actions 会在 push 和 pull request 时运行相同检查，并用 MySQL/PostgreSQL service container 运行数据库集成测试（`Mysqli`、`Pdo_Mysql`、`Pgsql`、`Pdo_Pgsql`、`SQLite`、`Pdo_SQLite`）。
+脚本首次运行会将 PHPStan 和 Semgrep 安装到被 Git 忽略的 `.tools/` 目录；本地默认使用项目内的 `php-8.5.10/php.exe`，也可通过 `PHP_EXE` 指定 PHP。GitHub Actions 会在 push 和 pull request 时运行相同检查，数据库集成测试只覆盖 SQLite（`SQLite`、`Pdo_SQLite`）。
 
 静态分析使用 **PHPStan level 5**（扫描 `admin`、`install`、`var`、`usr`、`tests`），当前 **0 告警且不使用 baseline**。检查说明与已知限制见 [`docs/guide/quality.md`](docs/guide/quality.md)。
 

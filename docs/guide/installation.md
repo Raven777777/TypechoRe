@@ -1,10 +1,8 @@
 ### 安装环境要求
 - PHP 8.5 以上
-- 数据库（MariaDB、MySQL、PostgreSQL、SQLite 任意一种），并在 PHP 中安装了对应扩展
-  - MariaDB 或 MySQL 5.5.3 以上
-  - SQLite 3.7.11 以上
-  - PostgreSQL 9.1 以上
-- 必需的 PHP 扩展：`mbstring`、`json`、`Reflection`，以及至少一种数据库扩展（`mysqli`、`sqlite3`、`pgsql`、`pdo_mysql`、`pdo_sqlite`、`pdo_pgsql`）
+- 数据库：**SQLite 3.7.11 以上**（本项目唯一维护的数据库），并在 PHP 中安装 `sqlite3` 或 `pdo_sqlite` 扩展
+  - MariaDB / MySQL / PostgreSQL 适配器虽然保留（沿用上游 Typecho），但本项目不再维护、不在 CI 中测试，参见 README 的数据库支持范围说明
+- 必需的 PHP 扩展：`mbstring`、`json`、`Reflection`，以及 `sqlite3` 或 `pdo_sqlite`
 - 推荐扩展：`fileinfo`（基于内容的 MIME 探测，缺失时退化为扩展名映射）、`curl`（远程 HTTP 请求）
 
 > 安装向导会自动检测上述环境依赖，不符合时会在页面顶部给出提示。
@@ -12,6 +10,8 @@
 > 使用 Passkey/WebAuthn 还需要 `openssl`、`mbstring`、`sodium` 和 `session` 扩展。Passkey 需要 HTTPS（`localhost` 除外）。
 
 ### 数据库兼容性
+
+> **数据库支持范围：本项目只维护 SQLite。** MySQL / MariaDB / PostgreSQL 适配器代码虽然保留，但不维护、不测试，相关 Issue / PR 可能不会被处理。请使用 SQLite；如确需其他数据库，请自行测试验证并自行承担风险。
 
 TypechoRe 是独立于原版 Typecho 的 Fork。由于 TypechoRe 修改了密码与 authCode 存储方式、增加了 `typecho_passkeys` 表，并调整了部分核心行为，TypechoRe 数据库不再保证与原版 Typecho 相通。
 

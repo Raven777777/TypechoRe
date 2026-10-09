@@ -148,6 +148,8 @@ class "Sticky_Plugin" not found
 
 ## 数据库兼容性警告
 
+> **数据库支持范围：本项目只维护 SQLite。** MySQL / MariaDB / PostgreSQL 适配器代码虽然保留，但不维护、不在 CI 中测试，相关 Issue / PR 可能不会被处理。下面涉及 MySQL / PostgreSQL 的 SQL 仅供存量安装参考，请自行验证。
+
 TypechoRe 已经不是与原版 Typecho 完全相通的数据库分支。
 
 TypechoRe 修改了：

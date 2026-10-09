@@ -28,64 +28,16 @@ jobs:
       - name: End-to-end site test
         run: php tools/e2e.php
 
+  # 只维护 SQLite: MySQL/PostgreSQL 适配器代码保留, 但不在 CI 中测试
   database:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - adapter: SQLite,Pdo_SQLite
-            host: ''
-            port: ''
-            user: ''
-            password: ''
-          - adapter: Mysqli,Pdo_Mysql
-            host: 127.0.0.1
-            port: '3306'
-            user: root
-            password: root
-          - adapter: Pgsql,Pdo_Pgsql
-            host: 127.0.0.1
-            port: '5432'
-            user: postgres
-            password: postgres
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: typecho_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: typecho_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd=pg_isready
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
-          extensions: pdo_sqlite, sqlite3, mysqli, pdo_mysql, pgsql, pdo_pgsql
+          extensions: pdo_sqlite, sqlite3
       - name: Run database integration tests
         env:
-          TYPECHORE_TEST_ADAPTER: ${{ matrix.adapter }}
-          TYPECHORE_TEST_HOST: ${{ matrix.host }}
-          TYPECHORE_TEST_PORT: ${{ matrix.port }}
-          TYPECHORE_TEST_USER: ${{ matrix.user }}
-          TYPECHORE_TEST_PASSWORD: ${{ matrix.password }}
-          TYPECHORE_TEST_DATABASE: typecho_test
+          TYPECHORE_TEST_ADAPTER: SQLite,Pdo_SQLite
         run: php tests/integration.php

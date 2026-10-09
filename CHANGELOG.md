@@ -22,9 +22,10 @@
   发布文章、匿名评论、图片上传、插件启停、Passkey 参数、XML-RPC 与 1.3.2 升级路径，
   共 100 项断言，并检查服务器日志无任何 PHP 警告
 - 新增 `tests/integration.php`：真实数据库适配器集成测试（建表/CRUD/JOIN/
-  truncate/lastInsertId/affectedRows/升级脚本），本地默认跑 SQLite，
-  CI 通过 MySQL 与 PostgreSQL service container 跑 `Mysqli`/`Pdo_Mysql`/
-  `Pgsql`/`Pdo_Pgsql`
+  truncate/lastInsertId/affectedRows/升级脚本），本地与 CI 都只跑 SQLite（`SQLite`、
+  `Pdo_SQLite`）；MySQL / PostgreSQL 适配器不再维护、不再测试
+- 数据库支持范围收窄：**本项目只维护 SQLite**，`Mysqli`/`Pdo_Mysql`/`Pgsql`/
+  `Pdo_Pgsql` 适配器保留（沿用上游 Typecho）但不在 CI 中运行，也不再修复问题
 - 新增 `.github/workflows/release.yml`：推送 `v*` tag 时自动构建发布包并附到
   GitHub Release
 

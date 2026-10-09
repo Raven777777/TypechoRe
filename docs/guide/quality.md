@@ -7,7 +7,7 @@
 
 - PHP 8.5.10
 - Windows x64
-- SQLite 3（本地）、MySQL 8.4 与 PostgreSQL 16（CI service container）
+- SQLite 3（本地与 CI）
 - Node.js v24.19.0
 
 项目内的 `php-8.5.10/` 仅用于本地检查。生产环境应使用独立配置的 PHP，并根据实际数据库启用相应扩展。
@@ -43,9 +43,9 @@
     `Plugin::$signal` 的「只写不读」（它通过引用绑定到调用方变量）、
     `IXR\Client::__call()`（XML-RPC 方法名由远端接口决定）
 
-CI 中额外的 `database` job 会用 MySQL 与 PostgreSQL service container 运行
-`tests/integration.php`，覆盖 `Mysqli`、`Pdo_Mysql`、`Pgsql`、`Pdo_Pgsql` 与
-`SQLite`、`Pdo_SQLite` 六种适配器。
+CI 中额外的 `database` job 只跑 `tests/integration.php` 的 `SQLite` 与
+`Pdo_SQLite` 适配器。MySQL/PostgreSQL 适配器代码保留但**不维护、不测试**（详见
+[未完成与已知限制](#未完成与已知限制)）。
 
 ### `#[\Override]` 审计
 
@@ -95,8 +95,9 @@ php-8.5.10/php.exe tools/e2e.php --zip=dist/x.zip --keep --verbose
 - 三表 JOIN、聚合查询、`truncate()`
 - 1.3.2 升级脚本 `Utils\Upgrade::v1_3_2()` 建表且幂等
 
-本地无 MySQL/PostgreSQL 时，未设置 `TYPECHORE_TEST_HOST` 的适配器会被跳过并提示，
-退出码仍为 0；CI 中六种适配器全部执行。
+MySQL/PostgreSQL 适配器只有在显式设置 `TYPECHORE_TEST_ADAPTER` 与
+`TYPECHORE_TEST_HOST` 时才会本地执行（未设置则跳过并提示，退出码仍为 0）；
+CI 只跑 SQLite。
 
 ## 已完成检查
 
@@ -208,12 +209,13 @@ Typecho 大量使用运行时动态派发，以下几处在 PHPStan 中无法用
 
 ## 未完成与已知限制
 
-- **MySQL / PostgreSQL 只在本机以外的 CI 中测试**：本机没有运行数据库服务，
-  `Mysqli`/`Pdo_Mysql`/`Pgsql`/`Pdo_Pgsql` 的 SSL 连接与多库并发行为仍未覆盖
+- **MySQL / PostgreSQL 不再维护**：本项目只维护 SQLite，`Mysqli`/`Pdo_Mysql`/
+  `Pgsql`/`Pdo_Pgsql` 适配器代码保留但不在 CI 中测试、不修复问题（已知问题：
+  `Pgsql` 适配器会把字符串形式的 `sslVerify`（如 `'off'`）当作真值，从而强制
+  `sslmode=require`；`options` 这类复合主键表也不会返回有效的 `lastInsertId()`）
 - 项目没有 PHPUnit/Psalm：基础回归测试使用 `tests/smoke.php`，数据库测试使用
   `tests/integration.php`，真实请求测试使用 `tools/e2e.php`
-- `tools/e2e.php` 只覆盖 SQLite 站点；MySQL/PostgreSQL 的真实请求路径仍需在对应
-  服务可用时手工验证（CI 只跑适配器层集成测试）
+- `tools/e2e.php` 与 `tests/integration.php` 都只覆盖 SQLite 站点与适配器
 - 无 `cid` 直接访问 `admin/media.php` 会返回 500（上游同样如此，后台界面不会生成该
   链接）；如需对外开放该地址应补 404 处理
 - `#[\Override]` 无法标注 trait 中声明的覆盖方法（见上文说明）

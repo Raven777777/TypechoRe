@@ -13,8 +13,10 @@
  *     TYPECHORE_TEST_PASSWORD=secret TYPECHORE_TEST_DATABASE=typecho_test \
  *     php tests/integration.php
  *
- * 未指定适配器时默认只测 SQLite (临时文件)。Mysql/Pgsql 适配器缺少
- * 必要环境变量时会跳过并提示, 不影响退出码, 便于本地无数据库时使用。
+ * 未指定适配器时默认只测 SQLite (临时文件), CI 也只跑 SQLite。
+ *
+ * 本项目只维护 SQLite: Mysql/Pgsql 适配器的测试路径仅为保留上游兼容性,
+ * 不再维护也不在 CI 中执行; 缺少必要环境变量时会跳过并提示, 不影响退出码。
  */
 
 declare(strict_types=1);

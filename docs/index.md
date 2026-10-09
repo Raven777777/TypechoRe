@@ -1,6 +1,6 @@
 **TypechoRe**
 
-**TypechoRe** 是一个简单轻巧的博客程序，是 [Typecho](https://github.com/typecho/typecho) 的积极维护 Fork 版本。基于 `PHP`，使用多种数据库（`MariaDB`、`MySQL`、`PostgreSQL`、`SQLite`）储存数据，在 `GPL Version 2` 许可证下发行的开源程序，使用 `Git` 做版本管理。
+**TypechoRe** 是一个简单轻巧的博客程序，是 [Typecho](https://github.com/typecho/typecho) 的积极维护 Fork 版本。基于 `PHP`，使用 `SQLite` 储存数据（MySQL / PostgreSQL 适配器保留但不维护），在 `GPL Version 2` 许可证下发行的开源程序，使用 `Git` 做版本管理。
 
 **Typecho** 是由两个单词 `type` 和 `echo` 组成的，在发音的时候也发这两个音 `/taɪpˌ'ekoʊ/`
 
