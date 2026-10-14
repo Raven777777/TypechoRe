@@ -2,6 +2,19 @@
 
 本主题基于 Typecho 默认主题（Typecho Replica Theme）修改，以下仅记录本 Fork 的改动。
 
+## 1.3.2（2026-10-14）
+
+### 修复
+
+- Markdown 表格宽度溢出：当单元格包含长 URL、哈希等不可断行内容时，表格的最小宽度被内容撑大，`width: 100%` 无法约束，表格右侧溢出到侧边栏下方。
+  - 单元格新增 `overflow-wrap: anywhere`（并对旧内核回退 `word-break: break-word`）；与 `word-wrap: break-word` 不同，`anywhere` 会参与表格 `min-content` 计算，使表格真正保持 `width: 100%`。
+  - `.post-content` / `.comment-content` 中的表格新增 `display: block; overflow-x: auto`，列数过多等极端情况下退化为容器内横向滚动，而不是撑破布局。
+
+### 变更
+
+- `style.css`：`table` 增加 `max-width: 100%`；`th, td` 增加长内容断行规则；新增内容区表格横向滚动回退。
+- `index.php`：版本号更新为 `1.3.2`。
+
 ## 1.3.1（2026-09-22）
 
 ### 修复

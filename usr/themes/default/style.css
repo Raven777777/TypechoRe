@@ -51,14 +51,27 @@ blockquote {
 table {
   border: 1px solid #ddd;
   width: 100%;
+  max-width: 100%;
 }
 table th,
 table td {
   padding: 5px 10px;
   border: 1px solid #eee;
+  /* 长 URL/代码等不可断行内容会撑大表格最小宽度, 导致表格溢出容器;
+     overflow-wrap: anywhere 会参与 min-content 计算, 使表格保持 width: 100% */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 table th {
   background: #f3f3f3;
+}
+
+/* Markdown 表格内容过宽时, 退化为容器内横向滚动而不是撑破布局 */
+.post-content table,
+.comment-content table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 h1, h2, h3, h4, h5, h6 {
