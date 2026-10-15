@@ -339,6 +339,15 @@
     }
   }
 
+  /* ---------- 骨架屏的第二列 (侧边栏 / 文章目录) ----------
+     它挂在 #page-skeleton 的栅格列上, 但显不显与形态 (list/single) 无关 ——
+     只有这次跳转真的会换掉那一列时才由 app.js 取消 hidden (见 syncSkeletonAside)。
+     不用 .hidden 类是因为它属于 utilities 层, 会被网格列上的 lg:* 一起顶掉;
+     这里的选择器带 [hidden] 属性, 权重够高, 不需要 !important。 */
+  [data-skeleton-aside][hidden] {
+    display: none;
+  }
+
   /* ---------- 页面过渡 (Swup) ----------
      旧内容: 淡出并轻微上移。
      新内容: 容器替换后 app.js 给 <html> 加上 is-entering, 触发下面这套动画 ——
@@ -526,12 +535,73 @@
     @apply my-2;
   }
 
+  /* ---------- 评论里的 Markdown ----------
+     开启「在评论中使用 Markdown 语法」后, 评论正文会出现 strong / a / pre / ul 等标签
+     (白名单见 functions.php 的 themeCommentAllowedTags), 这里给它们最基本的排版。 */
+  .comment-body .comment-content > :first-child {
+    @apply mt-0;
+  }
+
+  .comment-body .comment-content > :last-child {
+    @apply mb-0;
+  }
+
+  .comment-body .comment-content :where(strong, b) {
+    @apply font-semibold text-zinc-900 dark:text-zinc-100;
+  }
+
+  .comment-body .comment-content a {
+    @apply font-medium text-accent underline decoration-accent/40 underline-offset-2 transition-colors hover:decoration-accent;
+  }
+
+  .comment-body .comment-content :where(h2, h3, h4, h5, h6) {
+    @apply mt-4 mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100;
+  }
+
+  .comment-body .comment-content :where(ul, ol) {
+    @apply my-2 list-outside space-y-1 pl-5;
+  }
+
+  .comment-body .comment-content ul {
+    @apply list-disc;
+  }
+
+  .comment-body .comment-content ol {
+    @apply list-decimal;
+  }
+
+  .comment-body .comment-content blockquote {
+    @apply my-3 border-l-2 border-zinc-200 pl-3 text-zinc-500 dark:border-zinc-700 dark:text-zinc-400;
+  }
+
+  .comment-body .comment-content hr {
+    @apply my-4 border-zinc-200 dark:border-zinc-800;
+  }
+
+  .comment-body .comment-content pre {
+    @apply my-3 overflow-x-auto rounded-lg bg-zinc-900 p-3 text-xs leading-relaxed text-zinc-100 dark:bg-zinc-950;
+  }
+
+  .comment-body .comment-content pre code {
+    @apply bg-transparent p-0 font-mono text-inherit;
+  }
+
+  .comment-body .comment-content :not(pre) > code {
+    @apply rounded-md bg-zinc-100 px-1.5 py-0.5 font-mono text-[0.8125rem] text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100;
+  }
+
   .comment-body .comment-reply {
     @apply mt-2 text-xs;
   }
 
   .comment-body .comment-reply a {
     @apply text-zinc-500 transition-colors hover:text-accent dark:text-zinc-400;
+  }
+
+  /* 回复时评论框会被搬到这条评论里 (app.js 的回复处理器):
+     缩小上下留白, 并在左侧压一条竖线, 表明「这是在回复上面那条」。 */
+  .comment-body .respond {
+    @apply mt-4 mb-4 border-l-2 border-accent/40 pl-3 sm:pl-4;
   }
 
   .comment-body.comment-by-author > .comment-author .fn::after {
@@ -550,6 +620,119 @@
 
   .field-label {
     @apply mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300;
+  }
+
+  /* 评论框用的轻量输入控件: 去掉四周描边, 换成浅灰底, 聚焦时才亮出主色描边。
+     必须写在 .field 之后 —— 两者同为 components 层, 靠源码顺序决定胜负。 */
+  .field-soft {
+    @apply border-transparent bg-zinc-100/70 placeholder:text-zinc-400 focus:border-accent/60 focus:bg-white focus:ring-4 focus:ring-accent-soft dark:border-transparent dark:bg-zinc-800/50 dark:placeholder:text-zinc-500 dark:focus:border-accent/60 dark:focus:bg-zinc-900/80;
+  }
+
+  /* ---------- 评论工具条 (评论框右下角) ---------- */
+  .comment-actions {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-2;
+  }
+
+  /* 左侧留出 1rem: 工具条与提示的字左边缘和输入框里的文字对齐
+     (.field-soft 没有横向内边距, 输入框文字自己带 1rem) */
+  .comment-toolbar {
+    @apply flex min-w-0 flex-1 flex-wrap items-center gap-1 pl-4;
+  }
+
+  .tool-btn {
+    @apply inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100;
+  }
+
+  .tool-btn::-webkit-details-marker {
+    display: none;
+  }
+
+  .toolbar-sep {
+    @apply mx-1 h-4 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700;
+  }
+
+  .comment-hint {
+    @apply text-xs text-zinc-400 dark:text-zinc-500;
+  }
+
+  .comment-submit {
+    @apply shrink-0;
+  }
+
+  /* 登录身份: 头像 + 昵称, 小字号灰字 */
+  .comment-identity {
+    @apply flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400;
+  }
+
+  .comment-avatar {
+    @apply size-6 shrink-0 rounded-full;
+  }
+
+  /* 表情选择面板: 绝对定位, 不挤压表单高度 */
+  .emoji-picker {
+    @apply relative shrink-0;
+  }
+
+  .emoji-panel {
+    @apply absolute bottom-full left-0 z-30 mb-2 grid w-56 grid-cols-8 gap-0.5 rounded-xl border border-zinc-200 bg-white p-2 shadow-card dark:border-zinc-800 dark:bg-zinc-900;
+  }
+
+  .emoji-item {
+    @apply flex size-6 cursor-pointer items-center justify-center rounded-md text-base leading-none transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800;
+  }
+
+  /* ---------- 上下篇导航 (极简文字流: 无外框, 左/右分布) ----------
+     .group 由模板写在标签上 (Tailwind v4 的 @apply 不认识 group 这个标记类)。
+     颜色统一挂在链接上、两级选择器: 这样 `group-hover:text-accent` 与它同权重,
+     靠源码顺序取胜 —— 深色模式的 dark:text-* 由 Tailwind 排在文件更后面,
+     写成同一选择器上的工具类会把 hover 的主色盖掉。 */
+  .post-nav-link {
+    @apply relative block min-w-0 py-1.5 transition-colors;
+  }
+
+  .post-nav-link .post-nav-label {
+    @apply flex items-center gap-1.5 text-xs text-zinc-400 transition-colors dark:text-zinc-500;
+  }
+
+  .post-nav-link .post-nav-title {
+    @apply mt-1 block truncate text-sm font-medium text-zinc-700 transition-colors group-hover:text-accent dark:text-zinc-200;
+  }
+
+  /* 悬停: 文字变主题色 + 一条从左侧滑出的主色下划线 */
+  .post-nav-link::after {
+    content: "";
+    @apply absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-accent transition-transform duration-300;
+  }
+
+  .post-nav-link:hover::after {
+    @apply scale-x-100;
+  }
+
+  .post-nav-link .post-nav-label svg {
+    @apply transition-transform duration-300;
+  }
+
+  .post-nav-link:hover .post-nav-label svg {
+    @apply -translate-x-0.5;
+  }
+
+  /* 下一篇在宽屏上右对齐 (移动端竖排, 保持左对齐更好读) */
+  @media (width >= 40rem) {
+    .post-nav-next {
+      @apply text-right;
+    }
+
+    .post-nav-next .post-nav-label {
+      @apply justify-end;
+    }
+
+    .post-nav-next::after {
+      @apply origin-right;
+    }
+
+    .post-nav-next:hover .post-nav-label svg {
+      @apply translate-x-0.5;
+    }
   }
 
   /* ---------- 分页 ---------- */

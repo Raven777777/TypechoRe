@@ -160,6 +160,10 @@ Alpine.data('backToTop', () => ({
 const COPY_IDLE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
 const COPY_DONE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 
+/* notice-box 的两种外观: 出错 (琥珀) / 一般回执 (灰底) */
+const NOTICE_ERROR_CLASS = 'mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm whitespace-pre-line text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200';
+const NOTICE_INFO_CLASS = 'mb-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm whitespace-pre-line text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200';
+
 /** 复制文本, 优先使用异步剪贴板 API, 失败时退回 execCommand */
 async function copyText(text) {
   try {
@@ -406,6 +410,427 @@ function enhanceCommentForm() {
   }
 }
 
+/**
+ * 评论框: 自适应高度 + Markdown 工具条 + 表情面板 + 回复/取消回复
+ */
+function enhanceCommentBox() {
+  const textarea = document.getElementById('textarea');
+  const form = document.getElementById('comment-form');
+  const comments = document.getElementById('comments');
+
+  if (!textarea || !form || !comments) {
+    return;
+  }
+
+  /* 评论框容器 id 由 Typecho 定 (respond-<theId>), 不要自己拼: theId 不是纯数字。
+     模板把完整值写在表单的 data-respond-id 上; 拿不到就退回「找最近的那个」。 */
+  const respond = (form.dataset.respondId && document.getElementById(form.dataset.respondId))
+    || comments.querySelector('.respond');
+  const cancelLink = comments.querySelector('#cancel-comment-reply-link');
+
+  /** 取 #respond-xxx 里的隐藏 parent 字段 (没有就按需创建) */
+  const parentField = (create) => {
+    let input = form.querySelector('input[name="parent"]');
+
+    if (!input && create) {
+      input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'parent';
+      form.appendChild(input);
+    }
+
+    return input;
+  };
+
+  /* 插入/取出 #respond-xxx 时, 需要一个位置固定的占位节点记住它原本在哪 */
+  const holderFor = () => {
+    let holder = comments.querySelector('[data-respond-holder]');
+
+    if (!holder) {
+      holder = document.createElement('div');
+      holder.id = respond ? respond.id + '-holder' : 'respond-holder';
+      holder.hidden = true;
+      holder.setAttribute('data-respond-holder', '');
+      respond.parentNode.insertBefore(holder, respond);
+    }
+
+    return holder;
+  };
+
+  /* 表单内容与评论内容一般长, 按内容高度自适应; 太长时退回 auto */
+  const autoGrow = () => {
+    if (textarea.offsetParent === null && textarea.getClientRects().length === 0) {
+      textarea.style.height = 'auto';
+      return;
+    }
+
+    /* 先归零才能量到真实内容高度; 顺手记住滚动位置, 免得长文时光标乱跳 */
+    const scrollTop = textarea.scrollTop;
+    textarea.style.height = 'auto';
+
+    const maxHeight = Number.parseFloat(window.getComputedStyle(textarea).maxHeight);
+    const limit = Number.isFinite(maxHeight) ? maxHeight : Infinity;
+    const contentHeight = textarea.scrollHeight;
+
+    /* hidden 状态下量不到真实高度 (会是 0), 这时不要写死一个 0 */
+    textarea.style.height = contentHeight > 0 ? `${Math.min(contentHeight, limit)}px` : 'auto';
+    textarea.scrollTop = scrollTop;
+  };
+
+  /**
+   * 用前后缀包裹选区 (没有选区时插入占位文本并选中它, 便于直接改写)
+   *
+   * @param {string} prefix
+   * @param {string} suffix
+   * @param {string} placeholder 没有选中内容时使用的占位文本
+   */
+  const insert = (prefix, suffix, placeholder = '') => {
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? start;
+    const selected = textarea.value.slice(start, end) || placeholder;
+
+    textarea.value = textarea.value.slice(0, start) + prefix + selected + suffix + textarea.value.slice(end);
+    textarea.focus();
+    textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+    autoGrow();
+  };
+
+  /** 按行前缀插入 (引用等) */
+  const prefixLines = (marker) => {
+    const start = textarea.selectionStart ?? 0;
+    const lineStart = textarea.value.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+
+    textarea.value = textarea.value.slice(0, lineStart) + marker + textarea.value.slice(lineStart);
+    textarea.focus();
+    textarea.setSelectionRange(start + marker.length, start + marker.length);
+    autoGrow();
+  };
+
+  const insertText = (text) => {
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? start;
+
+    textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+    textarea.focus();
+    textarea.setSelectionRange(start + text.length, start + text.length);
+    autoGrow();
+  };
+
+  /* 一律用「元素级」的一次性标记, 不用整个表单的标记:
+     提交成功后只换掉评论列表那一段并重跑增强 (见 refreshComments), 表单节点不变、
+     但列表里是全新节点 —— 表单级标记会让新评论的「回复」再也不被接手。
+     标记写在节点自己身上, 于是同一个节点只会绑一次。 */
+  const bindOnce = (element, key, handler) => {
+    const flag = 'bound' + key;
+
+    if (element.dataset[flag]) {
+      return;
+    }
+
+    element.dataset[flag] = '1';
+    element.addEventListener('click', handler);
+  };
+
+  if (!textarea.dataset.boundGrow) {
+    textarea.dataset.boundGrow = '1';
+    textarea.addEventListener('input', autoGrow);
+  }
+
+  autoGrow();
+
+  form.querySelectorAll('[data-comment-format]').forEach((button) => {
+    bindOnce(button, 'Format', () => {
+      switch (button.dataset.commentFormat) {
+        case 'bold':
+          insert('**', '**', '粗体');
+          break;
+        case 'italic':
+          insert('_', '_', '斜体');
+          break;
+        case 'link':
+          insert('[', '](https://)', '链接文字');
+          break;
+        case 'code':
+          insert('`', '`', 'code');
+          break;
+        case 'quote':
+          prefixLines('> ');
+          break;
+        default:
+          break;
+      }
+    });
+  });
+
+  const picker = form.querySelector('.emoji-picker');
+  form.querySelectorAll('.emoji-item').forEach((button) => {
+    bindOnce(button, 'Emoji', () => {
+      insertText(button.dataset.emoji || '');
+      if (picker) {
+        picker.open = false;
+      }
+    });
+  });
+
+  /* ---------- 回复 / 取消回复 ----------
+     把 Typecho 的「回复」搬进这里自己接管, 而不是依赖评论列表里的内联 onclick:
+
+       1. 内联 onclick 一旦抛错就不再返回 false, 浏览器会真的跟着 href 跳一次;
+          而 swup 的 ignoreVisit 见 ?replyTo= 会调 location.assign(), 于是整页重载。
+          位置也很巧: 只有「当前 URL 与链接不同」的第一次点击才会重载,
+          此后再点 (URL 已带 ?replyTo=) 看着就像没反应 —— 正是那种「第一次卡一下」。
+       2. 我们自己的处理器一定 preventDefault, 有没有 swup、TypechoComment 有没有就绪
+          都不影响; 顺带把 Swup 的地址栏更新也一起压掉 (见 shouldIgnoreVisit)。
+       3. 没有 JS 时模板里的内联 onclick 仍然照旧工作。 */
+  if (respond) {
+    comments.querySelectorAll('a[onclick*="TypechoComment.reply"]').forEach((link) => {
+      bindOnce(link, 'Reply', (event) => {
+        /* preventDefault 在前, 后面任何一步失败都不会变成整页跳转 */
+        event.preventDefault();
+
+        const match = /reply\(\s*'([^']+)'\s*,\s*(\d+)/.exec(link.getAttribute('onclick') || '') || [];
+        const target = match[1] ? document.getElementById(match[1]) : null;
+        const coid = match[2] || '';
+        const parent = parentField(true);
+
+        if (parent) {
+          parent.value = coid;
+        }
+
+        if (target) {
+          /* 先钉好占位节点再搬走评论框, 这样「取消回复」一定能把它送回原位 */
+          holderFor();
+          target.appendChild(respond);
+        } else {
+          /* 找不到评论节点时退回「搬到评论列表末尾」, 至少不丢回复动作 */
+          holderFor();
+          comments.appendChild(respond);
+        }
+
+        if (cancelLink) {
+          cancelLink.style.display = '';
+        }
+
+        autoGrow();
+        textarea.focus();
+      });
+    });
+
+    if (cancelLink) {
+      bindOnce(cancelLink, 'Cancel', (event) => {
+        event.preventDefault();
+
+        const holder = comments.querySelector('[data-respond-holder]');
+        const parent = parentField(false);
+
+        if (parent) {
+          parent.remove();
+        }
+
+        if (holder && holder.parentNode) {
+          holder.parentNode.insertBefore(respond, holder);
+          holder.remove();
+        }
+
+        cancelLink.style.display = 'none';
+        autoGrow();
+      });
+    }
+  }
+
+  /* ---------- 提交评论: 自己接管, 不整页跳转 ----------
+     TypechoRe 的评论提交是普通表单 POST, 服务端回 302 跳到评论锚点 —— 原生提交就是
+     一次整页导航。这里改成 fetch: 成功后就地刷新评论列表, 失败的提示写进 notice-box。
+     字段仍按表单原样提交 (action 里已经带 CSRF token), 所以服务端行为不变。 */
+  const noticeBox = document.getElementById('notice-box');
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  const showNotice = (message, className) => {
+    if (!noticeBox) {
+      return;
+    }
+
+    noticeBox.className = className;
+    noticeBox.textContent = message;
+    noticeBox.hidden = false;
+  };
+
+  const clearNotice = () => {
+    if (noticeBox) {
+      noticeBox.hidden = true;
+      noticeBox.textContent = '';
+    }
+  };
+
+  const setBusy = (busy) => {
+    if (submitButton) {
+      submitButton.disabled = busy;
+    }
+    form.classList.toggle('is-submitting', busy);
+  };
+
+  /* 只为用户输入错误的兜底提示; 真正显示什么由服务端的 __typecho_notice cookie 决定 */
+  const SUBMIT_FAILED = form.getAttribute('data-submit-failed') || '提交失败, 请稍后再试。';
+
+  /**
+   * 就地刷新评论列表
+   *
+   * 提交成功后评论区里会多出一条评论 (或审核提示), 但重载整页会把无刷新切页的体验
+   * 抹掉。这里只取同一地址的评论那一段换进来; respond 容器里的内容会被原样搬回,
+   * 于是用户已经输入的东西与回复状态都不会丢。任何一步失败都静默放弃 —— 宁可评论
+   * 列表晚一步更新, 也不能因此报错。
+   *
+   * @param {string} url 要抓取的地址 (通常是当前页)
+   * @param {string} jumpTo 新评论的锚点 id
+   */
+  const refreshComments = async (url, jumpTo) => {
+    const previousRespond = respond || comments.querySelector('.respond');
+    /* 占位节点是回复流程的锚, 换列表时要把它一起搬回去 */
+    const previousHolder = comments.querySelector('[data-respond-holder]');
+
+    try {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'fetch' }
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const incoming = doc.getElementById('comments');
+
+      if (!incoming) {
+        return;
+      }
+
+      const freshList = incoming.querySelector('.comment-list');
+      /* 服务端把最新页码放在标题下面的分页里, 这里跟着回第一页 */
+      const freshNav = incoming.querySelector('.page-navigator');
+      const currentList = comments.querySelector('.comment-list');
+      const currentNav = comments.querySelector('.page-navigator');
+      /* 「暂无评论」提示在空评论区里; 空评论区抓回来的模板里没有 .comment-list,
+         这时退化成整体替换整段 (#comments 的内部), 只是别忘了把评论框搬回去 */
+      const anchor = currentList || currentNav;
+
+      if (anchor && freshList) {
+        anchor.replaceWith(document.importNode(freshList, true));
+
+        if (freshNav && currentNav) {
+          currentNav.replaceWith(document.importNode(freshNav, true));
+        }
+      } else if (anchor) {
+        anchor.remove();
+      } else {
+        /* 之前没有可锚定的元素: 用新评论区的子节点重铺一遍 */
+        const fragment = document.createDocumentFragment();
+
+        incoming.childNodes.forEach((node) => {
+          if (node.nodeType === 1 && node.id === previousRespond?.id) {
+            return;
+          }
+          fragment.appendChild(document.importNode(node, true));
+        });
+
+        comments.textContent = '';
+        comments.appendChild(fragment);
+      }
+
+      /* 评论框搬回原位: 保留用户输入 / 焦点 / 回复状态 */
+      if (previousRespond) {
+        const after = comments.querySelector('.comment-list') || comments.querySelector('.page-navigator');
+
+        if (after) {
+          after.after(previousRespond);
+        } else if (comments.firstChild) {
+          comments.insertBefore(previousRespond, comments.firstChild);
+        } else {
+          comments.appendChild(previousRespond);
+        }
+      }
+
+      if (previousHolder && previousHolder.parentNode === null && previousRespond) {
+        previousRespond.after(previousHolder);
+      }
+
+      /* 新列表里的评论脚本 (回复链接等) 由增强逻辑重新接手 */
+      enhanceNotice();
+      enhanceCommentBox();
+
+      if (jumpTo) {
+        const target = document.getElementById(jumpTo);
+
+        if (target) {
+          target.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' });
+        }
+      }
+    } catch (error) {
+      /* 网络失败: 保持现状, 用户还可以自己刷新 */
+    }
+  };
+
+  /* 提交监听只挂一次: 这个函数会在每次就地刷新评论列表后重跑 (表单节点不变),
+     重复挂载会让一次提交发出多个 POST。 */
+  if (!form.dataset.boundSubmit) {
+    form.dataset.boundSubmit = '1';
+    form.addEventListener('submit', async (event) => {
+    /* 先拦下来: 后面无论成功失败都不会变成整页跳转 */
+    event.preventDefault();
+
+    clearNotice();
+    setBusy(true);
+
+    try {
+      const response = await fetch(form.getAttribute('action') || window.location.href, {
+        method: 'POST',
+        body: new FormData(form),
+        credentials: 'same-origin',
+        redirect: 'follow',
+        headers: { 'X-Requested-With': 'fetch' }
+      });
+
+      if (!response.ok) {
+        showNotice(SUBMIT_FAILED, NOTICE_ERROR_CLASS);
+        return;
+      }
+
+      /* 服务端把「评论提交成功 / 需要审核」写在 __typecho_notice cookie 里,
+         由 enhanceNotice() 负责显示 (与整页提交后的表现一致)。 */
+      enhanceNotice();
+
+      /* 审核中的评论不会出现在列表里, 这时给一句明确的回执 */
+      if (!noticeBox || noticeBox.hidden) {
+        showNotice(
+          form.getAttribute('data-waiting-text') || '评论已提交。',
+          NOTICE_INFO_CLASS
+        );
+      }
+
+      const waiting = document.cookie.includes('__typecho_unapproved_comment');
+      const jumpTo = waiting ? '' : (form.getAttribute('data-comment-anchor') || '');
+
+      textarea.value = '';
+      autoGrow();
+      await refreshComments(window.location.href, jumpTo);
+    } catch (error) {
+      showNotice(SUBMIT_FAILED, NOTICE_ERROR_CLASS);
+    } finally {
+      setBusy(false);
+    }
+    });
+  }
+}
+
+/* 点击别处收起表情面板 (事件委托, 只需注册一次) */
+document.addEventListener('click', (event) => {
+  document.querySelectorAll('.emoji-picker[open]').forEach((picker) => {
+    if (!picker.contains(event.target)) {
+      picker.open = false;
+    }
+  });
+});
+
 /** 每次页面内容替换后需要重新执行的增强 */
 function enhancePage() {
   enhanceCodeBlocks();
@@ -413,6 +838,7 @@ function enhancePage() {
   enhanceTocSpy();
   enhanceNotice();
   enhanceCommentForm();
+  enhanceCommentBox();
 }
 
 /* 移动端导航: 点击链接后收起 (事件委托, 只需注册一次) */
@@ -454,10 +880,12 @@ function shouldIgnoreVisit(url, element) {
     return true;
   }
 
-  /* 跨域、后台、评论回复等交给浏览器原生跳转 */
+  /* 跨域、后台等交给浏览器原生跳转。
+     注意 data-no-swup: 这类链接的默认行为已经由我们自己的处理器取消 (评论回复 /
+     取消回复), 不能让 swup 再 location.assign() 一次 —— 那就是整页重载。 */
   return target.origin !== window.location.origin
     || IGNORED_PATH.test(target.pathname)
-    || target.searchParams.has('replyTo')
+    || (target.searchParams.has('replyTo') && !element.closest('[data-no-swup]'))
     || target.hash === '#cancel-comment-reply-link';
 }
 
@@ -483,10 +911,16 @@ const SKELETON_FADE = 220;
 /* 与 CSS 里最长的卡片动画对齐 (175ms 错峰 + 340ms 动画 + 余量);
    实际值由 <html> 上的 --anim-window 决定, 这里只是读不到变量时的兜底 */
 const CONTENT_ENTER_DURATION = 620;
+/** 第二列 (侧边栏 / 文章目录) 的稳定标记, 骨架屏与切页同步都用它 */
+const ASIDE_SELECTOR = '.page-aside';
+/** 本次跳转真的换了第二列时挂在 <html> 上, 用来决定要不要给它播入场动画 */
+const ASIDE_SWAPPED_CLASS = 'is-aside-swapped';
 
 let skeletonTimer = 0;
 let skeletonHideTimer = 0;
 let skeletonVisible = false;
+/* 本次骨架屏要不要带上第二列、带哪一种 (由 asideKindForSession 在 visit:start 判定) */
+let skeletonNextAsideKind = 'none';
 let enterTimer = 0;
 /* 本次跳转是否要播放入场动画 (同页锚点跳转不播) */
 let enterNextContent = false;
@@ -619,6 +1053,7 @@ function showSkeleton(kind) {
   }
 
   overlay.dataset.kind = kind;
+  syncSkeletonAside(skeletonNextAsideKind);
   skeletonVisible = true;
   overlay.hidden = false;
   /* 等一帧再加类, 否则 hidden 刚取消时过渡不会触发。
@@ -629,6 +1064,79 @@ function showSkeleton(kind) {
       overlay.classList.add('is-visible');
     }
   });
+}
+
+/**
+ * 骨架屏的第二列 (侧边栏 / 文章目录) 该不该出现, 以及该画成哪一种
+ *
+ * @param {'none'|'sidebar'|'toc'} kind
+ */
+function syncSkeletonAside(kind) {
+  const asideSkeleton = document.querySelector('[data-skeleton-aside]');
+
+  if (!asideSkeleton) {
+    return;
+  }
+
+  const wanted = 'toc' === kind || 'sidebar' === kind ? kind : 'none';
+
+  asideSkeleton.dataset.asideKind = wanted;
+  asideSkeleton.hidden = 'none' === wanted;
+
+  /* 侧边栏 / 目录两种骨架都先渲染好, 这里只切换显隐 (见 footer.php) */
+  asideSkeleton.querySelectorAll('[data-skeleton-aside-variant]').forEach((variant) => {
+    variant.hidden = variant.getAttribute('data-skeleton-aside-variant') !== wanted;
+  });
+}
+
+/** 当前页面第二列的形态 (footer.php 写在 #page-skeleton 的 data-aside-kind 上) */
+function currentAsideKind() {
+  const overlay = document.getElementById('page-skeleton');
+
+  if (overlay && overlay.dataset.asideKind) {
+    return overlay.dataset.asideKind;
+  }
+
+  /* 关掉骨架屏时没有那层标记, 退回看真实的那一列 */
+  const aside = document.querySelector(ASIDE_SELECTOR);
+
+  return aside ? aside.dataset.aside || 'none' : 'none';
+}
+
+/**
+ * 按目标形态判断这次跳转的第二列骨架该画哪一种
+ *
+ * 关键约束: **拿不到目标文档**。swup 在 `visit:start` 之后才 fetch + DOMParser
+ * (见 navigate.ts 的 performNavigation), 所以那时候 `visit.to.document` 是
+ * undefined —— 早期版本靠它比对两边的 `data-aside`, 结果每次都判成「会换」,
+ * 于是「首页 → /me.html」这种侧边栏一个字都不变的跳转也会闪一块侧边栏骨架。
+ *
+ * 现在只能靠链接给的形态提示 (`skeletonKind`) 加上当前页自己的形态:
+ *
+ *   当前页没有第二列 → 目标页一定会有 → 一定会换;
+ *   目标是列表页   → 列表页的第二列必定是侧边栏, 与当前页无关;
+ *   目标是文章页   → 可能是目录也可能是侧边栏, 提前分不出来 → 一律按目录画。
+ *
+ * 「文章页也可能没有目录」这一档故意画错: 目录骨架多出现一次只是多闪一下,
+ * 而不画的话会在切页后凭空多出一列内容, 那更难接受。
+ *
+ * @param {'list'|'single'} sessionKind
+ * @returns {'none'|'sidebar'|'toc'}
+ */
+function asideKindForSession(sessionKind) {
+  const current = currentAsideKind();
+
+  /* 当前页连第二列都没有 (404 / 侧边栏区块全关): 目标页有什么都会是新出现的 */
+  if ('none' === current) {
+    return 'single' === sessionKind ? 'toc' : 'sidebar';
+  }
+
+  if ('single' === sessionKind) {
+    return 'toc';
+  }
+
+  /* 目标是列表页: 当前页是侧边栏时不会动; 当前页是目录则要换成侧边栏 */
+  return 'sidebar' === current ? 'none' : 'sidebar';
 }
 
 function hideSkeleton() {
@@ -661,11 +1169,19 @@ function hideSkeleton() {
 
     if (!skeletonVisible) {
       overlay.hidden = true;
+      /* 连第二列一起收回: 上一次留下的显隐状态不该带到下一次跳转 */
+      syncSkeletonAside('none');
     }
   }, animSettings().skeletonFade);
 }
 
-function scheduleSkeleton(kind) {
+/**
+ * 排一次骨架屏
+ *
+ * @param {'list'|'single'} kind 形态
+ * @param {'none'|'sidebar'|'toc'} asideKind 第二列画哪一种 (none = 不画)
+ */
+function scheduleSkeleton(kind, asideKind) {
   hideSkeleton();
 
   /* 主题设置里关掉骨架屏后, 等待期间不显示任何占位 */
@@ -673,6 +1189,7 @@ function scheduleSkeleton(kind) {
     return;
   }
 
+  skeletonNextAsideKind = asideKind || 'none';
   skeletonTimer = window.setTimeout(() => showSkeleton(kind), SKELETON_DELAY);
 }
 
@@ -722,10 +1239,6 @@ function cancelContentEnter() {
 const DEFERRED_SCRIPT_TYPE = 'text/swup-deferred';
 /** 标记缴械过的脚本, 同时记录它原本的 type */
 const DEFERRED_SCRIPT_ATTR = 'data-swup-script';
-/** 第二列 (侧边栏 / 文章目录) 的稳定标记 */
-const ASIDE_SELECTOR = '.page-aside';
-/** 本次跳转真的换了第二列时挂在 <html> 上, 用来决定要不要给它播入场动画 */
-const ASIDE_SWAPPED_CLASS = 'is-aside-swapped';
 
 /**
  * 替换前: 把新文档里 (容器与第二列范围内) 的脚本缴械并标记
@@ -852,8 +1365,7 @@ function markAsideSwapped() {
   document.documentElement.classList.add(ASIDE_SWAPPED_CLASS);
 }
 
-/** 同一个页面里的锚点跳转不会真正换页, 不必显示骨架也不需要入场动画 */
-function isSamePageHashVisit(visit) {
+/** 同一个页面里的锚点跳转不会真正换页, 不必显示骨架也不需要入场动画 */function isSamePageHashVisit(visit) {
   const to = visit?.to;
 
   if (!to || !to.hash || !to.url) {
@@ -907,7 +1419,10 @@ function boot() {
     enterNextContent = !isSamePageHashVisit(visit);
 
     if (enterNextContent) {
-      scheduleSkeleton(skeletonKind(visit.trigger && visit.trigger.el));
+      const sessionKind = skeletonKind(visit.trigger && visit.trigger.el);
+      /* 第二列会不会被换掉: 拿不到目标文档, 只能按形态提示判断 (见 asideKindForSession)。
+         「侧边栏 → 侧边栏」时骨架屏里就不该出现侧边栏那一列。 */
+      scheduleSkeleton(sessionKind, asideKindForSession(sessionKind));
     }
   });
 

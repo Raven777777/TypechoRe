@@ -73,7 +73,7 @@ const newDom = (html) => new JSDOM(html, { runScripts: 'dangerously', pretendToB
  */
 function makeNavigator(dom) {
   const doc = dom.window.document;
-  const api = new Function('window', 'document', `${code}\nreturn { deferContainerScripts, runDeferredScripts, syncPageAside, startContentEnter, cancelContentEnter };`)(dom.window, doc);
+  const api = new Function('window', 'document', `${code}\nreturn { deferContainerScripts, runDeferredScripts, syncPageAside, startContentEnter, cancelContentEnter, asideKindForSession };`)(dom.window, doc);
 
   const navigate = (incomingHtml) => {
     const incoming = new dom.window.DOMParser().parseFromString(incomingHtml, 'text/html');
@@ -218,6 +218,61 @@ function makeNavigator(dom) {
 
   check('9. ★ 关闭档: 不挂 is-entering', doc.documentElement.classList.contains('is-entering') === false);
   check('9. ★ 关闭档: 内容照样换成目录', !!doc.querySelector('#toc') && !doc.querySelector('#sidebar'));
+}
+
+/* ---------- 10. 骨架屏的第二列判定 ----------
+   骨架屏要在等待期间就决定画不画第二列, 而那时**拿不到目标文档**
+   (swup 在 visit:start 之后才 fetch + DOMParser), 所以判定只能靠链接给的形态提示:
+   目标是列表页 → 一定不换; 目标是文章页 → 按目录画。
+   这里同时守住一条底线: 判定为「不画」(none) 的那些跳转, syncPageAside 必须真的
+   没换那一列 —— 否则用户会看到「骨架里没有、切完却冒出来一列」。 */
+{
+  const list = makeNavigator(newDom(LIST_A));
+  check('10. ★ 列表页 → 列表页: 判定不画第二列 (首页 → /me.html 这类互切)', list.api.asideKindForSession('list') === 'none');
+  check('10. ★ 列表页 → 文章页: 判定画目录骨架', list.api.asideKindForSession('single') === 'toc');
+
+  const post = makeNavigator(newDom(POST_A));
+  check('10. ★ 文章页 (有目录) → 文章页: 判定画目录骨架 (每篇目录都不同)', post.api.asideKindForSession('single') === 'toc');
+  check('10. ★ 文章页 (有目录) → 列表页: 判定画侧边栏骨架 (目录要让位)', post.api.asideKindForSession('list') === 'sidebar');
+
+  const empty = makeNavigator(newDom(NOT_FOUND));
+  check('10. ★ 当前页没有第二列 → 列表页: 判定画侧边栏骨架', empty.api.asideKindForSession('list') === 'sidebar');
+  check('10. ★ 当前页没有第二列 → 文章页: 判定画目录骨架', empty.api.asideKindForSession('single') === 'toc');
+
+  /* ★ 判定「不画」的跳转必须真的没换列; 判定画某种骨架的必须真的换了列 */
+  const cases = [
+    [LIST_A, LIST_B, true],
+    [LIST_A, POST_A, false],
+    [POST_A, POST_B, false],
+    [POST_A, LIST_A, true],
+    [POST_A, NOT_FOUND, true],
+    [NOT_FOUND, POST_A, false],
+    [NOT_FOUND, LIST_A, true]
+  ];
+
+  for (const [from, to, isListSession] of cases) {
+    const dom = newDom(from);
+    const nav = makeNavigator(dom);
+    const before = nav.doc.querySelector('.page-aside');
+    const kind = nav.api.asideKindForSession(isListSession ? 'list' : 'single');
+    nav.navigate(to);
+    const after = nav.doc.querySelector('.page-aside');
+    const swapped = before !== after;
+    const name = (node) => (node ? node.dataset.aside || 'aside' : 'none');
+
+    check(
+      ('none' === kind ? '10. ★ 判定不画就必须真的没换 (' : '10. ★ 判定画骨架就必须真的换了 (')
+        + name(before) + ' → ' + name(after) + ')',
+      swapped === ('none' !== kind),
+      'kind=' + kind + ' swapped=' + swapped
+    );
+  }
+
+  /* 目录页之间互切必然换 (每篇目录都不同) */
+  const tocToToc = makeNavigator(newDom(POST_A));
+  const tocBefore = tocToToc.doc.querySelector('.page-aside');
+  tocToToc.navigate(POST_B);
+  check('10. 目录 → 目录: 必须换', tocToToc.doc.querySelector('.page-aside') !== tocBefore);
 }
 
 console.log(`\n${failures === 0 ? '全部通过' : failures + ' 项失败'}`);

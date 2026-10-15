@@ -58,6 +58,7 @@ function reset() {
   timers.length = 0;
   overlay.hidden = true;
   overlay.classList.remove('is-visible');
+  asideSkeleton.hidden = true;
 }
 
 /* ---------- 最小 DOM 桩 ---------- */
@@ -72,8 +73,22 @@ const makeClassList = () => {
 };
 
 const overlay = { hidden: true, dataset: {}, classList: makeClassList() };
+/* 骨架屏里的第二列 (侧边栏 / 文章目录): 两种形态都先渲染好, 切换显隐 */
+const asideVariants = ['sidebar', 'toc'].map((name) => ({
+  hidden: true,
+  getAttribute: (attribute) => (attribute === 'data-skeleton-aside-variant' ? name : null)
+}));
+const asideSkeleton = {
+  hidden: true,
+  dataset: {},
+  querySelectorAll: () => asideVariants
+};
+/* 只让显隐状态可读: 与外层结构无关 */
+const variantOf = (name) => asideVariants.find((v) => v.getAttribute('data-skeleton-aside-variant') === name);
+const asideShownKind = () => (asideSkeleton.hidden ? 'none' : asideSkeleton.dataset.asideKind || null);
 const documentStub = {
   getElementById: (id) => (id === 'page-skeleton' ? overlay : null),
+  querySelector: (selector) => (selector === '[data-skeleton-aside]' ? asideSkeleton : null),
   documentElement: { classList: makeClassList(), dataset: {} },
   body: { dataset: {} }
 };
@@ -116,6 +131,7 @@ const factory = new Function(
     scheduleSkeleton,
     showSkeleton,
     hideSkeleton,
+    asideKindForSession,
     startContentEnter,
     cancelContentEnter,
     animConfig,
@@ -162,7 +178,7 @@ const snapshot = () => ({
 
 /* 场景 1: 慢跳转 (骨架已显示), 且 swup 的 visit:end 落在淡出结束之前 */
 reset();
-api.scheduleSkeleton('list');            // visit:start
+api.scheduleSkeleton('list', 'none');     // visit:start
 advance(150);                            // 130ms 后显示 + rAF(16ms) 加类
 check('骨架已显示', overlay.hidden === false && overlay.classList.contains('is-visible'), JSON.stringify(snapshot()));
 
@@ -181,7 +197,7 @@ check('★ 且不残留 is-visible', overlay.classList.contains('is-visible') ==
 
 /* 场景 1b: 显示后同一帧内就被收掉 (超快跳转), rAF 不许把类加回来 */
 reset();
-api.scheduleSkeleton('list');
+api.scheduleSkeleton('list', 'none');
 advance(135);                            // 130ms: hidden=false, rAF 已排队
 api.hideSkeleton();                      // 同一帧内 content:replace
 advance(30);                             // rAF 到期 —— 不允许加回 is-visible
@@ -191,7 +207,7 @@ check('★ 该路径最终仍是 hidden', overlay.hidden === true, JSON.stringif
 
 /* 场景 2: 极快跳转 (骨架没来得及显示) */
 reset();
-api.scheduleSkeleton('single');
+api.scheduleSkeleton('single', 'toc');
 advance(60);
 api.hideSkeleton();                      // content:replace
 advance(80);
@@ -201,9 +217,9 @@ check('★ 快速跳转后遮罩保持隐藏', overlay.hidden === true && !overl
 
 /* 场景 3: 连点两次 */
 reset();
-api.scheduleSkeleton('list');
+api.scheduleSkeleton('list', 'none');
 advance(150);
-api.scheduleSkeleton('single');          // 第二次 visit:start
+api.scheduleSkeleton('single', 'toc');    // 第二次 visit:start
 advance(150);
 check('第二次跳转仍能显示骨架', overlay.hidden === false && overlay.classList.contains('is-visible'), JSON.stringify(snapshot()));
 api.hideSkeleton();                      // content:replace
@@ -216,7 +232,7 @@ check('连点后入场类已清掉', documentStub.documentElement.classList.cont
 
 /* 场景 4: 显示中的遮罩仍然拦截点击 (CSS 里只有 :not(.is-visible) 才 pointer-events:none) */
 reset();
-api.scheduleSkeleton('list');
+api.scheduleSkeleton('list', 'none');
 advance(150);
 check('显示中的遮罩保持可拦截 (is-visible 存在)', overlay.classList.contains('is-visible') === true);
 
@@ -257,7 +273,7 @@ check('8. 关闭档之后也不会冒出来', documentStub.documentElement.class
 /* 场景 9: 关掉骨架屏 — 等待期间不显示任何占位 */
 setAnimConfig({ level: 'normal', skeleton: '0', vars: { '--anim-window': '620ms' } });
 reset();
-api.scheduleSkeleton('list');
+api.scheduleSkeleton('list', 'none');
 advance(600);
 check('9. ★ 关掉骨架屏后不显示遮罩', overlay.hidden === true && overlay.classList.contains('is-visible') === false, JSON.stringify(snapshot()));
 api.hideSkeleton();
@@ -267,12 +283,88 @@ check('9. 关掉骨架屏后遮罩始终隐藏', overlay.hidden === true, JSON.s
 /* 场景 10: 重新打开骨架屏后一切照旧 (配置是按次读取的) */
 setAnimConfig({ level: 'normal', skeleton: '1', vars: { '--anim-skeleton-fade': '120ms' } });
 reset();
-api.scheduleSkeleton('list');
+api.scheduleSkeleton('list', 'none');
 advance(150);
 check('10. 重新开启后骨架正常显示', overlay.hidden === false && overlay.classList.contains('is-visible'));
 api.hideSkeleton();
 advance(200);                            // 淡出 120ms (变量值) 已过
 check('10. 淡出时长跟随 --anim-skeleton-fade (120ms) 收干净', overlay.hidden === true, JSON.stringify(snapshot()));
+
+/* ---------- 场景 12: 骨架屏里的第二列 (侧边栏 / 文章目录) ----------
+   第二列常常与当前页无关 (列表页之间互切时侧边栏一个字都不变), 这时不该出现骨架。
+   判定要记住一个硬约束: swup 到 content:replace 才解析目标文档, 所以 visit:start
+   里 `visit.to.document` 是 undefined —— 早期版本读它, 结果每次都判成「会换」,
+   于是首页 → /me.html 这种列表页互切也会闪一块侧边栏骨架 (就是这个 bug)。 */
+setAnimConfig({ level: 'normal', skeleton: '1', vars: { '--anim-skeleton-fade': '220ms' } });
+
+/* 当前页约定为「列表页 + 侧边栏」(最常见的起点): 形态写在 #page-skeleton 的
+   data-aside-kind 上, currentAsideKind() 读它 */
+const setCurrentPageAside = (kind) => {
+  overlay.dataset.asideKind = kind;
+};
+
+/* 12a: 列表页 → 列表页: 一定不换 */
+setCurrentPageAside('sidebar');
+check('12a. ★ 目标是列表页 → 判定不画第二列 (首页 → /me.html 这类互切)', api.asideKindForSession('list') === 'none');
+reset();
+api.scheduleSkeleton('list', api.asideKindForSession('list'));
+advance(150);
+check('12a. 骨架显示但第二列不出现', overlay.hidden === false && asideSkeleton.hidden === true, JSON.stringify({ overlay: overlay.hidden, aside: asideShownKind() }));
+api.hideSkeleton();
+advance(300);
+
+/* 12b: 列表页 → 文章页: 第二列会换 */
+check('12b. ★ 列表页 → 文章页: 判定画目录骨架', api.asideKindForSession('single') === 'toc');
+reset();
+api.scheduleSkeleton('single', api.asideKindForSession('single'));
+advance(150);
+check('12b. 画的是目录形态', asideShownKind() === 'toc' && variantOf('toc').hidden === false && variantOf('sidebar').hidden === true, JSON.stringify({ kind: asideShownKind() }));
+api.hideSkeleton();
+advance(300);
+check('12b. 收起后第二列骨架也一起收回', asideSkeleton.hidden === true);
+
+/* 12c: 文章页 (有目录) → 文章页: 同样按目录画 (每篇目录都不同) */
+setCurrentPageAside('toc');
+check('12c. ★ 文章页 → 文章页: 判定画目录骨架', api.asideKindForSession('single') === 'toc');
+check('12c. ★ 文章页 (有目录) → 列表页: 画侧边栏骨架 (目录要让位)', api.asideKindForSession('list') === 'sidebar');
+
+/* 12d: 当前页没有第二列时, 目标页有什么都会是新出现的 */
+setCurrentPageAside('none');
+check('12d. ★ 没有第二列 → 列表页: 画侧边栏骨架', api.asideKindForSession('list') === 'sidebar');
+check('12d. ★ 没有第二列 → 文章页: 画目录骨架', api.asideKindForSession('single') === 'toc');
+setCurrentPageAside('sidebar');
+
+/* 12e: 连着两次跳转, 上一次的显隐状态不许带到下一次 */
+reset();
+api.scheduleSkeleton('single', 'toc');
+advance(150);
+check('12e. 第一次 (会换) 显示了第二列', asideShownKind() === 'toc');
+api.hideSkeleton();
+advance(300);
+/* 从「有目录的文章页」切到列表页: 判定要画侧边栏骨架, 这里验的是「下一次不画时必须收起」 */
+setCurrentPageAside('toc');
+api.scheduleSkeleton('list', api.asideKindForSession('list'));
+advance(150);
+check('12e. 目录 → 列表页: 画的是侧边栏形态', asideShownKind() === 'sidebar' && variantOf('sidebar').hidden === false, JSON.stringify({ kind: asideShownKind() }));
+api.hideSkeleton();
+advance(300);
+setCurrentPageAside('sidebar');
+api.scheduleSkeleton('list', api.asideKindForSession('list'));
+advance(150);
+check('12e. ★ 紧接着「不换」的那次跳转里第二列必须收起来', overlay.hidden === false && asideSkeleton.hidden === true, JSON.stringify({ overlay: overlay.hidden, aside: asideShownKind() }));
+api.hideSkeleton();
+advance(300);
+
+/* 12f: 骨架屏关掉时, 第二列也不该留下 */
+setAnimConfig({ level: 'normal', skeleton: '0', vars: { '--anim-skeleton-fade': '220ms' } });
+reset();
+api.scheduleSkeleton('single', 'toc');
+advance(600);
+check('12f. ★ 关掉骨架屏后第二列骨架不会冒出来', overlay.hidden === true && asideSkeleton.hidden === true, JSON.stringify({ overlay: overlay.hidden, aside: asideShownKind() }));
+api.hideSkeleton();
+advance(400);
+check('12f. 关掉骨架屏后第二列始终隐藏', asideSkeleton.hidden === true);
+setAnimConfig({ level: 'normal', skeleton: '1', vars: { '--anim-skeleton-fade': '220ms' } });
 
 /* ---------- 场景 11: 链接预取开关 (主题设置 → <html data-preload> → 插件列表) ---------- */
 {

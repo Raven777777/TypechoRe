@@ -222,6 +222,59 @@ function themeInit(\Widget\Archive $archive): void
 {
     /** 主题的嵌套评论视觉层次最多支持 4 层, 避免深层嵌套挤压正文宽度 */
     \Widget\Options::alloc()->commentsMaxNestingLevels = 4;
+
+    /**
+     * 评论 Markdown 的兜底: 允许 Markdown 生成的标签通过过滤
+     *
+     * Typecho 默认把评论内容压成 `<p>` + `<br>` (`commentsHTMLTagAllowed` 默认为空),
+     * 所以 Markdown 渲染出来的 strong / a / pre / ul 会被全部剥掉 —— 用户看到的就是
+     * 「Markdown 没生效」。这里在 `contentEx` (内容过滤的最后一步) 上重做一次渲染:
+     * 关了 Markdown 就原样返回, 开了才允许那些标签通过。
+     *
+     * 之所以不直接改 `commentsHTMLTagAllowed`: 那是全站选项, 与主题开关无关,
+     * 而且它就是站长的设置, 主题不该偷偷覆盖。这里只影响本主题的输出。
+     *
+     * 注册时机没问题: functions.php 由 Widget\Archive::execute() 载入, 早于模板
+     * 渲染评论 (`listComments()` 在模板里才被调用)。
+     */
+    \Widget\Base\Comments::pluginHandle()->filter('contentEx', static function (?string $content, $comment): string {
+        $options = \Widget\Options::alloc();
+
+        if (empty($options->commentsMarkdown) || !($comment instanceof \Widget\Base\Comments)) {
+            return (string) $content;
+        }
+
+        /* 用评论原始文本重渲染: $content 已经是剥过一次标签的 HTML, 再转 Markdown 也救不回 */
+        $source = (string) ($comment->text ?: $content);
+
+        return themeStripCommentTags(\Utils\Markdown::convert($source));
+    });
+}
+
+/**
+ * 允许出现在评论里的 HTML 标签
+ *
+ * 与 `\Widget\Base\Comments::___content()` 用的 `<p><br>` 是同一套语法
+ * (`Common::stripTags` 的第二参数), 只是补齐了 Markdown 会生成的标签。
+ *
+ * @return string
+ */
+function themeCommentAllowedTags(): string
+{
+    return '<p> <br> <strong> <em> <del> <code> <pre> <blockquote>'
+        . ' <ul> <ol> <li> <h2> <h3> <h4> <h5> <h6>'
+        . ' <a href title rel> <hr>';
+}
+
+/**
+ * 过滤评论 HTML: 只保留白名单标签
+ *
+ * @param string $html
+ * @return string
+ */
+function themeStripCommentTags(string $html): string
+{
+    return \Typecho\Common::stripTags($html, themeCommentAllowedTags());
 }
 
 /* =============================================================================
@@ -543,11 +596,13 @@ function themeIcon(string $name, string $class = 'size-5'): string
         'clock'          => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
         'folder'         => '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
         'home'           => '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+        'link'           => '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
         'list'           => '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
         'menu'           => '<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',
         'message-circle' => '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
         'monitor'        => '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
         'moon'           => '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+        'quote'          => '<path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1a1 1 0 0 1 1 1v1a2 2 0 0 1-2 2h-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1a1 1 0 0 1 1 1v1a2 2 0 0 1-2 2H4a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/>',
         'rss'            => '<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
         'search'         => '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
         'sun'            => '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
@@ -1177,6 +1232,55 @@ function themeOptionsSaved(): bool
 function themePageWidthClass(): string
 {
     return 'full' === themeOption('layout', 'sidebar') ? 'max-w-4xl' : 'max-w-7xl';
+}
+
+/**
+ * 当前页面第二列 (侧边栏 / 文章目录) 的形态标记
+ *
+ * 输出到 <html data-aside-kind>, 供 app.js 判断「这次跳转会不会换掉第二列」——
+ * 骨架屏据此决定画不画那一列, 参见 app.js 的 asideWillChange()。
+ *
+ * 页面自己有目录时, 第二列就是目录 (layout=full 时不输出第二列);
+ * 其余情况是侧边栏。
+ *
+ * @param \Widget\Archive $archive
+ * @return string sidebar|toc|none
+ */
+function themeAsideKind(\Widget\Archive $archive): string
+{
+    if ('full' === themeOption('layout', 'sidebar')) {
+        return 'none';
+    }
+
+    if ($archive->is('single') && themeOptionBool('showToc')) {
+        $article = themeArticle($archive);
+
+        if (count($article['toc']) >= 2) {
+            return 'toc';
+        }
+    }
+
+    return themeSkeletonSidebar() ? 'sidebar' : 'none';
+}
+
+/**
+ * 侧边栏是否有内容可显示 (与 sidebar.php 的判定保持一致)
+ *
+ * @return bool
+ */
+function themeSkeletonSidebar(): bool
+{
+    if ('full' === themeOption('layout', 'sidebar')) {
+        return false;
+    }
+
+    foreach (['ShowRecentPosts', 'ShowRecentComments', 'ShowCategory', 'ShowArchive', 'ShowTagCloud', 'ShowOther'] as $block) {
+        if (themeHasBlock($block)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**

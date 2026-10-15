@@ -76,19 +76,19 @@ $this->need('header.php');
         <?php endif; ?>
     </article>
 
-    <nav class="post-nav mt-6 grid gap-4 sm:grid-cols-2" aria-label="<?php echo themeEsc(_t('上下篇导航')); ?>">
+    <nav class="post-nav mt-8 grid gap-4 sm:grid-cols-2 sm:gap-8" aria-label="<?php echo themeEsc(_t('上下篇导航')); ?>">
         <?php $prevPost = themeAdjacentPost($this, 'prev'); ?>
         <?php $nextPost = themeAdjacentPost($this, 'next'); ?>
         <?php if (null !== $prevPost): ?>
-            <a class="card card-hover group flex h-full flex-col gap-1.5 p-4" href="<?php echo themeEsc($prevPost['permalink']); ?>">
-                <span class="meta-text"><?php echo themeIcon('arrow-left', 'size-3.5'); ?><?php _e('上一篇'); ?></span>
-                <span class="text-sm leading-snug font-medium transition-colors group-hover:text-accent"><?php echo themeEsc($prevPost['title']); ?></span>
+            <a class="post-nav-link group" href="<?php echo themeEsc($prevPost['permalink']); ?>">
+                <span class="post-nav-label"><?php echo themeIcon('arrow-left', 'size-3.5'); ?><?php _e('上一篇'); ?></span>
+                <span class="post-nav-title"><?php echo themeEsc($prevPost['title']); ?></span>
             </a>
         <?php endif; ?>
         <?php if (null !== $nextPost): ?>
-            <a class="card card-hover group flex h-full flex-col gap-1.5 p-4 sm:items-end sm:text-right" href="<?php echo themeEsc($nextPost['permalink']); ?>">
-                <span class="meta-text"><?php _e('下一篇'); ?><?php echo themeIcon('arrow-right', 'size-3.5'); ?></span>
-                <span class="text-sm leading-snug font-medium transition-colors group-hover:text-accent"><?php echo themeEsc($nextPost['title']); ?></span>
+            <a class="post-nav-link post-nav-next group" href="<?php echo themeEsc($nextPost['permalink']); ?>">
+                <span class="post-nav-label"><?php _e('下一篇'); ?><?php echo themeIcon('arrow-right', 'size-3.5'); ?></span>
+                <span class="post-nav-title"><?php echo themeEsc($nextPost['title']); ?></span>
             </a>
         <?php endif; ?>
     </nav>

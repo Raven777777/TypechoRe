@@ -63,18 +63,16 @@ $footerText = themeOption('footerText');
  * 真实卡片的左边距/栅格完全对齐, 淡出时不会「跳一下」。
  * 形态 (列表页 / 文章页) 由 app.js 写在 data-kind 上, CSS 负责切换面板。
  * 主题设置里关掉骨架屏时整段标记都不输出 (app.js 读到 data-skeleton="0" 也不会去用它)。
+ *
+ * 第二列 (侧边栏 / 文章目录) 与形态面板平级, 两种骨架都先渲染好, 由 app.js 按
+ * 「这次跳转会不会换掉那一列」切换显隐 (见 syncSkeletonAside)。
+ * 本页第二列的形态写在 data-aside-kind 上, 供 app.js 读取。
  */
 $skeletonContainer = themeContainerClass();
-$skeletonSidebar = false;
-
-if ('full' !== themeOption('layout', 'sidebar')) {
-    foreach (['ShowRecentPosts', 'ShowRecentComments', 'ShowCategory', 'ShowArchive', 'ShowTagCloud', 'ShowOther'] as $skeletonBlock) {
-        $skeletonSidebar = $skeletonSidebar || themeHasBlock($skeletonBlock);
-    }
-}
+$skeletonAsideKind = themeAsideKind($this);
 ?>
 <?php if (themeSkeletonEnabled()): ?>
-<div id="page-skeleton" class="page-skeleton no-print" data-kind="list" role="status" aria-live="polite" hidden>
+<div id="page-skeleton" class="page-skeleton no-print" data-kind="list" data-aside-kind="<?php echo themeEsc($skeletonAsideKind); ?>" role="status" aria-live="polite" hidden>
     <div class="<?php echo themeEsc($skeletonContainer); ?>">
         <div class="min-w-0">
             <!-- 列表页形态: 与 post-card.php 同构 (左图 + 标题 / 摘要 / 元信息) -->
@@ -127,18 +125,42 @@ if ('full' !== themeOption('layout', 'sidebar')) {
             </div>
         </div>
 
-        <?php if ($skeletonSidebar): ?>
-            <aside class="mt-10 hidden min-w-0 space-y-6 lg:mt-0 lg:block" aria-hidden="true">
-                <?php for ($skeletonWidget = 0; $skeletonWidget < 2; $skeletonWidget++): ?>
-                    <div class="card space-y-3 p-5">
-                        <div class="skeleton-block h-4 w-24"></div>
-                        <div class="space-y-2">
-                            <div class="skeleton-block h-3.5 w-full"></div>
-                            <div class="skeleton-block h-3.5 w-10/12"></div>
-                            <div class="skeleton-block h-3.5 w-9/12"></div>
-                        </div>
+        <?php
+        /**
+         * 第二列骨架: 侧边栏 / 文章目录两种形态都在这里, 默认全隐藏。
+         * app.js 按本次跳转的目标形态切换: 给 <aside> 写 data-aside-kind, 同时只显示
+         * 对应的那个 [data-skeleton-aside-variant] (见 syncSkeletonAside)。
+         *
+         * 两种形态都渲染, 而不是只渲染当前页那一种: 目标是列表页 → 侧边栏, 目标是
+         * 文章页 → 目录 (文章页的目录数量要读完全文才知道, 骨架屏等不起)。
+         * 这一列在没切换时是空的、默认 hidden, 多出来的标记不影响首屏。
+         */
+        ?>
+        <?php if ('full' !== themeOption('layout', 'sidebar')): ?>
+            <aside class="mt-10 min-w-0 space-y-6 lg:mt-0" aria-hidden="true" data-skeleton-aside hidden>
+                <div data-skeleton-aside-variant="sidebar" hidden>
+                    <div class="space-y-6">
+                        <?php for ($skeletonWidget = 0; $skeletonWidget < 2; $skeletonWidget++): ?>
+                            <div class="card space-y-3 p-5">
+                                <div class="skeleton-block h-4 w-24"></div>
+                                <div class="space-y-2">
+                                    <div class="skeleton-block h-3.5 w-full"></div>
+                                    <div class="skeleton-block h-3.5 w-10/12"></div>
+                                    <div class="skeleton-block h-3.5 w-9/12"></div>
+                                </div>
+                            </div>
+                        <?php endfor; ?>
                     </div>
-                <?php endfor; ?>
+                </div>
+
+                <div data-skeleton-aside-variant="toc" hidden>
+                    <div class="card space-y-2 p-5">
+                        <div class="skeleton-block h-4 w-24"></div>
+                        <?php foreach ([86, 72, 92, 64, 80, 58, 76, 68] as $skeletonTocLine): ?>
+                            <div class="skeleton-block h-3.5" style="width: <?php echo (int) $skeletonTocLine; ?>%"></div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
             </aside>
         <?php endif; ?>
     </div>

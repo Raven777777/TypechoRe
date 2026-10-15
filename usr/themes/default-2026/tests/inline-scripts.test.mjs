@@ -31,6 +31,12 @@ if (start < 0 || end < 0 || end <= start) {
   throw new Error('无法从 app.js 中定位脚本重放代码段 (锚点注释被改动了?)');
 }
 const code = source.slice(start, end);
+/* 第二列的标记常量定义在这一段之前 (骨架屏与切页同步共用), 抽出来补在最前面 */
+const asideMarkers = /\n\/\*\* 第二列[\s\S]*?const ASIDE_SWAPPED_CLASS = [^\n]+\n/.exec(source);
+if (!asideMarkers) {
+  throw new Error('app.js 里找不到第二列标记常量 (ASIDE_SELECTOR / ASIDE_SWAPPED_CLASS)');
+}
+const scope = `${asideMarkers[0]}${code}`;
 console.log(`已从 app.js 抽取脚本重放逻辑: ${code.split('\n').length} 行\n`);
 
 /* 正文里手写 <script> / 自定义标签的最小复现 (结构同真实文章正文) */
@@ -49,7 +55,7 @@ const check = (label, ok, extra = '') => {
 };
 
 const newDom = () => new JSDOM(CURRENT, { runScripts: 'dangerously', pretendToBeVisual: true });
-const withApi = (doc) => new Function('document', `${code}\nreturn { deferContainerScripts, runDeferredScripts };`)(doc);
+const withApi = (doc) => new Function('document', `${scope}\nreturn { deferContainerScripts, runDeferredScripts };`)(doc);
 const expectedSpans = (incomingDoc) =>
   Array.from(incomingDoc.querySelectorAll('p-c')).reduce((n, el) => n + el.textContent.length, 0);
 
