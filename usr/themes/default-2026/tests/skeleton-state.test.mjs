@@ -83,10 +83,34 @@ const windowStub = {
   requestAnimationFrame: (cb) => fakeSetTimeout(cb, 16)
 };
 
+/* ---------- swup 插件的替身: 只记录自己是哪一个, 用来断言插件列表 ---------- */
+const madePlugins = [];
+const stubPlugin = (name) => class {
+  constructor(options) {
+    this.name = name;
+    this.options = options;
+    madePlugins.push(name);
+  }
+};
+const SwupStubs = {
+  head: stubPlugin('head'),
+  preload: stubPlugin('preload'),
+  progress: stubPlugin('progress'),
+  scroll: stubPlugin('scroll')
+};
+const stubHeaderOffset = () => 68;
+const stubReducedMotion = () => false;
+
 /* ---------- 用真实源码建一个可调用的作用域 ---------- */
 const factory = new Function(
   'window',
   'document',
+  'SwupHeadPlugin',
+  'SwupPreloadPlugin',
+  'SwupProgressPlugin',
+  'SwupScrollPlugin',
+  'headerOffset',
+  'prefersReducedMotion',
   `${code}
   return {
     scheduleSkeleton,
@@ -96,11 +120,22 @@ const factory = new Function(
     cancelContentEnter,
     animConfig,
     readTimeVar,
+    preloadEnabled,
+    buildSwupPlugins,
     resetAnim: () => { animCache = null; },
     state: () => ({ skeletonVisible, skeletonTimer, skeletonHideTimer })
   };`
 );
-const api = factory(windowStub, documentStub);
+const api = factory(
+  windowStub,
+  documentStub,
+  SwupStubs.head,
+  SwupStubs.preload,
+  SwupStubs.progress,
+  SwupStubs.scroll,
+  stubHeaderOffset,
+  stubReducedMotion
+);
 
 /** 模拟一次「页面加载」: 换掉 <html> 上的动效配置并清掉缓存 */
 function setAnimConfig({ level, skeleton, vars } = {}) {
@@ -238,6 +273,30 @@ check('10. 重新开启后骨架正常显示', overlay.hidden === false && overl
 api.hideSkeleton();
 advance(200);                            // 淡出 120ms (变量值) 已过
 check('10. 淡出时长跟随 --anim-skeleton-fade (120ms) 收干净', overlay.hidden === true, JSON.stringify(snapshot()));
+
+/* ---------- 场景 11: 链接预取开关 (主题设置 → <html data-preload> → 插件列表) ---------- */
+{
+  const names = () => api.buildSwupPlugins().map((plugin) => plugin.name);
+
+  /* 读不到属性 (老页面 / 脚本跑在 <html> 之前) 时默认开启, 与主题默认值一致 */
+  delete documentStub.documentElement.dataset.preload;
+  check('11. 读不到配置时预取默认开启', api.preloadEnabled() === true);
+  check('11. ★ 默认插件列表 = head → 预取 → 进度条 → 滚动', JSON.stringify(names()) === JSON.stringify(['head', 'preload', 'progress', 'scroll']), names().join(' → '));
+
+  documentStub.documentElement.dataset.preload = '1';
+  check('11. data-preload="1" 时开启', api.preloadEnabled() === true);
+  check('11. ★ 显式开启时仍然注册预取插件', names().includes('preload'));
+
+  documentStub.documentElement.dataset.preload = '0';
+  check('11. ★ data-preload="0" 时关闭', api.preloadEnabled() === false);
+  check('11. ★ 关闭后不再注册预取插件', JSON.stringify(names()) === JSON.stringify(['head', 'progress', 'scroll']), names().join(' → '));
+
+  /* 其它插件不受影响, 且预取插件的参数仍是悬停预载 */
+  documentStub.documentElement.dataset.preload = '1';
+  const preload = api.buildSwupPlugins().find((plugin) => 'preload' === plugin.name);
+  check('11. 预取插件仍配置为悬停预载', preload.options.preloadHoveredLinks === true && preload.options.throttle === 4, JSON.stringify(preload.options));
+  delete documentStub.documentElement.dataset.preload;
+}
 
 console.log(`\n${failures === 0 ? '全部通过' : failures + ' 项失败'}`);
 process.exit(failures === 0 ? 0 : 1);

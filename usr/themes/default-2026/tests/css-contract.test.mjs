@@ -18,11 +18,15 @@
  *     设置项永远不会生效, 只会静静用兜底值)。
  *  6. 未显示的骨架层必须 pointer-events: none (那层是覆盖内容区的固定层,
  *     停在透明状态会让整片内容点不动)。
+ *  7. 设置项接线: 每个开关都要在 functions.php 注册、在 header.php 输出成 <html>
+ *     上的 data-*, 并被 app.js 真正读取 —— 少任何一环设置项就会静默失效。
  */
 import { readFileSync } from 'node:fs';
 
 const cssSource = readFileSync(process.env.CSS_MAIN || new URL('../src/css/main.css', import.meta.url), 'utf8');
 const php = readFileSync(new URL('../functions.php', import.meta.url), 'utf8');
+const header = readFileSync(new URL('../header.php', import.meta.url), 'utf8');
+const appJs = readFileSync(new URL('../src/js/app.js', import.meta.url), 'utf8');
 
 let failures = 0;
 const check = (label, ok, extra = '') => {
@@ -131,6 +135,69 @@ for (const state of ['is-animating', 'is-rendering']) {
   const rule = rules.find((r) => r.selector.includes('.page-skeleton') && r.selector.includes(':not(.is-visible)'));
 
   check('★ 未显示的骨架层 pointer-events: none', !!rule && rule.body.includes('pointer-events: none'), rule ? rule.selector : '未找到');
+}
+
+/* ---------- 7. 设置项接线: functions.php → header.php → app.js ---------- */
+
+/** 取出某个顶层函数的函数体 (从 function 名 到下一个顶格 }) */
+function functionBody(source, name) {
+  const start = source.indexOf(`function ${name}(`);
+
+  if (start < 0) {
+    return '';
+  }
+
+  const end = source.indexOf('\n}', start);
+
+  return end < 0 ? source.slice(start) : source.slice(start, end);
+}
+
+/** 断言一个开关的完整接线 */
+function checkSwitch({ option, reader, attribute, usesInApp, appPurpose }) {
+  check(`${option}: functions.php 注册了设置项`, new RegExp(`'${option}'`).test(php));
+  check(`${option}: functions.php 提供 ${reader}()`, php.includes(`function ${reader}(`));
+  check(
+    `${option}: header.php 用它输出 ${attribute}`,
+    header.includes(`${reader}()`) && header.includes(`${attribute}=`),
+    attribute
+  );
+  check(
+    `${option}: app.js 真正读取了它`,
+    appJs.includes(`dataset.${attribute.replace('data-', '')}`),
+    appJs.includes(`dataset.${attribute.replace('data-', '')}`) ? '' : `未找到 dataset.${attribute.replace('data-', '')}`
+  );
+  check(`${option}: ${appPurpose}`, appJs.includes(usesInApp), usesInApp);
+}
+
+checkSwitch({
+  option: 'preloadLinks',
+  reader: 'themePreloadLinks',
+  attribute: 'data-preload',
+  usesInApp: 'if (preloadEnabled())',
+  appPurpose: '预取插件被 preloadEnabled() 条件包裹'
+});
+checkSwitch({
+  option: 'showSkeleton',
+  reader: 'themeSkeletonEnabled',
+  attribute: 'data-skeleton',
+  usesInApp: "'0' !== root.dataset.skeleton",
+  appPurpose: 'app.js 按它决定要不要显示骨架'
+});
+checkSwitch({
+  option: 'animLevel',
+  reader: 'themeAnimLevel',
+  attribute: 'data-anim',
+  usesInApp: "root.dataset.anim",
+  appPurpose: 'app.js 按它判断「关闭」档'
+});
+
+/* 预取插件的注册必须在 buildSwupPlugins() 里, 且由开关把关 */
+{
+  const body = functionBody(appJs, 'buildSwupPlugins');
+
+  check('buildSwupPlugins() 存在', body.length > 0);
+  check('★ 预取插件在 buildSwupPlugins() 内按开关注册', body.includes('if (preloadEnabled())') && body.includes('new SwupPreloadPlugin'));
+  check('插件顺序仍是 head → 预取 → 进度条 → 滚动', body.indexOf('SwupHeadPlugin') < body.indexOf('SwupPreloadPlugin') && body.indexOf('SwupPreloadPlugin') < body.indexOf('SwupProgressPlugin'));
 }
 
 console.log(`\n${failures === 0 ? '全部通过' : failures + ' 项失败'}`);

@@ -183,6 +183,16 @@ function themeConfig(\Typecho\Widget\Helper\Form $form): void
     );
     $form->addInput($sidebarBlock->multiMode());
 
+    /* ------------------------------------------------------------ 性能 */
+    $preloadLinks = new \Typecho\Widget\Helper\Form\Element\Radio(
+        'preloadLinks',
+        ['1' => _t('开启'), '0' => _t('关闭')],
+        '1',
+        _t('链接预取'),
+        _t('鼠标悬停在文章卡片、导航等链接上时, 后台提前把目标页面取回来, 点击后几乎瞬间打开; 关闭可节省流量与服务器请求, 但首次点击会变慢')
+    );
+    $form->addInput($preloadLinks);
+
     /* ---------------------------------------------------------------- 页脚 */
     $footerText = new \Typecho\Widget\Helper\Form\Element\Textarea(
         'footerText',
@@ -446,6 +456,16 @@ function themeAnimPreset(string $level): array
 function themeSkeletonEnabled(): bool
 {
     return themeOptionBool('showSkeleton', true);
+}
+
+/**
+ * 链接预取是否启用 (悬停即后台取回目标页面)
+ *
+ * @return bool
+ */
+function themePreloadLinks(): bool
+{
+    return themeOptionBool('preloadLinks', true);
 }
 
 /**

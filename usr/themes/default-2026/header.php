@@ -17,9 +17,12 @@ $themeFont = 'serif' === themeOption('fontStyle', 'sans') ? 'font-serif' : 'font
 $themeContainer = themeContainerClass();
 /* 动效参数交给 CSS 变量: main.css 与 app.js 读同一份, 不会各自跑偏 */
 $themeAnimLevel = themeAnimLevel();
+/* 几个开关直接写成 <html> 上的 data-*: app.js 读它们决定注册哪些插件 / 播不播动画 */
+$themeSkeleton = themeSkeletonEnabled();
+$themePreload = themePreloadLinks();
 ?>
 <!DOCTYPE html>
-<html lang="<?php echo themeEsc(str_replace('_', '-', (string) $this->options->lang)); ?>" class="<?php echo themeEsc($themeFont); ?><?php echo 'dark' === $themeScheme ? ' dark' : ''; ?>"<?php if ('auto' !== $themeScheme): ?> data-theme-mode="<?php echo themeEsc($themeScheme); ?>"<?php endif; ?> data-default-theme-mode="<?php echo themeEsc($themeScheme); ?>" data-anim="<?php echo themeEsc($themeAnimLevel); ?>" data-skeleton="<?php echo themeSkeletonEnabled() ? '1' : '0'; ?>" style="--theme-accent: <?php echo themeEsc(themeAccent()); ?>; <?php echo themeEsc(themeAnimStyle()); ?>">
+<html lang="<?php echo themeEsc(str_replace('_', '-', (string) $this->options->lang)); ?>" class="<?php echo themeEsc($themeFont); ?><?php echo 'dark' === $themeScheme ? ' dark' : ''; ?>"<?php if ('auto' !== $themeScheme): ?> data-theme-mode="<?php echo themeEsc($themeScheme); ?>"<?php endif; ?> data-default-theme-mode="<?php echo themeEsc($themeScheme); ?>" data-anim="<?php echo themeEsc($themeAnimLevel); ?>" data-skeleton="<?php echo $themeSkeleton ? '1' : '0'; ?>" data-preload="<?php echo $themePreload ? '1' : '0'; ?>" style="--theme-accent: <?php echo themeEsc(themeAccent()); ?>; <?php echo themeEsc(themeAnimStyle()); ?>">
 <head>
     <meta charset="<?php $this->options->charset(); ?>">
     <meta name="viewport" content="width=device-width, initial-scale=1">

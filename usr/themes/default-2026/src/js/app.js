@@ -547,6 +547,48 @@ function animSettings() {
 }
 
 /**
+ * 主题设置: 链接预取是否开启
+ *
+ * header.php 把它写成 <html data-preload="1|0">。关掉后不注册预取插件 ——
+ * 悬停不再后台取页面, 命中缓存的跳转变少, 骨架屏那 130ms 延迟正好派上用场。
+ *
+ * @returns {boolean}
+ */
+function preloadEnabled() {
+  const root = document.documentElement;
+
+  return !root.dataset || '0' !== root.dataset.preload;
+}
+
+/**
+ * 组装 swup 插件, 顺序: head → [预取] → 进度条 → 滚动
+ *
+ * 预取插件按主题设置接线: 关掉后完全不注册, 悬停不再后台取页面。
+ * 单独抽成函数是为了让「设置开关 → 插件列表」这条线能被测试直接调用。
+ *
+ * @returns {Array<object>}
+ */
+function buildSwupPlugins() {
+  const plugins = [new SwupHeadPlugin({ persistAssets: true, awaitAssets: true })];
+
+  if (preloadEnabled()) {
+    plugins.push(new SwupPreloadPlugin({ preloadHoveredLinks: true, preloadVisibleLinks: false, throttle: 4 }));
+  }
+
+  plugins.push(
+    new SwupProgressPlugin({ className: 'swup-progress-bar', delay: 150, transition: 260, finishAnimation: true }),
+    new SwupScrollPlugin({
+      offset: () => headerOffset(),
+      animateScroll: prefersReducedMotion()
+        ? false
+        : { betweenPages: true, samePageWithHash: true, samePage: true }
+    })
+  );
+
+  return plugins;
+}
+
+/**
  * 猜目标页面该用哪种骨架形态。
  *
  * 点文章卡片 → 目标是文章页; 其余 (导航 / 分页 / 分类 / 侧栏) 按列表页处理。
@@ -847,17 +889,7 @@ function boot() {
     animateHistoryBrowsing: false,
     linkSelector: 'a[href]',
     ignoreVisit: (url, { el } = {}) => shouldIgnoreVisit(url, el),
-    plugins: [
-      new SwupHeadPlugin({ persistAssets: true, awaitAssets: true }),
-      new SwupPreloadPlugin({ preloadHoveredLinks: true, preloadVisibleLinks: false, throttle: 4 }),
-      new SwupProgressPlugin({ className: 'swup-progress-bar', delay: 150, transition: 260, finishAnimation: true }),
-      new SwupScrollPlugin({
-        offset: () => headerOffset(),
-        animateScroll: prefersReducedMotion()
-          ? false
-          : { betweenPages: true, samePageWithHash: true, samePage: true }
-      })
-    ]
+    plugins: buildSwupPlugins()
   });
 
   /* 供模板内联脚本或 Alpine 组件 (x-on:swup:page:view.document) 使用 */
