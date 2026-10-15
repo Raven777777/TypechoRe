@@ -55,11 +55,96 @@ $footerText = themeOption('footerText');
     </button>
 </div>
 
-<!-- 无刷新切页时的加载指示 (由 dist/app.js 控制显隐, 无 JS 时始终隐藏) -->
-<div id="page-loading" class="page-loading no-print" role="status" aria-live="polite" hidden>
-    <span class="page-loading-spinner" aria-hidden="true"></span>
+<?php
+/**
+ * 无刷新切页时的骨架屏 (由 dist/app.js 控制显隐与形态, 无 JS 时始终隐藏)
+ *
+ * 容器类与真实页面一致 (#page-wrap 用的 themeContainerClass), 这样骨架卡片与
+ * 真实卡片的左边距/栅格完全对齐, 淡出时不会「跳一下」。
+ * 形态 (列表页 / 文章页) 由 app.js 写在 data-kind 上, CSS 负责切换面板。
+ * 主题设置里关掉骨架屏时整段标记都不输出 (app.js 读到 data-skeleton="0" 也不会去用它)。
+ */
+$skeletonContainer = themeContainerClass();
+$skeletonSidebar = false;
+
+if ('full' !== themeOption('layout', 'sidebar')) {
+    foreach (['ShowRecentPosts', 'ShowRecentComments', 'ShowCategory', 'ShowArchive', 'ShowTagCloud', 'ShowOther'] as $skeletonBlock) {
+        $skeletonSidebar = $skeletonSidebar || themeHasBlock($skeletonBlock);
+    }
+}
+?>
+<?php if (themeSkeletonEnabled()): ?>
+<div id="page-skeleton" class="page-skeleton no-print" data-kind="list" role="status" aria-live="polite" hidden>
+    <div class="<?php echo themeEsc($skeletonContainer); ?>">
+        <div class="min-w-0">
+            <!-- 列表页形态: 与 post-card.php 同构 (左图 + 标题 / 摘要 / 元信息) -->
+            <div class="page-skeleton-panel" data-skeleton-panel="list">
+                <div class="space-y-6">
+                    <?php for ($skeletonCard = 0; $skeletonCard < 3; $skeletonCard++): ?>
+                        <div class="card flex flex-col overflow-hidden sm:flex-row" aria-hidden="true">
+                            <div class="shrink-0 sm:w-56">
+                                <div class="skeleton-block h-44 w-full rounded-none sm:h-full sm:min-h-32"></div>
+                            </div>
+                            <div class="flex min-w-0 flex-1 flex-col gap-3 p-5">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <div class="skeleton-block h-6 w-16 rounded-full"></div>
+                                    <div class="skeleton-block h-3.5 w-24"></div>
+                                </div>
+                                <div class="skeleton-block h-5 w-3/4"></div>
+                                <div class="space-y-2">
+                                    <div class="skeleton-block h-3.5 w-full"></div>
+                                    <div class="skeleton-block h-3.5 w-11/12"></div>
+                                    <div class="skeleton-block h-3.5 w-2/3"></div>
+                                </div>
+                                <div class="mt-auto flex flex-wrap items-center gap-4 pt-1">
+                                    <div class="skeleton-block h-3.5 w-20"></div>
+                                    <div class="skeleton-block h-3.5 w-16"></div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endfor; ?>
+                </div>
+            </div>
+
+            <!-- 文章 / 独立页面形态: 与 post.php 的卡片头 + 正文段落同构 -->
+            <div class="page-skeleton-panel" data-skeleton-panel="single">
+                <div class="card overflow-hidden" aria-hidden="true">
+                    <div class="space-y-4 border-b border-zinc-200/80 p-6 sm:p-8 dark:border-zinc-800/80">
+                        <div class="skeleton-block h-6 w-20 rounded-full"></div>
+                        <div class="skeleton-block h-8 w-4/5"></div>
+                        <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+                            <div class="skeleton-block h-4 w-20"></div>
+                            <div class="skeleton-block h-4 w-28"></div>
+                            <div class="skeleton-block h-4 w-16"></div>
+                        </div>
+                    </div>
+                    <div class="space-y-3 p-6 sm:p-8">
+                        <?php foreach ([100, 96, 92, 100, 88, 74, 100, 94, 62] as $skeletonLine): ?>
+                            <div class="skeleton-block h-4" style="width: <?php echo (int) $skeletonLine; ?>%"></div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <?php if ($skeletonSidebar): ?>
+            <aside class="mt-10 hidden min-w-0 space-y-6 lg:mt-0 lg:block" aria-hidden="true">
+                <?php for ($skeletonWidget = 0; $skeletonWidget < 2; $skeletonWidget++): ?>
+                    <div class="card space-y-3 p-5">
+                        <div class="skeleton-block h-4 w-24"></div>
+                        <div class="space-y-2">
+                            <div class="skeleton-block h-3.5 w-full"></div>
+                            <div class="skeleton-block h-3.5 w-10/12"></div>
+                            <div class="skeleton-block h-3.5 w-9/12"></div>
+                        </div>
+                    </div>
+                <?php endfor; ?>
+            </aside>
+        <?php endif; ?>
+    </div>
     <span class="sr-only"><?php _e('正在加载…'); ?></span>
 </div>
+<?php endif; ?>
 
 <?php $this->footer(); ?>
 <script type="module" src="<?php echo themeAsset('dist/app.js'); ?>"></script>

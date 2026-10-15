@@ -25,7 +25,8 @@ if (!$hasBlock) {
     return;
 }
 ?>
-<aside id="sidebar" class="mt-10 min-w-0 space-y-6 lg:mt-0">
+<!-- .page-aside 见 toc.php: 切页时 app.js 会整列同步这一块 (侧边栏 / 文章目录互斥) -->
+<aside id="sidebar" class="page-aside mt-10 min-w-0 space-y-6 lg:mt-0" data-aside="sidebar">
     <?php if (themeHasBlock('ShowRecentPosts')): ?>
         <?php $recent = \Widget\Contents\Post\Recent::alloc(); ?>
         <?php if ($recent->have()): ?>

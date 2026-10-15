@@ -46,6 +46,17 @@
 @layer base {
   :root {
     color-scheme: light;
+
+    /* 动效参数 (标准档)。header.php 会按主题设置把它们内联写在 <html> 上,
+       内联样式优先级更高, 所以这里的值只是「没有设置时」的兜底;
+       app.js 也读同一批变量来决定自己的定时器。 */
+    --anim-enter-duration: 0.34s;
+    --anim-enter-distance: 12px;
+    --anim-exit-distance: -4px;
+    --anim-stagger: 35ms;
+    --anim-fade-duration: 0.18s;
+    --anim-skeleton-fade: 0.22s;
+    --anim-window: 620ms;
   }
 
   .dark {
@@ -244,105 +255,209 @@
     background-color: var(--color-accent);
   }
 
-  /* ---------- 切页加载指示 (由 app.js 控制显隐) ----------
-     内容等待期间用一层淡淡的遮罩 + 转圈提示过渡, 避免新页面「突兀」地出现。
-     只有停留超过约 130ms 的跳转才会显示, 命中预取的快速跳转不会闪烁。 */
-  .page-loading {
-    position: fixed;
-    inset: 0;
-    z-index: 70;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: color-mix(in oklab, var(--color-white) 40%, transparent);
-    opacity: 0;
-    transition: opacity 0.2s var(--ease-out-quint);
-  }
+  /* ---------- 切页骨架屏 (由 app.js 控制显隐与形态) ----------
+     等待期间用与真实布局同构的骨架接管内容区, 而不是一个转圈符号:
+     骨架自己轻轻上浮淡入, 数据到达后淡出, 新内容再错峰上浮,
+     于是「大片内容」的切换是连续的, 不会先转圈再啪一下跳出来。
+     只有停留超过约 130ms 的跳转才会显示, 命中预取的快速跳转不会闪烁。
 
-  .dark .page-loading {
-    background-color: color-mix(in oklab, var(--color-zinc-950) 40%, transparent);
-  }
+     放在 @layer components 里, 是为了让模板上的 Tailwind 工具类
+     (rounded-none / rounded-full / h-44 等) 仍能覆盖 .skeleton-block 的默认值。 */
+  @layer components {
+    .page-skeleton {
+      position: fixed;
+      /* 顶部固定导航 (h-14 = 3.5rem) 之下: 导航保持可见, 骨架只接管内容区 */
+      inset: 3.5rem 0 0 0;
+      z-index: 70;
+      overflow: hidden;
+      /* 不透明: 让骨架直接接管画面, 避免与旧内容叠在一起糊成一片 */
+      background-color: var(--color-white);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity var(--anim-skeleton-fade) var(--ease-out-quint),
+        transform var(--anim-skeleton-fade) var(--ease-out-quint);
+    }
 
-  .page-loading[hidden] {
-    display: none;
-  }
+    .dark .page-skeleton {
+      background-color: var(--color-zinc-950);
+    }
 
-  .page-loading.is-visible {
-    opacity: 1;
-  }
+    .page-skeleton[hidden] {
+      display: none;
+    }
 
-  .page-loading-spinner {
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 9999px;
-    border: 2px solid var(--color-accent-ring);
-    border-top-color: var(--color-accent);
-    animation: page-loading-spin 0.7s linear infinite;
-  }
+    /* 兜底: 只要不是在「显示中」, 这层就不许吃点击。
+       它是覆盖内容区的固定层, 一旦停在透明度 0 的状态就会让整片内容点不动。 */
+    .page-skeleton:not(.is-visible) {
+      pointer-events: none;
+    }
 
-  @keyframes page-loading-spin {
-    to {
-      transform: rotate(1turn);
+    .page-skeleton.is-visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* 形态切换: app.js 把 list / single 写在 data-kind 上 */
+    .page-skeleton-panel {
+      display: none;
+    }
+
+    .page-skeleton[data-kind="list"] .page-skeleton-panel[data-skeleton-panel="list"],
+    .page-skeleton[data-kind="single"] .page-skeleton-panel[data-skeleton-panel="single"] {
+      display: block;
+    }
+
+    .skeleton-block {
+      position: relative;
+      overflow: hidden;
+      border-radius: 0.5rem;
+      background-color: var(--color-zinc-200);
+    }
+
+    .dark .skeleton-block {
+      background-color: var(--color-zinc-800);
+    }
+
+    /* 微光扫过: 让骨架看起来在加载, 而不是一块静止的灰 */
+    .skeleton-block::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      transform: translateX(-100%);
+      background-image: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.6), transparent);
+      animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    }
+
+    .dark .skeleton-block::after {
+      background-image: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.07), transparent);
+    }
+
+    @keyframes skeleton-shimmer {
+      to {
+        transform: translateX(100%);
+      }
     }
   }
 
-  @media (min-width: 40rem) {
-    .page-loading-spinner {
-      width: 1.75rem;
-      height: 1.75rem;
-    }
-  }
+  /* ---------- 页面过渡 (Swup) ----------
+     旧内容: 淡出并轻微上移。
+     新内容: 容器替换后 app.js 给 <html> 加上 is-entering, 触发下面这套动画 ——
+       父层只做一次很短的淡入, 「上浮」交给 #main 里的卡片错峰完成,
+       所以列表页会看到卡片依次浮起, 而不是整块内容一起跳。
 
-  /* ---------- 页面过渡 (Swup) ---------- */
+     第二列 (侧边栏 / 文章目录) 走同一条时间轴, 但**只在它真的换了内容时**才动:
+     app.js 换掉那一列时会给 <html> 加 is-aside-swapped, 带这个条件的规则才生效 ——
+     列表页之间来回切 (侧边栏没变) 时它一动不动。 */
   html.is-changing .transition-fade {
-    transition: opacity 0.28s var(--ease-out-quint), transform 0.28s var(--ease-out-quint);
     opacity: 1;
     transform: none;
   }
 
   html.is-animating .transition-fade {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(var(--anim-exit-distance));
+    transition: opacity var(--anim-fade-duration) var(--ease-out-quint),
+      transform var(--anim-fade-duration) var(--ease-out-quint);
   }
 
+  /* 新内容插入后保持可见: 入场动画交给 html.is-entering, 不在这里先藏起来。
+     否则 swup 要到整个 visit 结束才清掉这个类, 骨架屏淡出后会先露出一段空白。 */
   html.is-rendering .transition-fade {
-    opacity: 0;
-    transform: translateY(10px);
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 
-  /* 原生 View Transitions 模式下改由浏览器负责动画 */
-  html.swup-native.is-changing #main {
-    view-transition-name: main-content;
+  /* 注意: 上面两条**故意**不包含 .page-aside。
+     第二列只做入场、不做退场 —— 退场阶段还没拿到目标文档, 无从判断这一列会不会
+     被换掉; 一旦给它加淡出, 「侧边栏没变」的跳转 (例如两篇都没有目录的文章之间
+     切换) 就会淡出后被 is-rendering 瞬间弹回, 闪一下。骨架屏开着时那层不透明
+     遮罩正好盖住这个闪烁, 关掉骨架屏就露出来了。 */
+
+  html.is-entering .transition-fade {
+    /* 很短: 只为没有卡片的页面 (404 / 空状态) 兜底, 上浮由卡片自己负责 */
+    animation: content-fade var(--anim-fade-duration) var(--ease-out-quint) both;
   }
 
-  ::view-transition-old(main-content) {
-    animation: 0.24s var(--ease-out-quint) both vt-fade-out;
+  /* 第二列换内容时跟着浮起来, 比卡片晚一档 (像跟在正文后面的一个整体) */
+  html.is-entering.is-aside-swapped .page-aside {
+    animation: aside-rise var(--anim-enter-duration) var(--ease-out-quint) both;
+    animation-delay: var(--anim-stagger);
   }
 
-  ::view-transition-new(main-content) {
-    animation: 0.32s var(--ease-out-quint) both vt-fade-in;
+  html.is-entering #main article.card {
+    animation: card-rise var(--anim-enter-duration) var(--ease-out-quint) both;
   }
 
-  @keyframes vt-fade-out {
+  /* 卡片错峰 (每张 +1 档, 第 6 张起一起进场); 步长由 --anim-stagger 决定 */
+  html.is-entering #main article.card:nth-of-type(1) {
+    animation-delay: 0ms;
+  }
+
+  html.is-entering #main article.card:nth-of-type(2) {
+    animation-delay: calc(var(--anim-stagger) * 1);
+  }
+
+  html.is-entering #main article.card:nth-of-type(3) {
+    animation-delay: calc(var(--anim-stagger) * 2);
+  }
+
+  html.is-entering #main article.card:nth-of-type(4) {
+    animation-delay: calc(var(--anim-stagger) * 3);
+  }
+
+  html.is-entering #main article.card:nth-of-type(5) {
+    animation-delay: calc(var(--anim-stagger) * 4);
+  }
+
+  html.is-entering #main article.card:nth-of-type(n + 6) {
+    animation-delay: calc(var(--anim-stagger) * 5);
+  }
+
+  @keyframes content-fade {
     from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes card-rise {
+    from {
+      opacity: 0;
+      transform: translateY(var(--anim-enter-distance));
+    }
+    to {
       opacity: 1;
       transform: none;
     }
-    to {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
   }
 
-  @keyframes vt-fade-in {
+  /* 第二列 (侧边栏 / 文章目录) 的入场: 与卡片同一套位移与时长 */
+  @keyframes aside-rise {
     from {
       opacity: 0;
-      transform: translateY(8px);
+      transform: translateY(var(--anim-enter-distance));
     }
     to {
       opacity: 1;
       transform: none;
     }
+  }
+
+  /* ---------- 目录: 条目过多时折叠 (themeTocHtml 输出 <details>) ---------- */
+  .toc-toggle {
+    @apply cursor-pointer list-none text-xs font-medium text-zinc-500 transition-colors hover:text-accent dark:text-zinc-400;
+  }
+
+  .toc-toggle::-webkit-details-marker {
+    display: none;
+  }
+
+  .toc-more:not([open]) .toc-toggle-close,
+  .toc-more[open] .toc-toggle-open {
+    display: none;
   }
 
   /* ---------- 整张卡片可点击 ----------

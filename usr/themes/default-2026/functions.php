@@ -97,13 +97,36 @@ function themeConfig(\Typecho\Widget\Helper\Form $form): void
     );
     $form->addInput($layout);
 
+    $animLevel = new \Typecho\Widget\Helper\Form\Element\Radio(
+        'animLevel',
+        [
+            'off'    => _t('关闭'),
+            'light'  => _t('轻盈'),
+            'normal' => _t('标准'),
+            'strong' => _t('明显')
+        ],
+        'normal',
+        _t('动效强度'),
+        _t('控制切页时新内容的上浮距离、时长与卡片错峰幅度。「关闭」为直接替换内容 (骨架屏仍保留极短淡出, 避免硬切)')
+    );
+    $form->addInput($animLevel);
+
+    $showSkeleton = new \Typecho\Widget\Helper\Form\Element\Radio(
+        'showSkeleton',
+        ['1' => _t('显示'), '0' => _t('不显示')],
+        '1',
+        _t('切页骨架屏'),
+        _t('等待新内容时的占位骨架 (与动效强度相互独立), 关闭后等待期间不显示任何占位')
+    );
+    $form->addInput($showSkeleton);
+
     /* ---------------------------------------------------------------- 文章 */
     $showToc = new \Typecho\Widget\Helper\Form\Element\Radio(
         'showToc',
         ['1' => _t('显示'), '0' => _t('不显示')],
         '1',
         _t('文章目录'),
-        _t('自动为正文中的二至四级标题生成目录与锚点, 标题少于两个时不显示')
+        _t('自动为正文中的二至三级标题生成目录与锚点 (四级标题仍会生成锚点, 但不进目录), 可见条目少于两个时不显示')
     );
     $form->addInput($showToc);
 
@@ -341,6 +364,119 @@ function themeColorScheme(): string
 }
 
 /* =============================================================================
+ * 动效
+ *
+ * 一套数值同时被 CSS 与 JS 使用, 所以统一由这里输出成 <html> 上的 CSS 变量:
+ *   main.css 直接 var() 取用, app.js 读同一批变量换算自己的定时器
+ *   (否则改了 CSS 时长, JS 里那个「入场窗口」就不准了)。
+ * ========================================================================== */
+
+/**
+ * 动效强度选项的合法值
+ *
+ * @return string off|light|normal|strong
+ */
+function themeAnimLevel(): string
+{
+    $level = themeOption('animLevel', 'normal');
+
+    return in_array($level, ['off', 'light', 'normal', 'strong'], true) ? $level : 'normal';
+}
+
+/**
+ * 各档位的具体参数 (纯函数, 便于单独测试)
+ *
+ * enter* 管新内容的入场 (上浮 + 淡入), exitDistance 管旧内容淡出时上移多少
+ * (退出时长复用 fadeDuration); window 告诉 JS「入场动画要留多久」,
+ * 取值 = 卡片动画时长 + 最大错峰 + 余量。
+ *
+ * @param string $level off|light|normal|strong
+ * @return array<string, string>
+ */
+function themeAnimPreset(string $level): array
+{
+    $presets = [
+        'off' => [
+            'enterDuration' => '0s',
+            'enterDistance' => '0px',
+            'exitDistance'  => '0px',
+            'stagger'       => '0ms',
+            'fadeDuration'  => '0s',
+            /* 骨架屏淡出保留一点: 0 会让它硬切, 看起来像页面在闪 */
+            'skeletonFade'  => '0.16s',
+            'window'        => '0ms'
+        ],
+        'light' => [
+            'enterDuration' => '0.24s',
+            'enterDistance' => '8px',
+            'exitDistance'  => '-3px',
+            'stagger'       => '25ms',
+            'fadeDuration'  => '0.14s',
+            'skeletonFade'  => '0.16s',
+            'window'        => '430ms'
+        ],
+        'normal' => [
+            'enterDuration' => '0.34s',
+            'enterDistance' => '12px',
+            'exitDistance'  => '-4px',
+            'stagger'       => '35ms',
+            'fadeDuration'  => '0.18s',
+            'skeletonFade'  => '0.22s',
+            'window'        => '620ms'
+        ],
+        'strong' => [
+            'enterDuration' => '0.46s',
+            'enterDistance' => '20px',
+            'exitDistance'  => '-6px',
+            'stagger'       => '60ms',
+            'fadeDuration'  => '0.24s',
+            'skeletonFade'  => '0.3s',
+            'window'        => '830ms'
+        ]
+    ];
+
+    return $presets[$level] ?? $presets['normal'];
+}
+
+/**
+ * 骨架屏是否启用
+ *
+ * @return bool
+ */
+function themeSkeletonEnabled(): bool
+{
+    return themeOptionBool('showSkeleton', true);
+}
+
+/**
+ * 挂到 <html> style 上的动效 CSS 变量
+ *
+ * @return string 形如 "--anim-enter-duration: 0.34s; ..."
+ */
+function themeAnimStyle(): string
+{
+    $preset = themeAnimPreset(themeAnimLevel());
+
+    $map = [
+        'enterDuration' => '--anim-enter-duration',
+        'enterDistance' => '--anim-enter-distance',
+        'exitDistance'  => '--anim-exit-distance',
+        'stagger'       => '--anim-stagger',
+        'fadeDuration'  => '--anim-fade-duration',
+        'skeletonFade'  => '--anim-skeleton-fade',
+        'window'        => '--anim-window'
+    ];
+
+    $style = '';
+
+    foreach ($map as $key => $name) {
+        $style .= $name . ': ' . $preset[$key] . '; ';
+    }
+
+    return trim($style);
+}
+
+/* =============================================================================
  * 资源与图标
  * ========================================================================== */
 
@@ -543,7 +679,11 @@ function themeArticle(\Widget\Archive $archive): array
                 $attr .= ' id="' . $id . '"';
             }
 
-            $toc[] = ['id' => $id, 'text' => $text, 'level' => $level];
+            /* 只收录二至三级标题: 目录保持两层, 过深会刷屏。
+               四级标题仍然会走到这里并拿到锚点 id, 只是不进目录 —— 已有深链不受影响。 */
+            if ($level <= 3) {
+                $toc[] = ['id' => $id, 'text' => $text, 'level' => $level];
+            }
 
             return '<h' . $level . $attr . '>' . $match[3] . '</h' . $level . '>';
         },
@@ -566,31 +706,57 @@ function themeArticle(\Widget\Archive $archive): array
 }
 
 /**
+ * 渲染目录条目
+ *
+ * @param array<int, array{id: string, text: string, level: int}> $items
+ * @return string
+ */
+function themeTocItems(array $items): string
+{
+    $html = '';
+
+    foreach ($items as $item) {
+        $indent = 3 === $item['level'] ? ' pl-4' : '';
+
+        $html .= '<li><a class="toc-link' . $indent . '" href="#' . themeEsc($item['id']) . '">'
+            . themeEsc($item['text']) . '</a></li>';
+    }
+
+    return $html;
+}
+
+/**
  * 输出文章目录 HTML
  *
  * @param array<int, array{id: string, text: string, level: int}> $toc
+ * @param bool $collapsible 条目过多时是否折叠尾部 (桌面版用; 移动端本身已在 <details> 里)
  * @return string
  */
-function themeTocHtml(array $toc): string
+function themeTocHtml(array $toc, bool $collapsible = false): string
 {
     if ([] === $toc) {
         return '';
     }
 
-    $items = '';
+    /** 超过这个条数就折叠, 避免长文目录把侧栏撑爆 */
+    $limit = 12;
+    $fold = $collapsible && count($toc) > $limit;
 
-    foreach ($toc as $item) {
-        $indent = match ($item['level']) {
-            3 => ' pl-4',
-            4 => ' pl-8',
-            default => ''
-        };
+    $html = '<ol class="m-0 list-none p-0">'
+        . themeTocItems($fold ? array_slice($toc, 0, $limit) : $toc)
+        . '</ol>';
 
-        $items .= '<li><a class="toc-link' . $indent . '" href="#' . themeEsc($item['id']) . '">'
-            . themeEsc($item['text']) . '</a></li>';
+    if ($fold) {
+        /* 用原生 <details> 折叠, 无 JS 也能展开 */
+        $html .= '<details class="toc-more mt-1">'
+            . '<summary class="toc-toggle"><span class="toc-toggle-open">'
+            . sprintf(_t('展开全部 (%d 条)'), count($toc))
+            . '</span><span class="toc-toggle-close">' . _t('收起') . '</span></summary>'
+            . '<ol class="m-0 list-none p-0 mt-1">' . themeTocItems(array_slice($toc, $limit)) . '</ol>'
+            . '</details>';
     }
 
-    return '<ol class="m-0 list-none p-0">' . $items . '</ol>';
+    return $html;
 }
 
 /**

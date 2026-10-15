@@ -7,7 +7,7 @@
 TypechoRe 的默认主题: 现代、优雅、以性能为先。
 
 - **服务端渲染优先**: 所有内容都是 PHP 渲染的普通 HTML, 关掉 JavaScript 依然可以完整阅读、评论与翻页。
-- **渐进增强**: 有 JavaScript 时启用无刷新切页 (Swup, 优先走原生 View Transitions API)、切页加载指示、链接预取、目录高亮、代码复制、阅读进度。
+- **渐进增强**: 有 JavaScript 时启用无刷新切页 (Swup)、切页骨架屏与卡片上浮入场、链接预取、目录高亮、代码复制、阅读进度。
 - **零外部请求**: 不加载任何第三方 CDN、字体或图标文件; 图标以内联 SVG 输出, 字体使用系统字体栈。
 - **宽阅读栏**: 桌面端正文可读宽度约 930px (单栏布局约 830px), 内容图片不做圆角与描边。
 - **卡片整块可点**: 列表卡片与上下篇导航都是整张卡片可点击 (标题链接用伪元素铺满卡片)。
@@ -50,7 +50,32 @@ cd usr/themes/default-2026
 npm install          # 首次
 npm run build        # 生成 dist/style.css 与 dist/app.js
 npm run dev          # 监听源码变化自动构建
+npm test             # 骨架屏状态机 + 动效配置 (纯 Node, 无额外依赖)
+npm run test:dom     # 正文脚本重放 + 第二列同步测试 (需要 jsdom, 见下)
+npm run test:php     # 主题纯函数: 目录渲染/折叠 + 动效档位表 (需要 php)
 ```
+
+`npm test` 会把 `src/js/app.js` 里骨架屏与动效配置那段真实代码抽出来, 配一个虚拟时钟重放
+「点文章 → 返回主页」「连点两次」「超快跳转」等时间线, 断言跳转结束后遮罩一定回到
+`hidden`; 同时验证 `data-anim="off"` 不挂入场类、`data-skeleton="0"` 不显示骨架、
+以及 CSS 变量 (`0.83s` / `300ms` / 空值 / 垃圾值) 的解析与兜底。
+随后跑 `css-contract.test.mjs`: jsdom 的 `getComputedStyle` 不套用样式表规则 (实测过),
+所以动效的 CSS 约定改为直接读 `src/css/main.css` 断言 —— 第二列不得参与退场/插入态、
+第二列入场必须同时要求 `is-entering` 与 `is-aside-swapped`、正文进出场仍在、
+错峰与位移走变量、CSS 用到的 `--anim-*` 都由 `functions.php` 输出、未显示的骨架层
+`pointer-events: none`。
+
+`npm run test:dom` 用 jsdom 起一个真实 DOM, 跑两个文件: `inline-scripts.test.mjs`
+复现 Swup 的 `cloneNode(true)` 路径不执行正文脚本的行为, 再验证重放恰好执行一次;
+`aside-sync.test.mjs` 验证第二列在「侧边栏 ↔ 文章目录 ↔ 不存在」之间切换时能正确同步,
+并且「侧边栏 → 侧边栏」不会重建那一列 (重建会让侧边栏闪)。
+需要 `npm i -D jsdom` (主题刻意没把它写进依赖, 免得为一个可选测试引入一堆包),
+未安装时会打印 SKIP 并以 0 退出。
+
+`npm run test:php` 只加载 `functions.php` 定义, 不碰 Typecho 运行时与数据库, 校验目录
+渲染/折叠与动效档位表 (四档齐全、未知值回落、档位递增、入场窗口足够长)。需要 `php`
+在 PATH 上, 仓库根目录自带的那份可以这样用:
+`..\..\..\php-8.5.10\php.exe tests/theme-functions.php`。
 
 技术栈: [Tailwind CSS v4](https://tailwindcss.com) + [@tailwindcss/typography](https://github.com/tailwindlabs/tailwindcss-typography)
 + [Alpine.js](https://alpinejs.dev) + [Swup](https://swup.js.org) (head / preload / progress / scroll 插件)。
@@ -71,7 +96,9 @@ npm run dev          # 监听源码变化自动构建
 | 默认外观 | 跟随系统 / 始终浅色 / 始终深色 |
 | 正文字体 | 无衬线 (系统字体) / 衬线 |
 | 页面布局 | 内容 + 侧边栏 / 单栏 |
-| 文章目录 | 自动为二至四级标题生成锚点与目录, 标题少于两个时不显示 |
+| 动效强度 | 关闭 / 轻盈 / 标准 / 明显, 控制切页上浮的距离、时长与卡片错峰 |
+| 切页骨架屏 | 等待新内容时是否显示占位骨架 (与动效强度相互独立) |
+| 文章目录 | 自动为二至三级标题生成目录 (四级标题仍生成锚点), 可见条目少于两个时不显示 |
 | 预计阅读时间 | 中英文混排估算 |
 | 相关文章 | 按标签关联, 最多 3 篇 |
 | 面包屑导航 | 同时输出结构化数据 |
@@ -100,9 +127,76 @@ npm run dev          # 监听源码变化自动构建
 按钮下方的代码文字用一层与代码块同色的渐隐 (`pre.code-block::before`) 盖住。
 如果没有 JavaScript, 这两条规则都不生效, 代码块仍是原生可横向滚动的 `<pre>`。
 
-**切页加载指示**: `footer.php` 里的 `#page-loading` 由 `app.js` 控制显隐 ——
-跳转等待超过 130ms 才淡入, 内容替换后淡出, 命中预取或缓存的快速跳转不会闪一下。
-样式取自 `.page-loading`, 不需要可以直接删掉这段标记与对应的 CSS。
+**切页骨架屏与入场动画**: `footer.php` 里的 `#page-skeleton` 由 `app.js` 控制显隐与形态 ——
+跳转等待超过 130ms 才上浮淡入, 容器替换后立刻淡出; 同一时间 `app.js` 给 `<html>` 挂上
+`is-entering`, 让 `#main` 里的卡片错峰上浮淡入, 与骨架淡出交叠成一次连续的「浮起」。
+形态只有两种: `data-kind="list"` (列表卡片) 与 `data-kind="single"` (文章 / 独立页面),
+默认按「点击的是不是文章卡片」推断, 也可以在链接或卡片上写 `data-skeleton="list|single"` 指定。
+骨架标记与样式分别是 `#page-skeleton` / `.page-skeleton`、`.skeleton-block`,
+不需要可以直接删掉这段标记与对应的 CSS (删除后只是回到「内容直接出现」)。
+
+**动效参数怎么流动**: 所有数值只有一份来源 —— `functions.php` 的 `themeAnimPreset()`
+(四档预览: 关闭 / 轻盈 / 标准 / 明显), 由 `header.php` 写成 `<html>` 上的 CSS 变量
+(`--anim-enter-duration`、`--anim-enter-distance`、`--anim-exit-distance`、`--anim-stagger`、
+`--anim-fade-duration`、`--anim-skeleton-fade`、`--anim-window`), 同时把档位写成 `data-anim`、
+把骨架屏开关写成 `data-skeleton`。`main.css` 直接 `var()` 取用, `app.js` 读同一批变量换算
+自己的定时器 (所以改了 CSS 时长, JS 里那个「入场窗口」也会跟着变, 不会出现动画没播完就
+被收掉)。「关闭」档 = 位移与入场时长归零 + JS 不挂 `is-entering`; 骨架屏淡出仍保留 0.16s,
+避免硬切。`prefers-reduced-motion` 依旧全局断电 (见 `main.css` 的 base 层)。
+
+**第二列也走同一条时间轴**: 侧边栏 / 文章目录的**入场**用的就是上面那批变量
+(`aside-rise`, 位移 `--anim-enter-distance`、时长 `--anim-enter-duration`), 所以切换
+「侧边栏 ↔ 文章目录」时它和正文是一套动作, 不会一边动一边硬切。但**只有它真的换了内容
+才动**: `app.js` 换掉那一列时给 `<html>` 加 `is-aside-swapped`, CSS 里第二列的入场规则
+一律要求 `is-entering` 与它同时存在 —— 列表页之间来回切 (侧边栏内容没变) 时那一列
+一动不动 (也不会重建, 见下)。入场比卡片晚一档 (`--anim-stagger`), 像是跟在正文后面。
+
+> 第二列**刻意不做退场**: 退场阶段还没拿到目标文档, 无从判断这一列会不会被换掉。
+> 一旦给它加淡出, 「侧边栏没变」的跳转 (例如两篇都没有目录的文章之间切换) 就会淡出后
+> 被 `is-rendering` 瞬间弹回 —— 骨架屏开着时那层不透明遮罩正好盖住这个闪烁, 关掉骨架屏
+> 就露出来了。这条约定由 `tests/css-contract.test.mjs` 钉住。
+
+**文章目录的层级与折叠**: `themeArticle()` 只为 h2 / h3 生成目录条目, **h4 仍会注入锚点 id**
+(已有深链不受影响) 但不进目录, 所以目录只有两层、缩进只有一档。可见条目少于两个时
+整个目录不显示。桌面版 (`toc.php` 传 `collapsible: true`) 在条目超过 12 条时把尾部折进
+原生 `<details>`「展开全部 (N 条)」, 无 JS 也能展开; 移动端本身在 `<details>` 里, 不再折叠。
+
+**为什么不走原生 View Transitions**: Swup 的 `native` 模式只能把 `#main` 当作一整块快照交叉淡入,
+既无法逐张卡片错峰, 又会在 `is-rendering` 期间把新内容藏在 `opacity: 0` 上,
+与骨架屏淡出叠在一起会露出空白。因此 `app.js` 里固定 `native: false`,
+过渡时间轴由 `html.is-animating` (旧内容淡出上移) 与 `html.is-entering` (新内容上浮) 两个类控制。
+
+**正文里的内联脚本**: Swup 用 `incomingEl.cloneNode(true)` 插入新容器, 而从 `DOMParser` 文档
+克隆出来的 `<script>` 带着 "already started" 标记 (HTML 规范: script 的克隆步骤会置位它),
+浏览器永远不会执行 —— 也就是说写在文章 / 独立页面正文里的 `<script>` 只有按 F5 才生效。
+主题因此在替换前把新文档里 (`#main` / `#site-nav` 范围内) 的脚本**缴械** (type 改成
+`text/swup-deferred`), 替换后再按原属性、原顺序重新造一个 `<script>` 插回去, 每个脚本恰好
+执行一次。所以下面这种「正文里塞自定义标签 + 脚本」的写法切页后也会正常渲染:
+
+```html
+<p-c>会用脚本逐字上色的一句话</p-c>
+<script>/* 操作上面这些 <p-c> 的脚本 */</script>
+```
+
+- 需要保持「只在 F5 执行」的脚本, 在标签上写 `data-swup-skip`。
+- 只覆盖 Swup 容器 (`#main`、`#site-nav`) 与第二列 (`.page-aside`) 内的脚本;
+  `<head>` 里的脚本由 `@swup/head-plugin` 负责, 主题自己的增强逻辑统一走
+  `enhancePage()`, 不去重放它。
+
+**第二列 (侧边栏 / 文章目录)**: 文章页与独立页面在「有目录」时是**用目录整列替换掉侧边栏**
+(`post.php` / `page.php` 里的 `if ($hasToc) toc.php else sidebar.php`)。这一列是 `#main`
+的兄弟节点, 不在 Swup 容器里 —— 如果不管它, 从列表页进文章就看不到目录 (必须 F5),
+从文章回列表页又会留着上一页的目录。因此两个模板的 `<aside>` 都带同一个稳定类
+`page-aside`, `app.js` 的 `syncPageAside()` 在容器替换后整列同步 (目标页有就替换、
+没有就移除、当前没有就插到 `#main` 之后)。
+
+> 这里刻意**不**把 `.page-aside` 注册成 Swup 容器: 容器在目标文档里缺失会让 Swup
+> 判定 `Container mismatch` 并放弃接管导航, 而这一列在「单栏布局 / 侧边栏区块全关 /
+> 404」等情况下本来就可能不存在 (`sidebar.php` 会提前 return)。
+
+目录那版 `<aside>` 还带着 `lg:self-stretch`, 这是**目录能吸顶的前提**:
+`#page-wrap` 是 `lg:items-start` 的栅格, 不把这一列撑到行高, 里面的
+`lg:sticky` 就没有滚动行程, 目录会跟着正文滚走并被导航栏盖住。改样式时不要删掉它。
 
 **正文 HTML 处理**: 图片懒加载在 `themeArticle()` 中显式处理, 而不是通过
 `Plugin::factory('Widget\Base\Contents')->contentEx` 钩子 —— 因为主题的 `functions.php`

@@ -468,71 +468,365 @@ function headerOffset() {
 }
 
 /* -----------------------------------------------------------------------------
- * 切页加载态 (progressive enhancement)
+ * 切页骨架屏 + 内容上浮入场 (progressive enhancement)
  *
- * 无刷新切页时内容会在几十到几百毫秒后突然出现, 看起来像「突兀地刷新」。
- * 这里在等待期间显示一个居中的加载指示, 让新旧内容之间有个平滑的过渡。
- * 延迟 130ms 才显示: 命中预取 / 缓存的跳转根本不会出现加载态, 不会闪一下。
+ * 无刷新切页时内容会在几十到几百毫秒后出现, 直接替换会显得「突兀」。
+ * 这里做两件事:
+ *   1. 等待期间显示与真实布局同构的骨架屏 (shimmer), 代替过去的转圈符号;
+ *   2. 容器替换后就给 <html> 挂 is-entering, 让新卡片错峰上浮淡入 ——
+ *      和骨架淡出交叠在一起, 大片内容的切换就变成连续的一次「浮起」。
+ * 延迟 130ms 才显示骨架: 命中预取 / 缓存的跳转根本不会出现骨架, 不会闪一下。
  * -------------------------------------------------------------------------- */
 
-const LOADING_OVERLAY_DELAY = 130;
-const LOADING_OVERLAY_FADE = 240;
+const SKELETON_DELAY = 130;
+const SKELETON_FADE = 220;
+/* 与 CSS 里最长的卡片动画对齐 (175ms 错峰 + 340ms 动画 + 余量);
+   实际值由 <html> 上的 --anim-window 决定, 这里只是读不到变量时的兜底 */
+const CONTENT_ENTER_DURATION = 620;
 
-let loadingTimer = 0;
-let loadingHideTimer = 0;
-let loadingVisible = false;
+let skeletonTimer = 0;
+let skeletonHideTimer = 0;
+let skeletonVisible = false;
+let enterTimer = 0;
+/* 本次跳转是否要播放入场动画 (同页锚点跳转不播) */
+let enterNextContent = false;
+/* 动效配置缓存: 每页只在首次用到时读一次 */
+let animCache = null;
 
-function showLoadingOverlay() {
-  const overlay = document.getElementById('page-loading');
-  if (!overlay || loadingVisible) {
-    return;
+/**
+ * 把 CSS 变量里的时间值换算成毫秒 ("0.34s" / "340ms" 都支持)
+ *
+ * @param {CSSStyleDeclaration|null} styles
+ * @param {string} name
+ * @param {number} fallback
+ * @returns {number}
+ */
+function readTimeVar(styles, name, fallback) {
+  const raw = styles ? styles.getPropertyValue(name).trim() : '';
+
+  if (!raw) {
+    return fallback;
   }
 
-  loadingVisible = true;
-  overlay.hidden = false;
-  /* 等一帧再加类, 否则 hidden 刚取消时过渡不会触发 */
-  window.requestAnimationFrame(() => overlay.classList.add('is-visible'));
+  const value = Number.parseFloat(raw);
+
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return raw.endsWith('ms') ? value : value * 1000;
 }
 
-function hideLoadingOverlay() {
-  window.clearTimeout(loadingTimer);
-  window.clearTimeout(loadingHideTimer);
-  loadingTimer = 0;
-  loadingHideTimer = 0;
+/**
+ * 读取主题设置输出的动效配置
+ *
+ * header.php 会把档位写成 data-anim / data-skeleton, 把数值写成 CSS 变量,
+ * 所以 CSS 与 JS 用的是同一份真相 (改了 CSS 时长, 这里的窗口也会跟着变)。
+ *
+ * @returns {{level: string, skeleton: boolean, enterWindow: number, skeletonFade: number}}
+ */
+function animConfig() {
+  const root = document.documentElement;
+  const styles = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(root) : null;
 
-  const overlay = document.getElementById('page-loading');
+  return {
+    level: (root.dataset && root.dataset.anim) || 'normal',
+    skeleton: !root.dataset || '0' !== root.dataset.skeleton,
+    enterWindow: readTimeVar(styles, '--anim-window', CONTENT_ENTER_DURATION),
+    skeletonFade: readTimeVar(styles, '--anim-skeleton-fade', SKELETON_FADE)
+  };
+}
 
-  if (!loadingVisible || !overlay) {
-    loadingVisible = false;
+/** 动效配置 (每页只解析一次) */
+function animSettings() {
+  if (null === animCache) {
+    animCache = animConfig();
+  }
+
+  return animCache;
+}
+
+/**
+ * 猜目标页面该用哪种骨架形态。
+ *
+ * 点文章卡片 → 目标是文章页; 其余 (导航 / 分页 / 分类 / 侧栏) 按列表页处理。
+ * 需要精确控制时可以在链接或卡片上写 data-skeleton="list|single"。
+ * 这只是一层形态近似, 猜错也只影响等待那几百毫秒的观感。
+ *
+ * @param {Element|null|undefined} triggerEl 触发跳转的元素
+ * @returns {'list'|'single'}
+ */
+function skeletonKind(triggerEl) {
+  const hinted = triggerEl && triggerEl.closest('[data-skeleton]');
+
+  if (hinted) {
+    const kind = hinted.getAttribute('data-skeleton');
+
+    if ('list' === kind || 'single' === kind) {
+      return kind;
+    }
+  }
+
+  return triggerEl && triggerEl.closest('#main article.card') ? 'single' : 'list';
+}
+
+function showSkeleton(kind) {
+  const overlay = document.getElementById('page-skeleton');
+  if (!overlay || skeletonVisible) {
     return;
   }
 
-  loadingVisible = false;
+  overlay.dataset.kind = kind;
+  skeletonVisible = true;
+  overlay.hidden = false;
+  /* 等一帧再加类, 否则 hidden 刚取消时过渡不会触发。
+     这一帧里可能已经被 hideSkeleton 收掉了 (超快跳转), 所以要再确认一次,
+     否则会把 is-visible 加回来, 让遮罩在该消失的时候又亮一下。 */
+  window.requestAnimationFrame(() => {
+    if (skeletonVisible) {
+      overlay.classList.add('is-visible');
+    }
+  });
+}
+
+function hideSkeleton() {
+  /* 只取消「还没显示出来」的那个定时器。
+     进入淡出流程后, 那个 hidden 定时器必须留着 —— 如果在这里清掉,
+     遮罩会停在 hidden=false 的透明状态, 继续拦截整片内容区的点击
+     (swup 的 visit:end 会在淡出结束前就再调一次 hideSkeleton)。 */
+  window.clearTimeout(skeletonTimer);
+  skeletonTimer = 0;
+
+  const overlay = document.getElementById('page-skeleton');
+
+  if (!overlay) {
+    skeletonVisible = false;
+    return;
+  }
+
+  /* 已经收过了: 不要重复排队, 也不要动正在跑的淡出定时器 */
+  if (!skeletonVisible) {
+    return;
+  }
+
+  skeletonVisible = false;
   overlay.classList.remove('is-visible');
 
-  /* 等淡出动画结束再真正隐藏, 过渡时长与 CSS 保持一致 */
-  loadingHideTimer = window.setTimeout(() => {
-    loadingHideTimer = 0;
+  /* 等淡出动画结束再真正隐藏, 时长与 CSS 的 --anim-skeleton-fade 保持一致 */
+  window.clearTimeout(skeletonHideTimer);
+  skeletonHideTimer = window.setTimeout(() => {
+    skeletonHideTimer = 0;
 
-    if (!loadingVisible) {
+    if (!skeletonVisible) {
       overlay.hidden = true;
     }
-  }, LOADING_OVERLAY_FADE);
+  }, animSettings().skeletonFade);
 }
 
-function scheduleLoadingOverlay() {
-  hideLoadingOverlay();
-  loadingTimer = window.setTimeout(showLoadingOverlay, LOADING_OVERLAY_DELAY);
+function scheduleSkeleton(kind) {
+  hideSkeleton();
+
+  /* 主题设置里关掉骨架屏后, 等待期间不显示任何占位 */
+  if (!animSettings().skeleton) {
+    return;
+  }
+
+  skeletonTimer = window.setTimeout(() => showSkeleton(kind), SKELETON_DELAY);
 }
 
-/** 同一个页面里的锚点跳转不会重新加载内容, 不必显示加载态 */
+/** 新内容入场: 由 CSS 的 html.is-entering 规则提供动画 */
+function startContentEnter() {
+  cancelContentEnter();
+
+  const config = animSettings();
+
+  /* 「关闭」档: 不做入场动画, 内容直接替换 */
+  if ('off' === config.level || config.enterWindow <= 0) {
+    return;
+  }
+
+  document.documentElement.classList.add('is-entering');
+  enterTimer = window.setTimeout(cancelContentEnter, config.enterWindow);
+}
+
+/**
+ * 结束 (或取消) 入场动画。
+ *
+ * 必须在下次跳转开始前清掉: 动画的 fill-mode 是 both, 留着会盖住旧内容
+ * 淡出时的 opacity/transform 过渡。
+ */
+function cancelContentEnter() {
+  window.clearTimeout(enterTimer);
+  enterTimer = 0;
+  document.documentElement.classList.remove('is-entering', ASIDE_SWAPPED_CLASS);
+}
+
+/* -----------------------------------------------------------------------------
+ * 让正文里的内联脚本在切页后也能执行
+ *
+ * Swup 插入新容器用的是 incomingEl.cloneNode(true), 而从 DOMParser 文档克隆出来的
+ * <script> 带着 "already started" 标记 (HTML 规范: script 的克隆步骤会置位它),
+ * 浏览器永远不会执行 —— 所以写在文章 / 独立页面正文里的 <script> 只有按 F5
+ * 走解析器路径时才生效。
+ *
+ * 这里在替换前先把新文档里的脚本「缴械」(type 改成浏览器不认识的类型),
+ * 替换后再按原样造一个新的 script 插回去执行: 顺序、属性、内容都保持原样,
+ * 且每个脚本恰好执行一次 —— 不依赖 swup 以后会不会换插入方式。
+ *
+ * 需要保持「只在 F5 时执行」的脚本, 在标签上写 data-swup-skip 即可。
+ * -------------------------------------------------------------------------- */
+
+/** 缴械后临时使用的 type, 浏览器不会执行它 */
+const DEFERRED_SCRIPT_TYPE = 'text/swup-deferred';
+/** 标记缴械过的脚本, 同时记录它原本的 type */
+const DEFERRED_SCRIPT_ATTR = 'data-swup-script';
+/** 第二列 (侧边栏 / 文章目录) 的稳定标记 */
+const ASIDE_SELECTOR = '.page-aside';
+/** 本次跳转真的换了第二列时挂在 <html> 上, 用来决定要不要给它播入场动画 */
+const ASIDE_SWAPPED_CLASS = 'is-aside-swapped';
+
+/**
+ * 替换前: 把新文档里 (容器与第二列范围内) 的脚本缴械并标记
+ *
+ * @param {object} visit swup 的 visit 对象
+ */
+function deferContainerScripts(visit) {
+  const incoming = visit && visit.to && visit.to.document;
+  const containers = (visit && visit.containers) || [];
+
+  if (!incoming || !containers.length) {
+    return;
+  }
+
+  const roots = containers
+    .map((selector) => incoming.querySelector(selector))
+    .filter(Boolean);
+
+  /* 第二列不在 swup 的容器列表里 (见 syncPageAside), 但也可能带脚本 */
+  const aside = incoming.querySelector(ASIDE_SELECTOR);
+
+  if (aside) {
+    roots.push(aside);
+  }
+
+  roots.forEach((root) => {
+    root.querySelectorAll('script').forEach((script) => {
+      if (script.hasAttribute('data-swup-skip')) {
+        return;
+      }
+
+      script.setAttribute(DEFERRED_SCRIPT_ATTR, script.getAttribute('type') || '');
+      script.setAttribute('type', DEFERRED_SCRIPT_TYPE);
+    });
+  });
+}
+
+/** 替换后: 把缴械过的脚本按原样还原并执行 */
+function runDeferredScripts() {
+  document.querySelectorAll(`script[${DEFERRED_SCRIPT_ATTR}]`).forEach((placeholder) => {
+    const originalType = placeholder.getAttribute(DEFERRED_SCRIPT_ATTR);
+    const script = document.createElement('script');
+
+    Array.from(placeholder.attributes).forEach(({ name, value }) => {
+      if (name !== DEFERRED_SCRIPT_ATTR) {
+        script.setAttribute(name, value);
+      }
+    });
+
+    if (originalType) {
+      script.setAttribute('type', originalType);
+    } else {
+      script.removeAttribute('type');
+    }
+
+    /* 动态插入的脚本默认是 async, 会把外链脚本的执行顺序打乱;
+       作者显式写了 async 就尊重作者, 否则强制按插入顺序执行。 */
+    if (script.src && !script.hasAttribute('async')) {
+      script.async = false;
+    }
+
+    script.textContent = placeholder.textContent;
+    /* 插入到文档即执行; 顺带把标记节点换成真正的脚本节点 */
+    placeholder.replaceWith(script);
+  });
+}
+
+/**
+ * 同步第二列 (侧边栏 / 文章目录)。
+ *
+ * 这一列是 #main 的兄弟节点, 不在 swup 的容器列表里, 于是切页时整块不更新:
+ * 从列表页进文章看不到目录 (必须 F5), 从文章回列表页又留着上一页的目录。
+ * 这里按目标文档把整列换掉: 目标页有 → 替换 (当前没有就插到 #main 后面),
+ * 目标页没有 (404 等) → 移除。
+ *
+ * 不把它注册成 swup 容器是有意的: 容器在目标文档里缺失会让 swup 判定
+ * Container mismatch 并放弃接管导航, 而这一列在「单栏布局 / 侧边栏区块全关 /
+ * 404」等情况下本来就可能不存在。
+ *
+ * @param {object} visit swup 的 visit 对象
+ */
+function syncPageAside(visit) {
+  const incomingDoc = visit && visit.to && visit.to.document;
+  const current = document.querySelector(ASIDE_SELECTOR);
+  const incoming = incomingDoc ? incomingDoc.querySelector(ASIDE_SELECTOR) : null;
+
+  if (current && incoming) {
+    /* 侧边栏六个区块都是全站数据, 内容与当前页面无关 (实测首页与文章页的
+       侧边栏 HTML 逐字节相同), 所以同类型时不重建: 重建会整列重绘, 还会丢掉
+       hover / 焦点状态, 看起来就是侧边栏在闪, 也没必要为它播入场动画。
+       目录则必须每次替换 —— 不同文章的目录不同。 */
+    if ('sidebar' === current.dataset.aside && 'sidebar' === incoming.dataset.aside) {
+      return;
+    }
+
+    current.replaceWith(incoming.cloneNode(true));
+    markAsideSwapped();
+    return;
+  }
+
+  if (current) {
+    current.remove();
+    return;
+  }
+
+  /* 当前页没有这一列: 按模板结构插到 #main 之后 (目标文档里的位置也一样) */
+  if (incoming) {
+    const main = document.querySelector('#main');
+
+    if (main) {
+      main.after(incoming.cloneNode(true));
+      markAsideSwapped();
+    }
+  }
+}
+
+/**
+ * 标记「这次跳转真的换了第二列」
+ *
+ * CSS 里所有第二列的入场规则都要求 <html> 同时有 is-entering 与本标记,
+ * 于是「侧边栏没变」的跳转不会给那一列播任何动效。
+ */
+function markAsideSwapped() {
+  document.documentElement.classList.add(ASIDE_SWAPPED_CLASS);
+}
+
+/** 同一个页面里的锚点跳转不会真正换页, 不必显示骨架也不需要入场动画 */
 function isSamePageHashVisit(visit) {
   const to = visit?.to;
 
-  return Boolean(to)
-    && Boolean(to.hash)
-    && to.pathname === window.location.pathname
-    && to.search === window.location.search;
+  if (!to || !to.hash || !to.url) {
+    return false;
+  }
+
+  /* visit.to 只有 url / hash, 没有 pathname, 这里自己解析出来比对 */
+  try {
+    const target = new URL(to.url, window.location.href);
+
+    return target.pathname === window.location.pathname
+      && target.search === window.location.search;
+  } catch (error) {
+    return false;
+  }
 }
 
 function boot() {
@@ -546,7 +840,10 @@ function boot() {
 
   const swup = new Swup({
     containers: ['#main', '#site-nav'],
-    native: true,
+    /* 不用原生 View Transitions: 它只能整块快照交叉淡入, 没法逐张卡片错峰上浮,
+       而且 is-rendering 期间内容被隐藏, 会和骨架屏淡出叠出空白。这里改由
+       html.is-animating / html.is-entering 两个类精确控制时间轴。 */
+    native: false,
     animateHistoryBrowsing: false,
     linkSelector: 'a[href]',
     ignoreVisit: (url, { el } = {}) => shouldIgnoreVisit(url, el),
@@ -571,19 +868,51 @@ function boot() {
       details.open = false;
     });
 
-    if (!isSamePageHashVisit(visit)) {
-      scheduleLoadingOverlay();
+    /* 取消上一次还没走完的入场动画, 否则它的 fill 会盖住这次的淡出 */
+    cancelContentEnter();
+
+    /* 只在 visit:start 判断: 这时 window.location 还是旧地址 */
+    enterNextContent = !isSamePageHashVisit(visit);
+
+    if (enterNextContent) {
+      scheduleSkeleton(skeletonKind(visit.trigger && visit.trigger.el));
     }
   });
 
+  /* 替换前先把新文档里的脚本缴械 (swup 的 cloneNode 本来也不会执行它们) */
+  swup.hooks.before('content:replace', deferContainerScripts);
+
+  /* 容器换完就收骨架并开始上浮: 不等 page:view —— 滚动插件会先做一段平滑滚动,
+     等它结束会让骨架屏多停留几百毫秒。 */
+  swup.hooks.on('content:replace', (visit) => {
+    hideSkeleton();
+
+    if (enterNextContent) {
+      startContentEnter();
+      /* 第二列 (侧边栏 / 文章目录) 不在容器列表里, 这里整列同步。
+         必须排在 runDeferredScripts() 之前: 换进来的那一列如果带脚本,
+         要由重放逻辑负责执行。 */
+      syncPageAside(visit);
+    }
+
+    /* 正文里的内联脚本: 此时新节点已就位, 按原顺序重放一次。
+       放在 enhancePage() 之前, 与 F5 时「正文脚本先跑、主题增强后跑」一致。 */
+    runDeferredScripts();
+  });
+
   swup.hooks.on('page:view', () => {
-    hideLoadingOverlay();
     enhancePage();
   });
 
-  /* 跳转被取消 (例如用户又点了别的链接) 或失败时, 不要留下加载态 */
-  swup.hooks.on('visit:end', hideLoadingOverlay);
-  swup.hooks.on('visit:error', hideLoadingOverlay);
+  /* 跳转结束时收掉骨架屏; 请求失败 (swup 会退化成整页跳转) 时一并收干净。
+     注意 swup 4 没有 visit:error 这个钩子 (旧代码注册的它只会打印一条警告),
+     也不要用 visit:abort: 用户连点两次时 abort 晚于新 visit 的 start,
+     会把新跳转刚排上的骨架定时器清掉。 */
+  swup.hooks.on('visit:end', hideSkeleton);
+  swup.hooks.on('visit:fail', () => {
+    hideSkeleton();
+    cancelContentEnter();
+  });
 
   enhancePage();
 }

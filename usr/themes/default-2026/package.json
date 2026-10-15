@@ -7,7 +7,10 @@
   "license": "GPL-2.0-or-later",
   "scripts": {
     "dev": "vite build --watch --mode development",
-    "build": "vite build"
+    "build": "vite build",
+    "test": "node tests/skeleton-state.test.mjs && node tests/css-contract.test.mjs",
+    "test:dom": "node tests/inline-scripts.test.mjs && node tests/aside-sync.test.mjs",
+    "test:php": "php tests/theme-functions.php"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.20",
