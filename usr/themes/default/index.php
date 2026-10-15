@@ -1,19 +1,15 @@
 <?php
 /**
- * 主题模板作用域变量
- *
- * 模板由 Widget\Archive::render()/need() 通过 require 载入, 因此 $this 是当前归档组件;
- * 其余局部变量 (如 $comments) 由模板内部赋值。PHPStan 无法推断 include 作用域, 这里显式声明。
- *
- * @var Widget\Archive $this
- */
-/**
  * Default theme for Typecho
- *
+ * Edit by 2233
  * @package Typecho Replica Theme
  * @author Typecho Team
  * @version 1.3.2
  * @link http://typecho.org
+ *
+ * 模板由 Widget\Archive::render()/need() 通过 require 载入, 因此 $this 是当前归档组件。
+ *
+ * @var Widget\Archive $this
  */
 
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;

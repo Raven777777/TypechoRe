@@ -205,6 +205,75 @@ check(
     'PageNavigator totalPage should round up (10 items / 4 per page -> 3)'
 );
 
+// 评论 HTML 过滤: 白名单只管标签与属性名, 属性值里的危险协议必须被拦掉
+$commentTags = '<p><br> <strong> <code> <a href title rel>';
+$safeComment = '<p><strong>粗体</strong>、<code>x</code> 与 <a href="https://example.com" title="链接">链接</a></p>';
+check(
+    \Typecho\Common::stripTags($safeComment, $commentTags) === $safeComment,
+    'Comment filtering dropped safe markdown markup or a safe https link'
+);
+check(
+    str_contains(\Typecho\Common::stripTags('<p><a href="/x?a=1&amp;b=2">x</a></p>', $commentTags), 'href="/x?a=1&amp;b=2"'),
+    'Comment filtering rewrote a safe attribute value'
+);
+check(
+    !str_contains(\Typecho\Common::stripTags('<p><a href="/x" onclick="evil()">x</a></p>', $commentTags), 'onclick'),
+    'Comment filtering kept an attribute outside the whitelist'
+);
+
+foreach ([
+    'javascript: 协议' => '<a href="javascript:alert(1)">x</a>',
+    '实体编码协议'     => '<a href="java&#115;cript:alert(1)">x</a>',
+    '制表符拆开协议'   => "<a href=\"java\tscript:alert(1)\">x</a>",
+    '换行拆开协议'     => "<a href=\"java\nscript:alert(1)\">x</a>",
+    '大小写混写'       => '<a href="JaVaScRiPt:alert(1)">x</a>',
+    '前导空白'         => '<a href="  javascript:alert(1)">x</a>',
+    'data: 协议'       => '<a href="data:text/html;base64,PHNjcmlwdD4=">x</a>',
+    'vbscript: 协议'   => '<a href="vbscript:msgbox(1)">x</a>',
+] as $vector => $payload) {
+    $filtered = \Typecho\Common::stripTags('<p>' . $payload . '</p>', $commentTags);
+
+    check(
+        !preg_match('/javascript|vbscript|data:/i', $filtered) && str_contains($filtered, 'href="#"'),
+        "Dangerous link scheme survived comment filtering ({$vector}): {$filtered}"
+    );
+}
+
+// 评论 Markdown: 打开 commentsMarkdown 时, 内核要放行 Markdown 生成的标签
+$markdownTags = (new ReflectionClassConstant(\Widget\Base\Comments::class, 'MARKDOWN_ALLOWED_TAGS'))->getValue();
+check(is_string($markdownTags) && '' !== $markdownTags, 'Comments::MARKDOWN_ALLOWED_TAGS is missing');
+
+$markdownCommentSpec = '<p><br> ' . $markdownTags;
+
+foreach (['strong', 'em', 'del', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'h2', 'hr', 'a'] as $tag) {
+    check(
+        str_contains($markdownCommentSpec, '<' . $tag),
+        "Markdown comment whitelist does not allow <{$tag}>"
+    );
+}
+
+foreach (['img', 'script', 'iframe', 'style', 'form', 'input', 'object', 'embed'] as $tag) {
+    check(
+        !str_contains($markdownCommentSpec, '<' . $tag . '>') && !str_contains($markdownCommentSpec, '<' . $tag . ' '),
+        "Markdown comment whitelist must not allow <{$tag}>"
+    );
+}
+
+check(
+    str_contains(\Typecho\Common::stripTags('<p><strong>粗</strong> <em>斜</em></p>', $markdownCommentSpec), '<strong>粗</strong>'),
+    'Markdown markup was stripped even with the markdown whitelist'
+);
+
+// Markdown 侧的第一道协议检查: 危险协议换成 #, 而且不能触发 PHP 警告
+check(
+    str_contains(\Utils\Markdown::convert('[x](javascript:alert(1))'), '<a href="#">'),
+    'Markdown link with a dangerous scheme was not neutralised'
+);
+check(
+    str_contains(\Utils\Markdown::convert('[x](https://example.com)'), '<a href="https://example.com">'),
+    'Markdown link with a safe scheme was mangled'
+);
+
 // IXR: 联合类型参数不能触发 ReflectionType::getName() 致命错误, 错误必须被识别
 $ixrProbe = new class () {
     public function union(int|string $value): string

@@ -756,6 +756,62 @@ assertTrue($approved >= 1, 'comment was not approved');
 $postBody = assertResponse($site->get($postUrl), [200], 'GET post with comment');
 assertTrue(str_contains($postBody, '这是一条 E2E 回归评论'), 'comment missing on the post page');
 
+// ---------------------------------------------------------------- comment markdown
+
+step('comment markdown (commentsMarkdown = 1)');
+// 安装向导默认打开「同一 IP 的评论间隔限制」(60 秒): 上一条评论就在几秒前, 不关掉的话
+// 这一步能不能过取决于两次评论是否落在同一秒里, 那种测试是不可信的。
+sitePhp(
+    $php,
+    $siteDir,
+    "\$db->query(\$db->update('table.options')->rows(['value' => '1'])->where('name = ?', 'commentsMarkdown'));"
+    . "\$db->query(\$db->update('table.options')->rows(['value' => '0'])->where('name = ?', 'commentsPostIntervalEnable'));"
+);
+
+$response = $guest->post($commentAction, [
+    'author' => 'E2E Markdown',
+    'mail' => 'markdown@example.test',
+    'url' => '',
+    'text' => "**加粗** 与 *斜体*\n\n> 引用\n\n- 列表\n\n[x](javascript:alert(1))",
+    'parent' => '0',
+], ['Referer' => "http://127.0.0.1:{$port}{$postUrl}"]);
+assertResponse($response, [200, 302], 'POST markdown comment');
+
+$markdownApproved = sitePhp(
+    $php,
+    $siteDir,
+    "echo (int) \$db->fetchObject(\$db->select(['COUNT(*)' => 'num'])->from('table.comments')->where('author = ? AND status = ?', 'E2E Markdown', 'approved'))->num;"
+);
+assertTrue($markdownApproved >= 1, 'markdown comment was not approved');
+
+$postBody = assertResponse($site->get($postUrl), [200], 'GET post with markdown comment');
+
+// 内核必须放行 Markdown 生成的标签: 白名单缺一个, 那种语法就会被整段剥掉
+foreach ([
+    '<strong>加粗</strong>',
+    '<em>斜体</em>',
+    '<blockquote>',
+    '<li>列表</li>',
+    '<a href="#">x</a>',
+] as $snippet) {
+    assertTrue(str_contains($postBody, $snippet), "markdown comment lost {$snippet}");
+}
+
+assertTrue(
+    !str_contains($postBody, 'javascript:alert(1)'),
+    'dangerous link scheme leaked out of the markdown comment'
+);
+
+// 侧边栏的「最近回复」也会渲染评论正文 (走同一条管线), 顺带守住它不报错
+assertResponse($site->get('/'), [200], 'GET / with the markdown comment in the sidebar');
+
+sitePhp(
+    $php,
+    $siteDir,
+    "\$db->query(\$db->update('table.options')->rows(['value' => '0'])->where('name = ?', 'commentsMarkdown'));"
+    . "\$db->query(\$db->update('table.options')->rows(['value' => '1'])->where('name = ?', 'commentsPostIntervalEnable'));"
+);
+
 // ---------------------------------------------------------------- upload
 
 step('upload image');

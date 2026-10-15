@@ -21,6 +21,75 @@
 - `tools/build_release.py` 新增排除 `node_modules`, 避免主题前端依赖进入发布包
 - `.gitignore` 放行 `usr/themes/*/dist/`, 让主题构建产物可以随仓库提交
 
+### 修复: 评论 Markdown 不解析 (内核)
+
+- `var/Widget/Base/Comments.php`: 打开后台的「在评论中使用 Markdown 语法」后,
+  渲染出来的 strong / em / code / pre / blockquote / ul / ol / li / h2–h6 / hr / a
+  会被 `___content()` 最后的 `Common::stripTags()` 整段剥掉 —— 它只放行 `<p><br>`
+  加上站长填写的 `commentsHTMLTagAllowed` (默认为空), 于是用户看到的就是
+  「Markdown 没生效」。现在开关打开时内核一并放行 Markdown 会生成的标签,
+  站长的白名单仍然有效 (同名标签以站长的声明为准)
+- `var/Typecho/Common.php`: `stripTags()` 补上链接类属性 (href / src / srcset /
+  action / formaction / poster / cite 等) 的协议检查 —— 白名单只管标签与属性名,
+  属性值是不查的, 所以 `<a href="javascript:...">` 能原样留在输出里。检查前先做
+  与浏览器一致的归一化 (实体解码 + 去掉 ASCII 控制字符与空白), 否则
+  `java&#115;cript:` / `java\tscript:` / 大小写混写都能绕过去; 值安全时原样保留,
+  不安全时换成 `#`。这条同时对「站长放行了 `<a href>`」的老站点生效
+- `var/Utils/HyperDown.php`: 链接协议不在白名单里时 `cleanUrl()` 只返回了字符串 `#`,
+  而调用方会按 `[$url, $title]` 解构 —— 触发 PHP 警告、href 变成空字符串;
+  改为保持返回结构 (与正常分支一致)
+- `usr/themes/default-2026`: 删掉主题里那个在 `contentEx` 上重做 Markdown 渲染的兜底
+  (它跑在 `stripTags()` **之前**, 补出来的标签会被紧接着剥掉, 从来没有生效过)
+- 测试: `tests/smoke.php` 覆盖危险协议 (8 种写法) 与 Markdown 标签白名单;
+  `tools/e2e.php` 新增「评论 Markdown」端到端回归 (真实站点发一条 Markdown 评论,
+  断言前台与侧边栏都渲染出标签且 `javascript:` 链接被换成 `#`)
+
+### 修复: Default 2026 切页时侧边栏仍会闪一下
+
+- 骨架遮罩 (`.page-skeleton`) 是不透明的固定层, 铺满导航之下的整个视口: 本次跳转
+  「不换第二列」时骨架里不画它, 但遮罩照样把那一列盖成一块空白, 等淡出再露回来 ——
+  看起来就是侧边栏闪了一下 (「不闪骨架」但「还是闪一下」)。现在判定不画第二列骨架时
+  给 `<html>` 挂 `is-aside-kept`, `main.css` 把那一列提到遮罩之上 (`z-index: 71`),
+  并让它只「看得见」不吃点击 (`pointer-events: none`, 点击照旧归遮罩);
+  标记一直挂到遮罩真正 `hidden`, 覆盖整个淡出过程
+- 测试: `tests/skeleton-state.test.mjs` 新增「挂/摘时机」时间线断言,
+  `tests/css-contract.test.mjs` 与 `tests/comments-contract.test.mjs` 钉住那条 CSS 约定
+
+### 修复: Default 2026 侧边栏会压到吸顶导航上
+
+- 上一条修复把「本次不换的第二列」提到了遮罩之上 (`z-index: 71`), 同时把吸顶导航抬到 72。
+  但那条导航规则写在了 `@layer components` 里, 而导航身上的 Tailwind `.z-50` 在
+  utilities 层 —— **层级的优先级高于选择器优先级**, 所以 `z-index: 72` 从来没生效,
+  导航停在 50: 页面往下滚过一段时, 侧边栏卡片正好压在导航那一条上, 切换页面时会
+  短暂盖住导航 (关掉骨架屏就没有这个标记, 所以看起来正常)
+- 两条 `is-aside-kept` 规则改为写在所有 `@layer` 之外 (与 `main.css` 里
+  「必须写在层外」的正文排版覆盖同一处理方式)
+- 测试: `tests/css-contract.test.mjs` 新增 `@layer` 归属断言 —— 这类 bug
+  只看选择器和属性是看不出来的, 必须断言「这条规则不在任何层里」
+
+### 主题 Default 2026: 移除相关文章与面包屑导航
+
+- 删除主题设置里的 `相关文章` / `面包屑导航` 两个开关, 以及模板调用
+  (`post.php` / `page.php` / `archive.php`)、`themeBreadcrumbs()` 与 `related.php`
+- 这两个功能的内核 API (`Widget\Contents\Related`、`Archive::related()`) 不受影响,
+  需要时仍可在自定义模板里直接调用
+
+### 发布包: 排除开发文件, 附带逐文件 SHA-256 清单
+
+- `tools/build_release.py` 新增排除只服务于开发/构建的东西: 主题的 `tests/` 与 `src/`
+  (纯 Node 测试与前端源码, `dist/` 才是随包分发的构建产物)、`package.json` /
+  `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock` / `vite.config.*` 等 Node 构建配置,
+  以及任何位置的 `.gitignore` / `.gitattributes` / `.editorconfig`
+- 发布包内新增 `SHA256SUMS.txt`: 逐文件 (清单自己除外) 的 SHA-256, 每行
+  `<摘要>  <相对路径>`, 与 GNU coreutils 的 `sha256sum` 格式一致 ——
+  解压后 `sha256sum -c SHA256SUMS.txt` 即可整包校验 (单文件被改动会报 `FAILED` 并以 1 退出)
+- 构建时的自检 `verify()` 一并升级: 除了原有的必需文件与「危险文件」检查, 还会打开生成的
+  ZIP, 确认清单恰好覆盖包内每个文件 (清单自己除外)、且逐条与包内字节重新计算的摘要一致
+- `tests/build_release.py` 增加两项断言: 主题开发文件确实没进包 (同时确认 `dist/` 在包里,
+  防止排除过宽)、`SHA256SUMS.txt` 与包内字节逐条一致
+- 文档: `docs/guide/deployment.md` 补充发布包内容与校验方式, `docs/guide/quality.md`
+  同步测试说明
+
 ## 1.3.2
 
 本版本不改变前台行为，重点是「把静态分析提升到 PHPStan level 5 并清零」，

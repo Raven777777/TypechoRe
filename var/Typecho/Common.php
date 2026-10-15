@@ -214,6 +214,14 @@ namespace Typecho {
         public const PROJECT_ORIGIN_URL = 'https://github.com/typecho/typecho';
 
         /**
+         * 会当作地址解析的属性 (值需要过一遍协议检查, 见 filterUrlAttribute())
+         *
+         * @var string[]
+         */
+        private const URL_ATTRIBUTES = ['href', 'src', 'srcset', 'action', 'formaction', 'poster', 'cite', 'background',
+            'data', 'xlink:href'];
+
+        /**
          * 将路径转化为链接
          *
          * @access public
@@ -536,6 +544,9 @@ EOF;
          * //display: '<a href="http://test/test.php">hello</a>'
          * </code>
          *
+         * 白名单只管标签与属性名, 属性值不查 —— 所以 `href` / `src` 的值还会过一次
+         * 协议检查 (见 filterUrlAttribute()), 避免 `javascript:` 之类的地址进来。
+         *
          * @param string|null $html 需要处理的字符串
          * @param string|null $allowableTags 需要忽略的html标签
          * @return string
@@ -575,7 +586,7 @@ EOF;
 
                     foreach ($attrs as $key => $val) {
                         if (in_array($key, $allowableAttributes[$tag] ?? [])) {
-                            $parsedAttrs[] = " {$key}" . (empty($val) ? '' : "={$val}");
+                            $parsedAttrs[] = " {$key}" . (empty($val) ? '' : '=' . self::filterUrlAttribute($key, $val));
                         }
                     }
 
@@ -583,6 +594,44 @@ EOF;
                 },
                 $html
             ) ?? $html;
+        }
+
+        /**
+         * 过滤链接类属性的值 (只保留 http / https / mailto 与相对地址)
+         *
+         * 白名单只声明了属性名, 属性值是不查的, 于是 `<a href="javascript:...">`
+         * 能原样留在输出里。这里对链接类属性 (href / src 等) 的值做一次协议检查:
+         * 浏览器解析地址时会先做实体解码, 并忽略 ASCII 控制字符与空白再判断协议,
+         * 所以判断前必须做同样的归一化 —— 否则 `java&#115;cript:`、`java\tscript:`
+         * 这类写法可以绕过去。
+         *
+         * 值安全时原样返回 (不改写站长的数据), 不安全时统一换成 `#`。
+         *
+         * @param string $name 属性名
+         * @param string $value 带引号的属性值, 例如 '"https://example.com"'
+         * @return string
+         */
+        private static function filterUrlAttribute(string $name, string $value): string
+        {
+            if (!in_array(strtolower($name), self::URL_ATTRIBUTES, true)) {
+                return $value;
+            }
+
+            $quote = ($value[0] ?? '') === '"' || ($value[0] ?? '') === "'" ? $value[0] : '';
+            $inner = '' === $quote ? $value : substr($value, 1, -1);
+
+            /** 实体解码 + 去掉控制字符与空白, 得到浏览器真正会拿去解析的地址 */
+            $normalized = html_entity_decode($inner, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $normalized = preg_replace('/[\x00-\x20\x7f]+/', '', $normalized) ?? $inner;
+
+            if (
+                preg_match('#^([a-z][a-z0-9+.\-]*):#i', $normalized, $matches)
+                && !in_array(strtolower($matches[1]), ['http', 'https', 'mailto'], true)
+            ) {
+                return '"#"';
+            }
+
+            return $value;
         }
 
         /**

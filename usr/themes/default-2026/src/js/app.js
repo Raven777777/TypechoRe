@@ -915,6 +915,8 @@ const CONTENT_ENTER_DURATION = 620;
 const ASIDE_SELECTOR = '.page-aside';
 /** 本次跳转真的换了第二列时挂在 <html> 上, 用来决定要不要给它播入场动画 */
 const ASIDE_SWAPPED_CLASS = 'is-aside-swapped';
+/** 本次骨架屏不画第二列、而当前页那一列又确实存在时挂在 <html> 上 (见 syncAsideKept) */
+const ASIDE_KEPT_CLASS = 'is-aside-kept';
 
 let skeletonTimer = 0;
 let skeletonHideTimer = 0;
@@ -1056,6 +1058,8 @@ function showSkeleton(kind) {
   syncSkeletonAside(skeletonNextAsideKind);
   skeletonVisible = true;
   overlay.hidden = false;
+  /* 这次不画第二列 (当前页那一列本来就不会变) → 把那列真实内容托到遮罩之上 */
+  syncAsideKept();
   /* 等一帧再加类, 否则 hidden 刚取消时过渡不会触发。
      这一帧里可能已经被 hideSkeleton 收掉了 (超快跳转), 所以要再确认一次,
      否则会把 is-visible 加回来, 让遮罩在该消失的时候又亮一下。 */
@@ -1087,6 +1091,26 @@ function syncSkeletonAside(kind) {
   asideSkeleton.querySelectorAll('[data-skeleton-aside-variant]').forEach((variant) => {
     variant.hidden = variant.getAttribute('data-skeleton-aside-variant') !== wanted;
   });
+}
+
+/**
+ * 骨架屏不画第二列时, 把真实的那一列浮到遮罩之上
+ *
+ * 遮罩是一层不透明的固定层, 铺满导航之下的整个视口。侧边栏在「列表页 → 列表页」时
+ * 一个字都不会变 (见 syncPageAside), 骨架屏里也就不画它 —— 但遮罩照样会把它盖成一块
+ * 空白, 等遮罩淡出再露回来, 看起来就是侧边栏闪了一下。这里给 <html> 挂上
+ * is-aside-kept, CSS 据此把那一列提到遮罩之上; 遮罩彻底收掉后一起摘掉。
+ *
+ * 显隐跟着 overlay.hidden 走: 淡出那 200ms 里遮罩还在画面上, 这一列必须一直浮着,
+ * 否则又会被盖回去, 等于没修。
+ */
+function syncAsideKept() {
+  const overlay = document.getElementById('page-skeleton');
+  const kept = !!overlay && !overlay.hidden
+    && 'none' === skeletonNextAsideKind
+    && null !== document.querySelector(ASIDE_SELECTOR);
+
+  document.documentElement.classList.toggle(ASIDE_KEPT_CLASS, kept);
 }
 
 /** 当前页面第二列的形态 (footer.php 写在 #page-skeleton 的 data-aside-kind 上) */
@@ -1171,6 +1195,8 @@ function hideSkeleton() {
       overlay.hidden = true;
       /* 连第二列一起收回: 上一次留下的显隐状态不该带到下一次跳转 */
       syncSkeletonAside('none');
+      /* 遮罩已经收掉, 真实那一列不必再浮着 */
+      syncAsideKept();
     }
   }, animSettings().skeletonFade);
 }

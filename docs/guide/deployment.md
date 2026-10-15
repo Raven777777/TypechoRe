@@ -8,7 +8,15 @@
 python tools/build_release.py
 ```
 
-输出为 `dist/TypechoRe-<版本>.zip`，解压后文件直接位于网站根目录。发布包包含 `LICENSE.txt`、`admin/`、`install/`、`usr/`、`var/` 及入口文件；不会包含本地 `config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、日志、备份、缓存或用户上传文件。
+输出为 `dist/TypechoRe-<版本>.zip`，解压后文件直接位于网站根目录。发布包包含 `LICENSE.txt`、`admin/`、`install/`、`usr/`、`var/` 及入口文件；不会包含本地 `config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、日志、备份、缓存或用户上传文件，也不会包含只服务于开发/构建的文件（主题的 `tests/`、`src/`、`package.json` / `vite.config.js` 等 Node 构建配置、`node_modules/` 与 `.gitignore`）。
+
+包里还附带一份 `SHA256SUMS.txt`：逐文件（清单自己除外）的 SHA-256，格式与 `sha256sum` 一致。解压后可直接整包校验：
+
+```bash
+sha256sum -c SHA256SUMS.txt        # macOS: shasum -a 256 -c SHA256SUMS.txt
+```
+
+校验通过时每个文件会打印 `OK` 并以 0 退出；任何一个字节被改动都会报 `FAILED`。
 
 生产站点还需要 `config.inc.php` 和数据库，但它们属于站点数据，不放进代码包：首次安装由安装向导生成；升级时保留服务器原有配置、数据库和上传文件，先备份再覆盖代码。
 
@@ -112,8 +120,9 @@ limit_req_status 429;
 10. 确认运行正常后删除部署压缩包
 
 发布包由 `tools/build_release.py` 构建（或由 GitHub Release 自动构建），已排除
-`config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、`*.log`、`usr/uploads/` 与 `usr/backups/`。部署前仍建议
-确认 zip 内没有遗留的数据库或日志文件。
+`config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、`*.log`、`usr/uploads/` 与 `usr/backups/`，
+以及主题的 `tests/`、`src/` 与 Node 构建配置。部署前仍建议确认 zip 内没有遗留的数据库或日志文件，
+并用包内的 `SHA256SUMS.txt` 校验一次完整性。
 
 已安装的网站不需要重复访问：
 

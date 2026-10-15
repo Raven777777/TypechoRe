@@ -23,10 +23,6 @@ $postTags = $this->tags;
 $this->need('header.php');
 ?>
 <main id="main" class="min-w-0 transition-fade">
-    <?php if (themeOptionBool('showBreadcrumbs')): ?>
-        <?php echo themeBreadcrumbs($this); ?>
-    <?php endif; ?>
-
     <article class="card overflow-hidden" itemscope itemtype="http://schema.org/BlogPosting">
         <header class="border-b border-zinc-200/80 p-6 sm:p-8 dark:border-zinc-800/80">
             <?php if (null !== $postPrimary): ?>
@@ -92,10 +88,6 @@ $this->need('header.php');
             </a>
         <?php endif; ?>
     </nav>
-
-    <?php if (themeOptionBool('showRelated') && [] !== $postTags): ?>
-        <?php $this->need('related.php'); ?>
-    <?php endif; ?>
 
     <?php $this->need('comments.php'); ?>
 </main>

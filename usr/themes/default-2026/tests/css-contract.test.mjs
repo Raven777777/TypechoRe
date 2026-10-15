@@ -20,6 +20,8 @@
  *     停在透明状态会让整片内容点不动)。
  *  7. 设置项接线: 每个开关都要在 functions.php 注册、在 header.php 输出成 <html>
  *     上的 data-*, 并被 app.js 真正读取 —— 少任何一环设置项就会静默失效。
+ *  8. 「本次不画第二列骨架」时, 遮罩不许把那一列盖成空白 (盖住再露出来就是闪一下):
+ *     is-aside-kept 只把那一列提到遮罩之上, 并且不吃点击。
  */
 import { readFileSync } from 'node:fs';
 
@@ -35,9 +37,10 @@ const check = (label, ok, extra = '') => {
 };
 
 /* ---------- 极简规则抽取: 先剥注释, 再按花括号配平收集 ---------- */
+const strippedCss = cssSource.replace(/\/\*[\s\S]*?\*\//g, '');
 const rules = [];
 {
-  const css = cssSource.replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = strippedCss;
   const re = /([^{}]+)\{/g;
   let match;
 
@@ -64,6 +67,47 @@ console.log(`已解析 main.css: ${rules.length} 条规则\n`);
 
 const withSelector = (needle) => rules.filter((rule) => rule.selector.includes(needle));
 const showRules = (list) => list.map((rule) => rule.selector).join(' | ');
+
+/**
+ * 收集 @layer 块的范围 (起止偏移)
+ *
+ * 层级 (layer) 的优先级高于选择器优先级: 写在 @layer components 里的 `z-index: 72`
+ * 永远赢不了 utilities 层里的 Tailwind `.z-50`。这正是「侧边栏压到吸顶导航上」
+ * 那个 bug 的成因 —— 规则看着完全正确, 却被工具类顶掉了, 所以必须单独断言。
+ */
+function layerBlocks(css) {
+  const blocks = [];
+  const re = /@layer\s+([a-zA-Z0-9_-]+)\s*\{/g;
+  let match;
+
+  while ((match = re.exec(css)) !== null) {
+    let depth = 1;
+    let i = re.lastIndex;
+
+    while (i < css.length && depth > 0) {
+      if (css[i] === '{') depth++;
+      else if (css[i] === '}') depth--;
+      i++;
+    }
+
+    blocks.push({ name: match[1], start: match.index, end: i });
+  }
+
+  return blocks;
+}
+
+const layerRanges = layerBlocks(strippedCss);
+
+/** 选择器是否写在所有 @layer 之外 (也就是能压过 utilities 层) */
+function outsideEveryLayer(selector) {
+  const index = strippedCss.indexOf(selector);
+
+  if (index < 0) {
+    return false;
+  }
+
+  return !layerRanges.some((block) => index > block.start && index < block.end);
+}
 
 /* ---------- 1. 第二列不参与退场/插入态 ---------- */
 for (const state of ['is-animating', 'is-rendering']) {
@@ -198,6 +242,42 @@ checkSwitch({
   check('buildSwupPlugins() 存在', body.length > 0);
   check('★ 预取插件在 buildSwupPlugins() 内按开关注册', body.includes('if (preloadEnabled())') && body.includes('new SwupPreloadPlugin'));
   check('插件顺序仍是 head → 预取 → 进度条 → 滚动', body.indexOf('SwupHeadPlugin') < body.indexOf('SwupPreloadPlugin') && body.indexOf('SwupPreloadPlugin') < body.indexOf('SwupProgressPlugin'));
+}
+
+/* ---------- 8. 不画第二列骨架时, 真实那一列浮在遮罩之上 ----------
+   遮罩不透明且铺满视口: 盖住「本来就不会变」的侧边栏再随淡出露回来, 就是那次闪烁。
+   is-aside-kept 只做两件事 —— 提到遮罩 (z-index: 70) 之上、把点击让给遮罩;
+   它不许给那一列加任何动效 (内容根本没变)。 */
+{
+  const keptRules = rules.filter((rule) => rule.selector.includes('is-aside-kept') && rule.selector.includes('.page-aside'));
+
+  check('★ 有 is-aside-kept 的第二列规则', keptRules.length === 1, showRules(keptRules));
+
+  const body = keptRules[0]?.body ?? '';
+
+  check('★ 提到遮罩之上 (遮罩是 70)', /z-index:\s*7[1-9]/.test(body), body);
+  check('★ 只到「看得见」为止: 点击仍归遮罩', /pointer-events:\s*none/.test(body), body);
+  check('★ 不给它加动效 (那一列内容没变)', !/animation|opacity|transition|transform/.test(body), body);
+  check('★ 需要定位属性才能吃 z-index', /position:\s*(relative|absolute|fixed|sticky)/.test(body), body);
+
+  /* 抬到 71 层之后, 吸顶导航 (50) 要一起抬, 否则滚过一段时卡片会盖住导航 */
+  const navRule = rules.find((rule) => rule.selector.includes('is-aside-kept') && rule.selector.includes('#site-nav'));
+  const navZIndex = Number(/(?:^|;)\s*z-index:\s*(\d+)/.exec(navRule?.body ?? '')?.[1] ?? 0);
+
+  check('★ 吸顶导航被一起抬高 (盖不过第二列)', !!navRule && navZIndex > 71, navRule ? `${navRule.selector} { ${navRule.body} }` : '未找到');
+
+  /* ★ 关键: 这两条必须写在层外。导航身上有 Tailwind 的 .z-50 (utilities 层),
+     层级的优先级高于选择器优先级 —— 写在 components 层里就一定输, 第二列会压住导航。 */
+  check(
+    '★ is-aside-kept 的第二列规则写在所有 @layer 之外',
+    outsideEveryLayer('html.is-aside-kept .page-aside'),
+    `层: ${layerRanges.map((block) => block.name).join(', ') || '无'}`
+  );
+  check(
+    '★ is-aside-kept 的导航规则写在所有 @layer 之外 (否则赢不了 .z-50)',
+    outsideEveryLayer('html.is-aside-kept #site-nav'),
+    `层: ${layerRanges.map((block) => block.name).join(', ') || '无'}`
+  );
 }
 
 console.log(`\n${failures === 0 ? '全部通过' : failures + ' 项失败'}`);

@@ -30,10 +30,6 @@ $archiveLabels = [
 $archiveLabel = $archiveLabels[$archiveType] ?? '';
 ?>
 <main id="main" class="min-w-0 transition-fade">
-    <?php if (themeOptionBool('showBreadcrumbs')): ?>
-        <?php echo themeBreadcrumbs($this); ?>
-    <?php endif; ?>
-
     <header class="mb-6">
         <?php if ('' !== $archiveLabel): ?>
             <span class="text-xs font-medium tracking-widest text-accent uppercase"><?php echo themeEsc($archiveLabel); ?></span>

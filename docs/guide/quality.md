@@ -21,7 +21,8 @@
 2. `tests/smoke.php` 基础回归测试
 3. `tools/audit-override.php` 反射审计 `#[\Override]` 覆盖率
 4. `tests/integration.php` 数据库适配器集成测试（本地默认 SQLite）
-5. `tests/build_release.py` 发布包隔离测试（确认 SQLite 主库及 WAL/SHM/journal 文件不进入 ZIP）
+5. `tests/build_release.py` 发布包隔离测试（确认 SQLite 主库及 WAL/SHM/journal 文件、
+   主题开发文件不进入 ZIP，且包内 `SHA256SUMS.txt` 与每个文件的实际摘要一致）
 6. PHPStan 静态分析（`phpstan.neon`，**level 5**）
 7. `tools/e2e.php` 真实站点端到端回归（发布包 + PHP 内置服务器）
 8. Semgrep 安全扫描（`p/php`、`p/security-audit`、`p/owasp-top-ten`、`p/secrets`；
@@ -100,9 +101,16 @@ MySQL/PostgreSQL 适配器只有在显式设置 `TYPECHORE_TEST_ADAPTER` 与
 `TYPECHORE_TEST_HOST` 时才会本地执行（未设置则跳过并提示，退出码仍为 0）；
 CI 只跑 SQLite。
 
-### 发布包敏感文件排除
+### 发布包敏感文件排除与校验清单
 
 `tests/build_release.py` 会在 `usr/` 临时创建 12 种 SQLite 主库与 `-wal` / `-shm` / `-journal` 文件名，实际构建 ZIP，确认这些运行时文件一个也未打包且包含 `LICENSE.txt`，然后清理测试文件。该测试随 `tools/quality.ps1` 运行，可防止发布包误带数据库或漏掉许可证文本。
+
+同一个测试还会实际读取 ZIP，确认：
+
+- 主题里只服务于开发/构建的文件（`usr/themes/*/tests/`、`src/`、`package.json`、`vite.config.js` 等）
+  没有被打包，而主题构建产物 `usr/themes/*/dist/` 确实在包里（避免「排除过宽」）；
+- 包内的 `SHA256SUMS.txt` 恰好覆盖除它自己以外的每个文件，且每一行的摘要在重新读取该文件字节后
+  仍然一致 —— 这条断言不依赖构建脚本自身的 `verify()`，相当于从外部复核一次清单。
 
 ## 已完成检查
 

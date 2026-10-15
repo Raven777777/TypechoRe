@@ -139,24 +139,6 @@ function themeConfig(\Typecho\Widget\Helper\Form $form): void
     );
     $form->addInput($showReadingTime);
 
-    $showRelated = new \Typecho\Widget\Helper\Form\Element\Radio(
-        'showRelated',
-        ['1' => _t('显示'), '0' => _t('不显示')],
-        '1',
-        _t('相关文章'),
-        _t('按标签关联, 最多显示 3 篇')
-    );
-    $form->addInput($showRelated);
-
-    $showBreadcrumbs = new \Typecho\Widget\Helper\Form\Element\Radio(
-        'showBreadcrumbs',
-        ['1' => _t('显示'), '0' => _t('不显示')],
-        '1',
-        _t('面包屑导航'),
-        _t('在页面顶部显示当前位置层级, 同时会输出结构化数据')
-    );
-    $form->addInput($showBreadcrumbs);
-
     $excerptLength = new \Typecho\Widget\Helper\Form\Element\Number(
         'excerptLength',
         null,
@@ -224,57 +206,14 @@ function themeInit(\Widget\Archive $archive): void
     \Widget\Options::alloc()->commentsMaxNestingLevels = 4;
 
     /**
-     * 评论 Markdown 的兜底: 允许 Markdown 生成的标签通过过滤
+     * 评论 Markdown 由内核负责, 主题不再兜底
      *
-     * Typecho 默认把评论内容压成 `<p>` + `<br>` (`commentsHTMLTagAllowed` 默认为空),
-     * 所以 Markdown 渲染出来的 strong / a / pre / ul 会被全部剥掉 —— 用户看到的就是
-     * 「Markdown 没生效」。这里在 `contentEx` (内容过滤的最后一步) 上重做一次渲染:
-     * 关了 Markdown 就原样返回, 开了才允许那些标签通过。
-     *
-     * 之所以不直接改 `commentsHTMLTagAllowed`: 那是全站选项, 与主题开关无关,
-     * 而且它就是站长的设置, 主题不该偷偷覆盖。这里只影响本主题的输出。
-     *
-     * 注册时机没问题: functions.php 由 Widget\Archive::execute() 载入, 早于模板
-     * 渲染评论 (`listComments()` 在模板里才被调用)。
+     * `Widget\Base\Comments::___content()` 最后会把评论压成 `<p>` + `<br>`, 但它在
+     * `commentsMarkdown` 打开时会一并放行 Markdown 生成的标签, 链接地址还有一层协议
+     * 检查。这里曾经注册过一个 `contentEx` 过滤器想把标签加回来 —— 但 `contentEx` 跑在
+     * 那次过滤**之前**, 补出来的标签会被紧接着的 `stripTags()` 再剥一次, 那个兜底从来
+     * 没生效过 (还让「Markdown 失效」看起来已经被修掉了)。修在内核里, 两个主题一起受益。
      */
-    \Widget\Base\Comments::pluginHandle()->filter('contentEx', static function (?string $content, $comment): string {
-        $options = \Widget\Options::alloc();
-
-        if (empty($options->commentsMarkdown) || !($comment instanceof \Widget\Base\Comments)) {
-            return (string) $content;
-        }
-
-        /* 用评论原始文本重渲染: $content 已经是剥过一次标签的 HTML, 再转 Markdown 也救不回 */
-        $source = (string) ($comment->text ?: $content);
-
-        return themeStripCommentTags(\Utils\Markdown::convert($source));
-    });
-}
-
-/**
- * 允许出现在评论里的 HTML 标签
- *
- * 与 `\Widget\Base\Comments::___content()` 用的 `<p><br>` 是同一套语法
- * (`Common::stripTags` 的第二参数), 只是补齐了 Markdown 会生成的标签。
- *
- * @return string
- */
-function themeCommentAllowedTags(): string
-{
-    return '<p> <br> <strong> <em> <del> <code> <pre> <blockquote>'
-        . ' <ul> <ol> <li> <h2> <h3> <h4> <h5> <h6>'
-        . ' <a href title rel> <hr>';
-}
-
-/**
- * 过滤评论 HTML: 只保留白名单标签
- *
- * @param string $html
- * @return string
- */
-function themeStripCommentTags(string $html): string
-{
-    return \Typecho\Common::stripTags($html, themeCommentAllowedTags());
 }
 
 /* =============================================================================
@@ -1109,58 +1048,6 @@ function themePostJsonLd(\Widget\Archive $archive, ?array $thumbnail = null): st
 /* =============================================================================
  * 其它模板辅助
  * ========================================================================== */
-
-/**
- * 面包屑导航
- *
- * @param \Widget\Archive $archive
- * @return string
- */
-function themeBreadcrumbs(\Widget\Archive $archive): string
-{
-    $items = [];
-    $options = \Widget\Options::alloc();
-    $items[] = ['name' => _t('首页'), 'url' => (string) $options->siteUrl];
-
-    if ($archive->is('single')) {
-        /** @var array<int, array{mid: int|string, name: string, permalink: string}> $categories */
-        $categories = $archive->categories;
-
-        if ([] !== $categories) {
-            $category = $categories[0];
-            $items[] = ['name' => (string) $category['name'], 'url' => (string) $category['permalink']];
-        }
-
-        $items[] = ['name' => (string) $archive->title, 'url' => ''];
-    } else {
-        $items[] = ['name' => trim($archive->getArchiveTitle() ?? '') ?: (string) $options->title, 'url' => ''];
-    }
-
-    $html = '<nav class="no-print mb-5 text-xs text-zinc-500 dark:text-zinc-400" aria-label="'
-        . themeEsc(_t('当前位置')) . '"><ol class="flex flex-wrap items-center gap-1.5">';
-
-    $last = count($items) - 1;
-
-    foreach ($items as $index => $item) {
-        $html .= '<li class="flex items-center gap-1.5">';
-
-        if ($index > 0) {
-            $html .= '<span aria-hidden="true" class="text-zinc-300 dark:text-zinc-600">/</span>';
-        }
-
-        if ($index === $last || '' === $item['url']) {
-            $html .= '<span class="max-w-[16rem] truncate font-medium text-zinc-700 dark:text-zinc-300">'
-                . themeEsc($item['name']) . '</span>';
-        } else {
-            $html .= '<a class="transition-colors hover:text-accent" href="' . themeEsc($item['url']) . '">'
-                . themeEsc($item['name']) . '</a>';
-        }
-
-        $html .= '</li>';
-    }
-
-    return $html . '</ol></nav>';
-}
 
 /**
  * 输出经典分页导航

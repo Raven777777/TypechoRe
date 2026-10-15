@@ -1705,7 +1705,8 @@ class HyperDown
         }
 
         if (preg_match("/^\w+:/i", $url) && !preg_match("/^(https?|mailto):/i", $url)) {
-            return '#';
+            /** 保持返回结构: 调用方会按 $parseTitle 解构, 返回字符串会触发 PHP 警告 */
+            return $parseTitle ? ['#', $title] : '#';
         }
 
         return $parseTitle ? [$url, $title] : $url;

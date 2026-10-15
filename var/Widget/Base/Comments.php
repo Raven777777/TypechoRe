@@ -58,6 +58,23 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 class Comments extends Base implements QueryInterface, RowFilterInterface, PrimaryKeyInterface, ParamsDelegateInterface
 {
     /**
+     * 评论开启 Markdown 时额外放行的标签
+     *
+     * 渲染后的评论还会被 `Common::stripTags()` 压成 `<p>` + `<br>`
+     * (`commentsHTMLTagAllowed` 默认为空), 于是 Markdown 生成的 strong / a / pre / ul
+     * 会被整段剥掉 —— 用户看到的就是「Markdown 没生效」。所以开关打开时补上
+     * Markdown 会生成的标签; 站长在后台填写的 `commentsHTMLTagAllowed` 仍然有效,
+     * 同名标签以站长的声明为准 (与 Typecho 自己的语义一致)。
+     *
+     * 只列结构标签, 不放行 img / script / iframe 这类能追踪或执行脚本的标签;
+     * 链接地址由 `Common::stripTags()` 的协议检查收口 (Markdown 允许写原始 HTML)。
+     *
+     * @var string
+     */
+    private const MARKDOWN_ALLOWED_TAGS = '<p> <br> <strong> <em> <del> <code> <pre>'
+        . ' <blockquote> <ul> <ol> <li> <h2> <h3> <h4> <h5> <h6> <hr> <a href title rel>';
+
+    /**
      * @return string 获取主键
      */
     #[\Override]
@@ -529,7 +546,15 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
         }
 
         $text = Comments::pluginHandle()->filter('contentEx', $text, $this);
-        return Common::stripTags($text, '<p><br>' . $this->options->commentsHTMLTagAllowed);
+
+        $allowedTags = '<p><br>';
+
+        /** Markdown 生成的标签要在它自己渲染完之后才允许, 站长的白名单放最后 (同名标签以它为准) */
+        if ($this->options->commentsMarkdown) {
+            $allowedTags .= ' ' . self::MARKDOWN_ALLOWED_TAGS . ' ';
+        }
+
+        return Common::stripTags($text, $allowedTags . $this->options->commentsHTMLTagAllowed);
     }
 
     /**

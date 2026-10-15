@@ -59,6 +59,7 @@ function reset() {
   overlay.hidden = true;
   overlay.classList.remove('is-visible');
   asideSkeleton.hidden = true;
+  documentStub.documentElement.classList.remove('is-aside-kept');
 }
 
 /* ---------- 最小 DOM 桩 ---------- */
@@ -67,6 +68,16 @@ const makeClassList = () => {
   return {
     add: (...c) => c.forEach((x) => set.add(x)),
     remove: (...c) => c.forEach((x) => set.delete(x)),
+    /* 两个参数的 toggle 是 app.js 用来挂/摘 is-aside-kept 的写法 */
+    toggle: (c, force) => {
+      const wanted = undefined === force ? !set.has(c) : !!force;
+      if (wanted) {
+        set.add(c);
+      } else {
+        set.delete(c);
+      }
+      return wanted;
+    },
     contains: (c) => set.has(c),
     toString: () => [...set].join(' ')
   };
@@ -86,9 +97,19 @@ const asideSkeleton = {
 /* 只让显隐状态可读: 与外层结构无关 */
 const variantOf = (name) => asideVariants.find((v) => v.getAttribute('data-skeleton-aside-variant') === name);
 const asideShownKind = () => (asideSkeleton.hidden ? 'none' : asideSkeleton.dataset.asideKind || null);
+/* 真实的那一列 (侧边栏 / 文章目录): 当前页有没有它由这个开关模拟 (见 syncAsideKept) */
+let realAsideExists = true;
 const documentStub = {
   getElementById: (id) => (id === 'page-skeleton' ? overlay : null),
-  querySelector: (selector) => (selector === '[data-skeleton-aside]' ? asideSkeleton : null),
+  querySelector: (selector) => {
+    if (selector === '[data-skeleton-aside]') {
+      return asideSkeleton;
+    }
+    if (selector === '.page-aside') {
+      return realAsideExists ? { dataset: { aside: 'sidebar' } } : null;
+    }
+    return null;
+  },
   documentElement: { classList: makeClassList(), dataset: {} },
   body: { dataset: {} }
 };
@@ -365,6 +386,65 @@ api.hideSkeleton();
 advance(400);
 check('12f. 关掉骨架屏后第二列始终隐藏', asideSkeleton.hidden === true);
 setAnimConfig({ level: 'normal', skeleton: '1', vars: { '--anim-skeleton-fade': '220ms' } });
+
+/* ---------- 场景 13: 不画第二列时, 真实的那一列要被托到遮罩之上 ----------
+   遮罩是不透明的固定层, 铺满导航之下的整个视口。侧边栏在「列表页 → 列表页」时一个字
+   都不会变, 骨架屏里也就不画它 —— 但遮罩照样会把它盖成一块空白, 等遮罩淡出再露回来,
+   看起来就是侧边栏闪了一下 (线上就是这么报的)。所以这一列要挂 is-aside-kept 浮上去,
+   并且一直浮到遮罩真正隐藏为止 (淡出那 200ms 遮罩还在画面上)。 */
+const keptFlag = () => documentStub.documentElement.classList.contains('is-aside-kept');
+
+{
+  setCurrentPageAside('sidebar');
+  realAsideExists = true;
+  reset();
+  api.scheduleSkeleton('list', api.asideKindForSession('list'));   // → none: 不画第二列
+  advance(150);
+  check('13a. ★ 不画第二列时挂上 is-aside-kept', keptFlag() && overlay.hidden === false, JSON.stringify({ kept: keptFlag(), overlay: overlay.hidden, aside: asideShownKind() }));
+
+  api.hideSkeleton();
+  advance(30);
+  check('13a. ★ 淡出期间仍然浮着 (遮罩还在画面上)', keptFlag(), JSON.stringify(snapshot()));
+
+  advance(300);
+  check('13a. ★ 遮罩真正隐藏后才摘掉', overlay.hidden === true && keptFlag() === false, JSON.stringify(snapshot()));
+}
+
+{
+  /* 会换第二列 (目录 → 侧边栏) 时不挂: 那一列要被骨架遮住, 不能浮上来 */
+  setCurrentPageAside('toc');
+  reset();
+  api.scheduleSkeleton('list', api.asideKindForSession('list'));
+  advance(150);
+  check('13b. ★ 画第二列骨架时不挂 is-aside-kept', keptFlag() === false && asideShownKind() === 'sidebar', JSON.stringify({ kept: keptFlag(), aside: asideShownKind() }));
+  api.hideSkeleton();
+  advance(300);
+}
+
+{
+  /* 当前页没有第二列 (404): 没有东西可托, 不许挂 */
+  setCurrentPageAside('none');
+  realAsideExists = false;
+  reset();
+  api.scheduleSkeleton('list', api.asideKindForSession('list'));
+  advance(150);
+  check('13c. ★ 当前页没有第二列时不挂 is-aside-kept', keptFlag() === false && overlay.hidden === false, JSON.stringify({ kept: keptFlag(), overlay: overlay.hidden }));
+  api.hideSkeleton();
+  advance(300);
+  check('13c. 收尾后依旧没有残留', keptFlag() === false);
+  realAsideExists = true;
+  setCurrentPageAside('sidebar');
+}
+
+{
+  /* 极快跳转: 骨架根本没显示过, 不许留下 is-aside-kept */
+  reset();
+  api.scheduleSkeleton('list', 'none');
+  advance(60);
+  api.hideSkeleton();
+  advance(500);
+  check('13d. ★ 骨架没显示过时不留 is-aside-kept', keptFlag() === false && overlay.hidden === true, JSON.stringify(snapshot()));
+}
 
 /* ---------- 场景 11: 链接预取开关 (主题设置 → <html data-preload> → 插件列表) ---------- */
 {

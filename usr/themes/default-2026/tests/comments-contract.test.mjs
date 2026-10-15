@@ -9,15 +9,19 @@
  *     `Common::stripTags($html, '<p><br>' . $options->commentsHTMLTagAllowed)`,
  *     而 `commentsHTMLTagAllowed` 默认为空 —— 于是 Markdown 渲染出来的
  *     strong / a / pre / ul 会被整段剥掉, 用户看到的就是「Markdown 没生效」。
- *     主题因此在 `contentEx` 上重做一次渲染并自带白名单 (functions.php)。
- *     这里钉住: 白名单必须覆盖 Markdown 会生成的标签, 且渲染必须由
- *     `commentsMarkdown` 把关。
+ *     这里曾经由主题在 `contentEx` 上重做一次渲染来兜底, 但 `contentEx` 跑在
+ *     `stripTags()` **之前**, 补出来的标签会被紧接着剥掉, 那个兜底从来没有生效过
+ *     (还让「Markdown 失效」看起来已经修好了)。现在改由内核在 `commentsMarkdown`
+ *     打开时放行 Markdown 生成的标签 (含链接协议检查), 主题不再插手。
+ *     所以这里钉的是: **主题不许再自建那套注定无效的兜底**, 以及评论框的接线。
+ *     内核那侧的行为由仓库根目录的 `tests/smoke.php` 与 `tools/e2e.php` 覆盖。
  *  2. **工具条与设置同步**: 站点关掉 Markdown 后, 评论框不能再显示
  *     「支持 Markdown」和 B / I / 链接等按钮 (comments.php)。
  *
- * 还有一条与骨架屏有关: 第二列骨架必须与 list/single 形态面板**平级**,
+ * 还有两条与骨架屏有关: 第二列骨架必须与 list/single 形态面板**平级**,
  * 不能挂在面板里面 —— 挂在里面就会跟着形态切换, 于是「侧边栏没变」的跳转
- * 也会闪一块侧边栏骨架 (footer.php)。
+ * 也会闪一块侧边栏骨架 (footer.php); 而骨架屏不画第二列时, 遮罩不许把那一列
+ * 盖成空白再露回来 (app.js 的 is-aside-kept + main.css)。
  */
 import { readFileSync } from 'node:fs';
 
@@ -25,6 +29,8 @@ const root = new URL('../', import.meta.url);
 const php = readFileSync(new URL('functions.php', root), 'utf8');
 const comments = readFileSync(new URL('comments.php', root), 'utf8');
 const footer = readFileSync(new URL('footer.php', root), 'utf8');
+const appJs = readFileSync(new URL('src/js/app.js', root), 'utf8');
+const css = readFileSync(new URL('src/css/main.css', root), 'utf8');
 
 let failures = 0;
 const check = (label, ok, extra = '') => {
@@ -45,117 +51,19 @@ function functionBody(source, name) {
   return end < 0 ? source.slice(start) : source.slice(start, end);
 }
 
-/** 把 <p> <a href> 这种白名单语法拆成标签名集合 */
-function allowedTags(spec) {
-  return new Set([...spec.matchAll(/<([a-z0-9]+)[^>]*>/gi)].map((match) => match[1].toLowerCase()));
-}
-
-/** 取出白名单标签各自允许的属性 (与 Typecho\Common::stripTags 的语义一致) */
-function allowedAttributes(spec) {
-  const map = new Map();
-
-  for (const match of spec.matchAll(/<([a-z0-9]+)((?:\s+[a-z-]+)*)>/gi)) {
-    map.set(match[1].toLowerCase(), new Set(match[2].trim().split(/\s+/).filter(Boolean)));
-  }
-
-  return map;
-}
-
-/**
- * 复刻 Typecho\Common::stripTags() 的判定 (见 var/Typecho/Common.php):
- * 不在白名单里的标签整段丢掉, 属性只留白名单里列出的那些。
- *
- * 这样就能在 Node 里验证「Markdown 的输出经过服务端过滤后还剩什么」——
- * 线上那个 bug 正是被这一步把整段标签剥掉的。
- */
-function stripTags(html, spec) {
-  const tags = allowedTags(spec);
-  const attributes = allowedAttributes(spec);
-
-  return html.replace(/<\/?([a-z0-9]+)((?:\s+[^>]*)?)>/gi, (whole, rawTag, rawAttrs) => {
-    const tag = rawTag.toLowerCase();
-
-    if (!tags.has(tag)) {
-      return '';
-    }
-
-    if ('/' === whole[1]) {
-      return `</${tag}>`;
-    }
-
-    const kept = [...(rawAttrs || '').matchAll(/([a-z-]+)(?:="[^"]*")?/gi)]
-      .map((match) => match[1].toLowerCase())
-      .filter((name) => (attributes.get(tag) || new Set()).has(name));
-
-    return '<' + tag + (kept.length ? ' ' + kept.join(' ') : '') + '>';
-  });
-}
-
-/* ---------- 1. 评论 Markdown 渲染 ---------- */
+/* ---------- 1. 评论 Markdown: 主题不再自建兜底 ----------
+   历史: 内核会把 Markdown 渲染出来的 strong / a / pre / ul 整段剥掉, 主题因此在
+   `contentEx` 上重做了一次渲染并自带白名单 —— 但 `contentEx` 跑在 `stripTags()`
+   **之前**, 补出来的标签会被紧接着剥掉, 那个兜底从来没有生效过 (还让「Markdown
+   失效」看起来已经修好了)。现在由内核在 `commentsMarkdown` 打开时放行 Markdown
+   生成的标签, 主题这边只保留接线; 内核行为由仓库根目录的 smoke / e2e 覆盖。 */
 {
-  check('functions.php 定义了 themeCommentAllowedTags()', php.includes('function themeCommentAllowedTags('));
-  check('functions.php 定义了 themeStripCommentTags()', php.includes('function themeStripCommentTags('));
-
-  /* 白名单是拼接出来的多个字符串字面量, 全部取出再拼 */
-  const spec = [...functionBody(php, 'themeCommentAllowedTags').matchAll(/'([^']*<[^']*)'/g)].map((match) => match[1]).join(' ');
-  check('白名单是一段可解析的标签串', '' !== spec, spec);
-
-  const tags = allowedTags(spec);
-
-  /* Markdown 真正会用到的标签: 少一个就意味着那种语法被静默吃掉 */
-  const needed = ['p', 'br', 'strong', 'em', 'del', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'a'];
-
-  for (const tag of needed) {
-    check(`★ 白名单允许 <${tag}> (Markdown 会生成)`, tags.has(tag), [...tags].join(','));
-  }
-
-  /* 不允许任何能执行脚本 / 带事件的标签 */
-  for (const tag of ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'img']) {
-    check(`白名单不含 <${tag}>`, !tags.has(tag));
-  }
-
-  check(
-    '★ 链接只允许 href / title / rel 三个属性',
-    /<a href title rel>/.test(spec),
-    spec.match(/<a[^>]*>/)?.[0] || '未找到 <a> 声明'
-  );
-
-  /* ★ 拿一段真实的 Markdown 输出来过一遍服务端过滤:
-     这就是线上「Markdown 没生效」的现场 —— 白名单缺哪个标签, 那一块就会被整段剥掉。 */
-  const markdownOutput = [
-    '<h2>小标题</h2>',
-    '<p>正文里有 <strong>粗体</strong>、<em>斜体</em>、<del>删除线</del> 和 <code>code</code>。</p>',
-    '<blockquote><p>引用</p></blockquote>',
-    '<ul><li>列表项</li></ul>',
-    '<ol><li>有序项</li></ol>',
-    '<pre><code>echo 1;</code></pre>',
-    '<p><a href="https://example.com" title="链接" rel="nofollow">链接</a></p>',
-    '<hr>'
-  ].join('\n');
-
-  const kept = stripTags(markdownOutput, spec);
-
-  for (const snippet of ['<strong>粗体</strong>', '<em>斜体</em>', '<del>删除线</del>', '<code>code</code>', '<blockquote>', '<ul>', '<li>列表项</li>', '<ol>', '<pre>', '<h2>小标题</h2>', '<hr>', '<a href']) {
-    check(`★ 过滤后仍保留 ${snippet}`, kept.includes(snippet), kept.replace(/\n/g, ' '));
-  }
-
-  /* 白名单里没有的属性必须被丢掉 (不能把 onclick 之类带进来) */
-  const withEvent = stripTags('<p><a href="/x" onclick="evil()">x</a></p>', spec);
-  check('★ 过滤后丢掉了白名单外的属性 (onclick)', !withEvent.includes('onclick'), withEvent);
-
-  /* 非白名单标签整段消失 */
-  const withScript = stripTags('<p>ok</p><script>alert(1)</script><img src=x onerror=y>', spec);
-  check('★ 过滤后丢掉了 script / img', !withScript.includes('<script') && !withScript.includes('<img'), withScript);
-
-  check('过滤走的是 Typecho 自己的 stripTags (与内核同一套规则)', functionBody(php, 'themeStripCommentTags').includes('Common::stripTags'));
-
-  /* 接线: contentEx 钩子 + commentsMarkdown 把关 + 用原始文本重渲染 */
   const init = functionBody(php, 'themeInit');
-  check('★ themeInit() 在 contentEx 上注册了过滤器', init.includes("filter('contentEx'"), init.includes('contentEx') ? '' : '未注册');
-  check('★ 渲染由 commentsMarkdown 把关 (关掉时原样返回)', init.includes('commentsMarkdown') && init.includes('return (string) $content'));
-  check('★ 用评论原始文本重渲染, 而不是已经剥过标签的 HTML', init.includes('$comment->text ?: $content'));
-  check('重渲染前先做 XSS 过滤', init.includes('themeStripCommentTags('));
-  check('用的还是内核的 Markdown 解析器', init.includes('Markdown::convert'));
+
+  check('★ 主题不再注册 contentEx 兜底钩子 (它跑在 stripTags 之前, 注定无效)', !init.includes("filter('contentEx'"));
+  check('★ 主题里没有重复实现标签白名单', !php.includes('themeCommentAllowedTags') && !php.includes('themeStripCommentTags'));
+  check('themeInit() 仍然收紧嵌套评论层级', init.includes('commentsMaxNestedLevels') || init.includes('commentsMaxNestingLevels = 4'));
+  check('themeInit() 不再自己渲染评论 (交给内核)', !init.includes('Markdown::convert'));
 }
 
 /* ---------- 2. 评论框的 Markdown 工具条跟随设置 ---------- */
@@ -196,6 +104,36 @@ function stripTags(html, spec) {
   check('形态判定: 单栏布局 → none', asideKind.includes("'full' === themeOption('layout', 'sidebar')") && asideKind.includes("return 'none'"));
   check('形态判定: 有目录的文章页 → toc', asideKind.includes("'toc'"));
   check('形态判定: 其余 → sidebar', asideKind.includes("'sidebar'"));
+}
+
+/* ---------- 4. 骨架屏不画第二列时, 遮罩不许把那一列盖成空白 ----------
+   遮罩是铺满视口的固定层: 侧边栏在「列表页 → 列表页」时一个字都不会变, 骨架屏里
+   不画它 —— 但它照样会被遮罩盖住, 等遮罩淡出再露回来, 看起来就是侧边栏闪了一下。
+   app.js 判定不画时给 <html> 挂 is-aside-kept, CSS 把那一列提到遮罩之上。 */
+{
+  const kept = functionBody(appJs, 'syncAsideKept');
+
+  check('app.js 定义了 syncAsideKept()', kept.length > 0);
+  check('★ 只在「本次不画第二列」且当前页确实有那一列时才托起来', kept.includes("'none' === skeletonNextAsideKind") && kept.includes('ASIDE_SELECTOR'));
+  check('★ 挂/摘跟着遮罩的显隐走 (淡出期间那一列必须一直浮着)', kept.includes('!overlay.hidden'));
+  check('★ 摘标记的时机在遮罩真正隐藏之后', /overlay\.hidden = true;[\s\S]{0,200}syncAsideKept\(\)/.test(appJs));
+  check('显示骨架时也算一次', /overlay\.hidden = false;[\s\S]{0,200}syncAsideKept\(\)/.test(appJs));
+
+  const rule = /html\.is-aside-kept \.page-aside \{([^}]*)\}/.exec(css);
+  const navRule = /html\.is-aside-kept #site-nav \{([^}]*)\}/.exec(css);
+
+  check('★ CSS 里有 html.is-aside-kept .page-aside 规则', null !== rule, rule ? rule[1].trim() : '未找到');
+  check('★ 那一列被提到遮罩 (z-index 70) 之上', null !== rule && /z-index:\s*7[1-9]/.test(rule[1]), rule ? rule[1].trim() : '未找到');
+  check(
+    '★ 只是「能看见」, 点击照旧被遮罩拦住',
+    null !== rule && /pointer-events:\s*none/.test(rule[1]) && /position:\s*relative/.test(rule[1]),
+    rule ? rule[1].trim() : '未找到'
+  );
+  check(
+    '★ 吸顶导航跟着抬高 (否则卡片会压到导航上)',
+    null !== navRule && Number(/(?:^|;)\s*z-index:\s*(\d+)/.exec(navRule[1])?.[1] ?? 0) > 71,
+    navRule ? navRule[1].trim() : '未找到'
+  );
 }
 
 console.log(`\n${failures === 0 ? '全部通过' : failures + ' 项失败'}`);
