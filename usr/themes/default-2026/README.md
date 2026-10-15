@@ -7,7 +7,7 @@
 TypechoRe 的默认主题: 现代、优雅、以性能为先。
 
 - **服务端渲染优先**: 所有内容都是 PHP 渲染的普通 HTML, 关掉 JavaScript 依然可以完整阅读、评论与翻页。
-- **渐进增强**: 有 JavaScript 时启用无刷新切页 (Swup)、切页骨架屏与卡片上浮入场、链接预取、目录高亮、代码复制、阅读进度。
+- **渐进增强**: 有 JavaScript 时启用无刷新切页 (Swup)、切页骨架屏与卡片上浮入场、链接预取、目录高亮、代码块高亮 (lite-hl)、代码复制、阅读进度。
 - **零外部请求**: 不加载任何第三方 CDN、字体或图标文件; 图标以内联 SVG 输出, 字体使用系统字体栈。
 - **宽阅读栏**: 桌面端正文可读宽度约 930px (单栏布局约 830px), 内容图片不做圆角与描边。
 - **卡片整块可点**: 列表卡片与上下篇导航都是整张卡片可点击 (标题链接用伪元素铺满卡片)。
@@ -86,7 +86,8 @@ npm run test:php     # 主题纯函数: 目录渲染/折叠 + 动效档位表 (�
 `..\..\..\php-8.5.10\php.exe tests/theme-functions.php`。
 
 技术栈: [Tailwind CSS v4](https://tailwindcss.com) + [@tailwindcss/typography](https://github.com/tailwindlabs/tailwindcss-typography)
-+ [Alpine.js](https://alpinejs.dev) + [Swup](https://swup.js.org) (head / preload / progress / scroll 插件)。
++ [Alpine.js](https://alpinejs.dev) + [Swup](https://swup.js.org) (head / preload / progress / scroll 插件)
++ [lite-hl](https://github.com/docmd-io/lite-hl) (代码高亮, 见「开源组件与来源」)。
 
 构建产物文件名固定, PHP 侧通过 `themeAsset()` 追加 `?v=<filemtime>` 做缓存失效,
 因此部署时不需要读取 manifest, 也不会有额外文件 IO。
@@ -122,17 +123,40 @@ npm run test:php     # 主题纯函数: 目录渲染/折叠 + 动效档位表 (�
 模板中用 `themeOption('键名', '默认值')` / `themeOptionBool()` / `themeOptionInt()` 读取。
 
 **改配色**: 绝大多数颜色来自 Tailwind 调色板 (`zinc`) 与 `--color-accent`,
-在 `src/css/main.css` 的 `@theme` 中调整后重新构建即可。
+在 `src/css/main.css` 的 `@theme` 中调整后重新构建即可。代码令牌的颜色是
+`--lite-hl-*` 一组变量 (见上文的「代码高亮的配色」)。
 
-**代码高亮**: 主题刻意不内置高亮库 (避免为博客正文增加几十 KB 依赖),
-代码块已经提供了圆角、复制按钮与语言徽标。若需要高亮, 推荐:
-使用 `typecho-plugin-shiki` 之类的插件在服务端输出高亮 HTML, 或自行引入 Prism/Shiki
-并在 `app.js` 的 `enhancePage()` 中调用 (每次页面切换后都会重新执行)。
+**改代码块圆角**: `src/css/main.css` 的 `@theme` 里的 `--radius-code` (默认 `10px`),
+只作用于代码块, 不影响引用块、图片与卡片。
 
-**代码块滚动**: 开启增强后, 横向滚动交给 `<code class="code-scroll">`,
+**代码高亮**: 主题内置 [lite-hl](https://github.com/docmd-io/lite-hl) 做客户端高亮 ——
+它是启发式的通用分词器, 不猜语言、也不需要按语言注册语法, 整包不到 10KB (gzip 后约 4KB,
+已随 `dist/app.js` 打包, 不额外请求任何 CDN)。**服务端不需要装任何插件**: 只要 Typecho 照常
+输出 `<pre><code>`, 浏览器里就会自动着色; 源码里的 `<` `&` 由 lite-hl 负责转义, 分词只包
+`<span>`, 所以 `textContent` 逐字符不变, 复制按钮拿到的仍是原始代码, 关掉 JavaScript 也只是
+回到没有颜色的纯文本。实现与约定:
+
+- 高亮范围是正文 (`.prose-theme`) 与评论 (`.comment-content`) 里的 `pre > code`, 行内 `code` 不动。
+- 每次切页 (`enhancePage()`) 与评论就地刷新后都会重新执行, 用 `data-highlighted` 标记保证幂等,
+  不会把已经分好词的代码再分一次。
+- 想让某个代码块保持原样, 在 `<pre>` 或 `<code>` 上写 `data-no-highlight` 即可。
+- 分词失败时静默退回纯文本 (不影响阅读与复制), 不做任何破坏性替换。
+- 输出的类名沿用 highlight.js 的 `hljs-*` 约定 (`mimicHljs`), 因此也能直接套用现成的
+  highlight.js 主题 CSS。
+
+**代码高亮的配色**: 令牌颜色定义在 `src/css/main.css` 的 `--lite-hl-*` 变量里 (与 lite-hl
+自带主题同名, 改单个令牌只需覆盖一个变量)。这里**没有**直接引 lite-hl 的 `theme.css`:
+那套主题用 `prefers-color-scheme` 切换明暗两套配色, 而本主题的深色模式是 `html.dark` 类驱动的,
+两者会错位; 加上代码块在浅色与深色模式下都是深色底, 它那份「白底」配色放上去根本看不清。
+所以主题只取了它的暗色一套值, 并按变量名重新写了一遍。
+
+**代码块圆角与滚动**: 代码块的圆角由 `@theme` 里的 `--radius-code` (默认 `10px`) 统一控制,
+正文与评论共用这一个值。开启增强后, 横向滚动交给 `<code class="code-scroll">`,
 复制按钮定位在不滚动的 `<pre class="code-block">` 上, 因此滚动代码时按钮不会跟着跑;
 按钮下方的代码文字用一层与代码块同色的渐隐 (`pre.code-block::before`) 盖住。
-如果没有 JavaScript, 这两条规则都不生效, 代码块仍是原生可横向滚动的 `<pre>`。
+`pre.code-block` 上的 `overflow: hidden` 只为把内容按圆角裁掉 —— 横向滚动条两端与右上角
+那层渐隐都不会顶到圆角外面。没有 JavaScript 时, `<pre>` 自身带 `overflow-x: auto`,
+长行在圆角盒子内部滚动, 而不是溢出到盒子外面 (那里的文字是浅色的, 溢到白底上等于看不见)。
 
 **切页骨架屏与入场动画**: `footer.php` 里的 `#page-skeleton` 由 `app.js` 控制显隐与形态 ——
 跳转等待超过 130ms 才上浮淡入, 容器替换后立刻淡出; 同一时间 `app.js` 给 `<html>` 挂上
@@ -258,7 +282,7 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
 
 ## 性能与可访问性
 
-- 单个 CSS (约 12 KB gzip) + 单个 JS (约 35 KB gzip), 均为长期缓存 (filemtime 版本号)。
+- 单个 CSS (约 14 KB gzip) + 单个 JS (约 40 KB gzip), 均为长期缓存 (filemtime 版本号)。
 - 省流模式 (`navigator.connection.saveData` 或 2G 网络) 下自动关闭无刷新切页与预取。
 - 尊重 `prefers-reduced-motion` / `prefers-reduced-data`。
 - 首图不加 `loading` (通常是 LCP 元素), 其余正文图片 `loading="lazy" decoding="async"`。
@@ -273,6 +297,28 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
   这类非图片后缀 (没有后缀的地址 (图床 / 动态缩略图接口) 视为图片)。
 - 附件按 Typecho 的附件类型判断 (`attachment->isImage`), 压缩包、PDF、音视频不会进卡片。
 - 所以「上传了别的文件」不会再把卡片图片搞坏, 自定义字段里的地址仍然无条件信任 (由站长自己填写)。
+
+## 开源组件与来源
+
+主题把运行时要用的第三方库都在构建期打进 `dist/`, 页面**不请求任何 CDN / 外部文件**:
+
+| 组件 | 版本 | 许可 | 来源 | 用在哪 |
+| --- | --- | --- | --- | --- |
+| lite-hl | `^0.2.1` | MIT | <https://github.com/docmd-io/lite-hl> (docmd 生态, 作者 Ghazi / mgks.dev) | 代码块语法高亮, `src/js/app.js` 的 `highlightCodeBlocks()` |
+| Alpine.js | `^3.17.4` | MIT | <https://github.com/alpinejs/alpine> | 深色模式切换等声明式交互 |
+| Swup (+ head / preload / progress / scroll 插件) | `^4.10.0` | MIT | <https://github.com/swup/swup> | 无刷新切页 |
+| Tailwind CSS + @tailwindcss/typography | `^4.3.3` / `^0.5.20` | MIT | <https://tailwindcss.com> | 只在构建期生成 `dist/style.css` |
+
+### lite-hl
+
+- 安装与引入: `npm install lite-hl` (见 `package.json` 的 `dependencies`),
+  代码里 `import { highlight } from 'lite-hl'`, 由 Vite 打包进 `dist/app.js`。
+- 只调用它的公共 API (`highlight(code, { language, mimicHljs: true })`),
+  **没有修改、也没有单独重新分发**它的源码。
+- 主题只自行编写了令牌配色 (变量名 `--lite-hl-*` 与上游保持一致, 见「代码高亮的配色」):
+  这部分是主题原创, 不是从上游复制的样式表。
+- 上游许可是 MIT, 主题整体是 GPL-2.0-or-later: 打包后的 `dist/app.js` 里同时包含两种许可的
+  代码, 二次分发时请一并保留上游的许可声明, 并在你 fork 的 README 里保留本节的来源说明。
 
 ## 兼容性
 

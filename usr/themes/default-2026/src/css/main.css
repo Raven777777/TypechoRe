@@ -37,6 +37,11 @@
   --shadow-card-hover: 0 2px 6px oklch(0.24 0.02 265 / 0.07), 0 18px 46px -20px oklch(0.24 0.02 265 / 0.42);
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
   --container-page: 78rem;
+
+  /* ---------- 代码块圆角 ----------
+     只给代码块用: 主题其它地方 (引用块、图片、卡片) 仍是直角或自己的圆角,
+     改这一个值即可同时调整正文与评论里的代码块。 */
+  --radius-code: 10px;
 }
 
 /* =============================================================================
@@ -579,7 +584,8 @@
   }
 
   .comment-body .comment-content pre {
-    @apply my-3 overflow-x-auto rounded-lg bg-zinc-900 p-3 text-xs leading-relaxed text-zinc-100 dark:bg-zinc-950;
+    @apply my-3 overflow-x-auto bg-zinc-900 p-3 text-xs leading-relaxed text-zinc-100 dark:bg-zinc-950;
+    border-radius: var(--radius-code);
   }
 
   .comment-body .comment-content pre code {
@@ -870,12 +876,17 @@ html.is-aside-kept #site-nav {
   color: var(--color-zinc-100);
 }
 
-/* 代码块: 直角 + 无描边
-   结构: <pre class="code-block"> (不滚动, 定位工具栏) > <code class="code-scroll"> (横向滚动) */
+/* 代码块: 轻微圆角 (10px, 见 @theme 的 --radius-code) + 无描边
+   结构: <pre class="code-block"> (不滚动, 定位工具栏) > <code class="code-scroll"> (横向滚动)
+
+   基础规则里的 overflow-x: auto 是给「没有 JS 增强」时的服务端输出用的: 长行会在
+   代码块内部滚动, 而不是溢出到圆角盒子外面 (文字是浅色的, 溢到白底上等于看不见)。
+   有 JS 时外层由 .code-block 接管, 这一条不再生效。 */
 .prose-theme pre {
   position: relative;
-  overflow: visible;
-  border-radius: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border-radius: var(--radius-code);
   padding: 1.15rem 1.25rem;
   font-size: 0.875rem;
   line-height: 1.7;
@@ -884,11 +895,13 @@ html.is-aside-kept #site-nav {
 
 /* 开启增强后: <pre> 本身不滚动, 也不再加左右内边距 ——
    绝对定位的复制按钮如果落在滚动容器里, 会跟着代码一起左右移动。
-   间距交给负责横向滚动的 <code>, 这样按钮始终贴在代码块右上角。 */
+   间距交给负责横向滚动的 <code>, 这样按钮始终贴在代码块右上角。
+   overflow: hidden 只为把内容裁进圆角里: 横向滚动的仍是内部的 <code>,
+   于是滚动条两端与右上角的渐隐层都不会顶出圆角外面。 */
 .prose-theme pre.code-block {
   padding-inline: 0;
   padding-bottom: 0;
-  overflow-x: visible;
+  overflow: hidden;
 }
 
 .prose-theme pre.code-block > code.code-scroll {
@@ -926,6 +939,78 @@ html.is-aside-kept #site-nav {
   padding: 0;
   font-weight: 400;
   font-size: inherit;
+}
+
+/* =============================================================================
+   代码高亮令牌配色 (lite-hl)
+
+   分词由 lite-hl (https://github.com/docmd-io/lite-hl, MIT) 在浏览器里完成, 输出的是
+   highlight.js 的 hljs-* 类名, 所以这里只负责上色 —— 类名与变量名都沿用 lite-hl 的
+   约定, 想改某一个令牌 (比如关键字) 覆盖对应的 --lite-hl-* 即可, 不必换整套主题。
+
+   与 lite-hl 自带 theme.css 的区别: 那套用 @media (prefers-color-scheme: dark) 切换
+   明暗两套配色, 而本主题的深色模式是 html.dark 类驱动的, 两者会错位; 加上代码块在
+   浅色与深色模式下都是深色底 (--tw-prose-pre-bg / 评论区的 bg-zinc-900), 浅色那套
+   配色放上去根本看不清。所以这里只取它暗色的一套值 —— 也就是它「AA on #0d1117」
+   的那组色, 代码块底色与之明度接近, 对比度基本保持。
+   ============================================================================= */
+
+:root {
+  --lite-hl-comment: #8b949e;
+  --lite-hl-string: #a5d6ff;
+  --lite-hl-number: #79c0ff;
+  --lite-hl-keyword: #ff7b72;
+  --lite-hl-literal: #79c0ff;
+  --lite-hl-function: #d2a8ff;
+  --lite-hl-variable: #ffa657;
+  --lite-hl-attr: #79c0ff;
+  --lite-hl-operator: #ff7b72;
+  --lite-hl-punctuation: #8b949e;
+}
+
+/* 未被着色的部分继承 pre 的 --tw-prose-pre-code (浅灰), 因此不必给 .hljs 定颜色 */
+.hljs-comment {
+  color: var(--lite-hl-comment);
+  font-style: italic;
+}
+
+.hljs-string {
+  color: var(--lite-hl-string);
+}
+
+.hljs-number {
+  color: var(--lite-hl-number);
+}
+
+.hljs-keyword {
+  color: var(--lite-hl-keyword);
+  font-weight: 600;
+}
+
+.hljs-literal {
+  color: var(--lite-hl-literal);
+  font-weight: 600;
+}
+
+/* lite-hl 把函数名输出成 class="hljs-title function_" (与 highlight.js 一致) */
+.hljs-title.function_ {
+  color: var(--lite-hl-function);
+}
+
+.hljs-variable {
+  color: var(--lite-hl-variable);
+}
+
+.hljs-attr {
+  color: var(--lite-hl-attr);
+}
+
+.hljs-operator {
+  color: var(--lite-hl-operator);
+}
+
+.hljs-punctuation {
+  color: var(--lite-hl-punctuation);
 }
 
 /* 引用块: 去掉插件自带的引号与圆角, 保留左侧强调色竖线 */

@@ -3,6 +3,7 @@
  *
  * - Alpine.js  : 深色模式切换、阅读进度、返回顶部等声明式轻交互
  * - Swup       : 无刷新切页 (优先使用原生 View Transitions API)
+ * - lite-hl    : 代码块语法高亮 (启发式分词, 不需要按语言注册语法)
  * - 渐进增强   : 代码块复制、目录高亮、移动端导航收起
  *
  * 全部脚本都以「无 JavaScript 也能正常阅读」为前提编写:
@@ -10,6 +11,7 @@
  */
 
 import Alpine from 'alpinejs';
+import { highlight } from 'lite-hl';
 import Swup from 'swup';
 import SwupHeadPlugin from '@swup/head-plugin';
 import SwupPreloadPlugin from '@swup/preload-plugin';
@@ -192,6 +194,58 @@ async function copyText(text) {
 
   document.body.removeChild(area);
   return ok;
+}
+
+/* -----------------------------------------------------------------------------
+ * 代码高亮 (lite-hl)
+ *
+ * lite-hl 是启发式的「通用分词器」: 不猜语言、也不需要注册任何语法, 只认注释 /
+ * 字符串 / 数字 / 关键字 / 函数调用这些跨语言共有的形态, 整包不到 10KB。
+ * 它按 highlight.js 的类名输出 (hljs-*), 配色在 main.css 里给出 —— 代码块在
+ * 浅色与深色模式下都是深色底, 所以那边只有一套暗色令牌配色, 不走 lite-hl 自带的
+ * theme.css (它跟随 prefers-color-scheme, 与本主题的 class 驱动深色模式对不上)。
+ *
+ * 只做增强, 不改变语义:
+ *   - 失败就保持服务端输出的纯文本, 不抛错、不留半个 span;
+ *   - 分词只包 <span>, textContent 与分词前逐字符相同, 复制按钮拿到的仍是原始代码;
+ *   - 需要保持原样的代码块, 在 <pre> 或 <code> 上标 data-no-highlight 即可跳过。
+ * -------------------------------------------------------------------------- */
+
+/** 需要高亮的代码块: 正文 (prose-theme) 与评论 (comment-content) */
+const HIGHLIGHT_SELECTOR = '#main .prose-theme pre > code, #comments .comment-content pre > code';
+
+/** 用 lite-hl 给尚未处理的代码块着色 (每次切页后重新执行) */
+function highlightCodeBlocks() {
+  document.querySelectorAll(HIGHLIGHT_SELECTOR).forEach((code) => {
+    /* 同一块可能被重复扫描 (切页 / 评论就地刷新), 处理过的不再动;
+       data-no-highlight 是留给「这段代码不想被分词」的出口。 */
+    if ('true' === code.dataset.highlighted || code.closest('[data-no-highlight]')) {
+      return;
+    }
+
+    const source = code.textContent || '';
+
+    if ('' === source.trim()) {
+      return;
+    }
+
+    /* 语言名只作 class 归属, 不参与分词 (lite-hl 对所有语言一视同仁);
+       Typecho 输出 class="lang-php", 部分插件/高亮库用 class="language-php"。 */
+    const match = /(?:language|lang)-([\w+#-]+)/.exec(code.className);
+
+    try {
+      const { value } = highlight(source, {
+        language: match ? match[1] : undefined,
+        mimicHljs: true
+      });
+
+      code.innerHTML = value;
+      code.classList.add('hljs');
+      code.dataset.highlighted = 'true';
+    } catch (error) {
+      /* 高亮失败不影响阅读与复制: 保持原始纯文本 */
+    }
+  });
 }
 
 /** 为代码块注入语言标签与复制按钮 */
@@ -754,7 +808,9 @@ function enhanceCommentBox() {
         previousRespond.after(previousHolder);
       }
 
-      /* 新列表里的评论脚本 (回复链接等) 由增强逻辑重新接手 */
+      /* 新列表里的评论脚本 (回复链接等) 由增强逻辑重新接手;
+         新评论正文里的代码块也在这里补一次高亮 (enhancePage 只在切页时跑)。 */
+      highlightCodeBlocks();
       enhanceNotice();
       enhanceCommentBox();
 
@@ -833,6 +889,9 @@ document.addEventListener('click', (event) => {
 
 /** 每次页面内容替换后需要重新执行的增强 */
 function enhancePage() {
+  /* 先分词再装饰: 语言徽标与复制按钮都按 <code> 的类名 / textContent 取, 顺序不影响结果,
+     但先高亮可以让复制按钮一出现就对应最终 DOM。 */
+  highlightCodeBlocks();
   enhanceCodeBlocks();
   enhanceOverflow();
   enhanceTocSpy();
