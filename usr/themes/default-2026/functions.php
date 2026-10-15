@@ -639,9 +639,36 @@ function themeResolveUrl(string $url): string
 }
 
 /**
+ * 没有扩展名的地址视为图片
+ *
+ * 图片地址可能不带后缀 (图床 / 动态缩略图接口), 所以不能反过来「必须匹配图片后缀」,
+ * 只能判断「明确带了文件后缀, 而且后缀不是图片」。
+ *
+ * @param string $path
+ * @return bool
+ */
+function themeIsImagePath(string $path): bool
+{
+    /** 去掉查询串与锚点, 只保留路径部分, 例如 photo.jpg?w=800#top */
+    $cleaned = preg_replace('/[?#].*$/', '', trim($path, " \t\n\r\0\x0B<>\"'")) ?? '';
+    $extension = strtolower(pathinfo($cleaned, PATHINFO_EXTENSION));
+
+    if ('' === $extension) {
+        return true;
+    }
+
+    static $images = ['jpg', 'jpeg', 'jpe', 'jfif', 'pjpeg', 'png', 'apng', 'gif', 'webp',
+        'avif', 'bmp', 'svg', 'svgz', 'ico', 'cur', 'tif', 'tiff', 'heic', 'heif', 'jxl'];
+
+    return in_array($extension, $images, true);
+}
+
+/**
  * 从原始文本中提取首图地址
  *
  * 直接解析 Markdown / HTML 原文, 避免为列表页的每篇文章渲染整篇内容。
+ * Markdown 语法可以给任意文件写 `![名字](file.zip)`, 所以这里会逐个检查后缀,
+ * 跳过压缩包、PDF 之类的附件, 免得它们被当成图片塞进卡片。
  *
  * @param string $text
  * @return string 找不到时返回空字符串
@@ -653,13 +680,33 @@ function themeFirstImageUrl(string $text): string
     }
 
     /** Markdown 图片: ![alt](url) */
-    if (preg_match('/!\[[^\]]*\]\(\s*<?([^\s)>]+)/', $text, $found)) {
-        return themeResolveUrl($found[1]);
+    if (preg_match_all('/!\[[^\]]*\]\(\s*<?([^\s)>]+)/', $text, $matches)) {
+        foreach ($matches[1] as $candidate) {
+            if (!themeIsImagePath($candidate)) {
+                continue;
+            }
+
+            $url = themeResolveUrl($candidate);
+
+            if ('' !== $url) {
+                return $url;
+            }
+        }
     }
 
     /** HTML 图片 */
-    if (preg_match('#<img\b[^>]*?\ssrc\s*=\s*(["\'])(.*?)\1#is', $text, $found)) {
-        return themeResolveUrl($found[2]);
+    if (preg_match_all('#<img\b[^>]*?\ssrc\s*=\s*(["\'])(.*?)\1#is', $text, $matches)) {
+        foreach ($matches[2] as $candidate) {
+            if (!themeIsImagePath($candidate)) {
+                continue;
+            }
+
+            $url = themeResolveUrl($candidate);
+
+            if ('' !== $url) {
+                return $url;
+            }
+        }
     }
 
     return '';
@@ -699,11 +746,19 @@ function themeThumbnail(\Widget\Archive $archive): ?array
         return $cache[$cid] = ['url' => $contentUrl, 'alt' => $title];
     }
 
-    /** 3. 图片附件 */
-    $attachments = $archive->attachments(1);
+    /** 3. 图片附件 (跳过压缩包 / 文档等非图片附件, 取第一张真正的图片) */
+    $attachments = $archive->attachments(20);
 
-    if ($attachments->have()) {
-        $attachmentUrl = themeResolveUrl((string) $attachments->attachment->url);
+    while ($attachments->next()) {
+        /** @var object|null $attachment */
+        $attachment = $attachments->attachment;
+
+        /* 少数插件写入的附件可能没有 isImage 标记, 按非图片处理更安全 */
+        if (null === $attachment || empty($attachment->isImage)) {
+            continue;
+        }
+
+        $attachmentUrl = themeResolveUrl((string) $attachment->url);
 
         if ('' !== $attachmentUrl) {
             return $cache[$cid] = ['url' => $attachmentUrl, 'alt' => $title];

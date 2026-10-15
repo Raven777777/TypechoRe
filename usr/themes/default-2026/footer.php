@@ -55,6 +55,12 @@ $footerText = themeOption('footerText');
     </button>
 </div>
 
+<!-- 无刷新切页时的加载指示 (由 dist/app.js 控制显隐, 无 JS 时始终隐藏) -->
+<div id="page-loading" class="page-loading no-print" role="status" aria-live="polite" hidden>
+    <span class="page-loading-spinner" aria-hidden="true"></span>
+    <span class="sr-only"><?php _e('正在加载…'); ?></span>
+</div>
+
 <?php $this->footer(); ?>
 <script type="module" src="<?php echo themeAsset('dist/app.js'); ?>"></script>
 </body>

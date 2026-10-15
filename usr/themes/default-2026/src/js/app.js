@@ -228,6 +228,11 @@ function enhanceCodeBlocks() {
 
     tools.appendChild(button);
     pre.appendChild(tools);
+
+    /* 让 <code> 自己成为横向滚动容器: 这样按钮定位在不滚动的 <pre> 上,
+       代码左右滚动时按钮不会再跟着移动。 */
+    code.classList.add('code-scroll');
+    pre.classList.add('code-block');
   });
 }
 
@@ -462,6 +467,74 @@ function headerOffset() {
   return nav ? nav.offsetHeight + 12 : 0;
 }
 
+/* -----------------------------------------------------------------------------
+ * 切页加载态 (progressive enhancement)
+ *
+ * 无刷新切页时内容会在几十到几百毫秒后突然出现, 看起来像「突兀地刷新」。
+ * 这里在等待期间显示一个居中的加载指示, 让新旧内容之间有个平滑的过渡。
+ * 延迟 130ms 才显示: 命中预取 / 缓存的跳转根本不会出现加载态, 不会闪一下。
+ * -------------------------------------------------------------------------- */
+
+const LOADING_OVERLAY_DELAY = 130;
+const LOADING_OVERLAY_FADE = 240;
+
+let loadingTimer = 0;
+let loadingHideTimer = 0;
+let loadingVisible = false;
+
+function showLoadingOverlay() {
+  const overlay = document.getElementById('page-loading');
+  if (!overlay || loadingVisible) {
+    return;
+  }
+
+  loadingVisible = true;
+  overlay.hidden = false;
+  /* 等一帧再加类, 否则 hidden 刚取消时过渡不会触发 */
+  window.requestAnimationFrame(() => overlay.classList.add('is-visible'));
+}
+
+function hideLoadingOverlay() {
+  window.clearTimeout(loadingTimer);
+  window.clearTimeout(loadingHideTimer);
+  loadingTimer = 0;
+  loadingHideTimer = 0;
+
+  const overlay = document.getElementById('page-loading');
+
+  if (!loadingVisible || !overlay) {
+    loadingVisible = false;
+    return;
+  }
+
+  loadingVisible = false;
+  overlay.classList.remove('is-visible');
+
+  /* 等淡出动画结束再真正隐藏, 过渡时长与 CSS 保持一致 */
+  loadingHideTimer = window.setTimeout(() => {
+    loadingHideTimer = 0;
+
+    if (!loadingVisible) {
+      overlay.hidden = true;
+    }
+  }, LOADING_OVERLAY_FADE);
+}
+
+function scheduleLoadingOverlay() {
+  hideLoadingOverlay();
+  loadingTimer = window.setTimeout(showLoadingOverlay, LOADING_OVERLAY_DELAY);
+}
+
+/** 同一个页面里的锚点跳转不会重新加载内容, 不必显示加载态 */
+function isSamePageHashVisit(visit) {
+  const to = visit?.to;
+
+  return Boolean(to)
+    && Boolean(to.hash)
+    && to.pathname === window.location.pathname
+    && to.search === window.location.search;
+}
+
 function boot() {
   Alpine.start();
 
@@ -493,15 +566,24 @@ function boot() {
   /* 供模板内联脚本或 Alpine 组件 (x-on:swup:page:view.document) 使用 */
   window.swup = swup;
 
-  swup.hooks.on('visit:start', () => {
+  swup.hooks.on('visit:start', (visit) => {
     document.querySelectorAll('#site-nav details[open]').forEach((details) => {
       details.open = false;
     });
+
+    if (!isSamePageHashVisit(visit)) {
+      scheduleLoadingOverlay();
+    }
   });
 
   swup.hooks.on('page:view', () => {
+    hideLoadingOverlay();
     enhancePage();
   });
+
+  /* 跳转被取消 (例如用户又点了别的链接) 或失败时, 不要留下加载态 */
+  swup.hooks.on('visit:end', hideLoadingOverlay);
+  swup.hooks.on('visit:error', hideLoadingOverlay);
 
   enhancePage();
 }

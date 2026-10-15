@@ -7,10 +7,11 @@
 TypechoRe 的默认主题: 现代、优雅、以性能为先。
 
 - **服务端渲染优先**: 所有内容都是 PHP 渲染的普通 HTML, 关掉 JavaScript 依然可以完整阅读、评论与翻页。
-- **渐进增强**: 有 JavaScript 时启用无刷新切页 (Swup, 优先走原生 View Transitions API)、链接预取、目录高亮、代码复制、阅读进度。
+- **渐进增强**: 有 JavaScript 时启用无刷新切页 (Swup, 优先走原生 View Transitions API)、切页加载指示、链接预取、目录高亮、代码复制、阅读进度。
 - **零外部请求**: 不加载任何第三方 CDN、字体或图标文件; 图标以内联 SVG 输出, 字体使用系统字体栈。
 - **宽阅读栏**: 桌面端正文可读宽度约 930px (单栏布局约 830px), 内容图片不做圆角与描边。
 - **卡片整块可点**: 列表卡片与上下篇导航都是整张卡片可点击 (标题链接用伪元素铺满卡片)。
+- **只把图片当图片**: 卡片缩略图只认自定义字段、正文里的图片和图片附件, 压缩包 / PDF 等非图片附件不会出现在卡片上。
 - **深色模式**: 跟随系统 / 始终浅色 / 始终深色三态, 首屏无闪烁, 访客的选择保存在浏览器本地。
 - **可配置**: 强调色、字体、布局、目录、相关文章、侧边栏区块、页脚与自定义 CSS 都可以在后台「外观设置」里调整。
 
@@ -94,6 +95,15 @@ npm run dev          # 监听源码变化自动构建
 使用 `typecho-plugin-shiki` 之类的插件在服务端输出高亮 HTML, 或自行引入 Prism/Shiki
 并在 `app.js` 的 `enhancePage()` 中调用 (每次页面切换后都会重新执行)。
 
+**代码块滚动**: 开启增强后, 横向滚动交给 `<code class="code-scroll">`,
+复制按钮定位在不滚动的 `<pre class="code-block">` 上, 因此滚动代码时按钮不会跟着跑;
+按钮下方的代码文字用一层与代码块同色的渐隐 (`pre.code-block::before`) 盖住。
+如果没有 JavaScript, 这两条规则都不生效, 代码块仍是原生可横向滚动的 `<pre>`。
+
+**切页加载指示**: `footer.php` 里的 `#page-loading` 由 `app.js` 控制显隐 ——
+跳转等待超过 130ms 才淡入, 内容替换后淡出, 命中预取或缓存的快速跳转不会闪一下。
+样式取自 `.page-loading`, 不需要可以直接删掉这段标记与对应的 CSS。
+
 **正文 HTML 处理**: 图片懒加载在 `themeArticle()` 中显式处理, 而不是通过
 `Plugin::factory('Widget\Base\Contents')->contentEx` 钩子 —— 因为主题的 `functions.php`
 由 `Widget\Archive::execute()` 在 `singleHandle()` 之后才载入, 而 `singleHandle()`
@@ -108,6 +118,15 @@ npm run dev          # 监听源码变化自动构建
 - 首图不加 `loading` (通常是 LCP 元素), 其余正文图片 `loading="lazy" decoding="async"`。
 - 语义化标签、跳转到主内容链接、可见焦点环、`aria-*` 标注、原生 `<details>` 导航 (无 JS 可用)。
 - 打印样式会隐藏导航、侧边栏、目录与评论区。
+
+## 卡片缩略图的取值规则
+
+`themeThumbnail()` 依次尝试: 自定义字段 `thumbnail` → 正文首图 → 附件, 并且**只接受图片**:
+
+- 正文按 Markdown / HTML 原文解析, 逐个跳过 `![附件](file.zip)`、`<img src="a.pdf">`
+  这类非图片后缀 (没有后缀的地址 (图床 / 动态缩略图接口) 视为图片)。
+- 附件按 Typecho 的附件类型判断 (`attachment->isImage`), 压缩包、PDF、音视频不会进卡片。
+- 所以「上传了别的文件」不会再把卡片图片搞坏, 自定义字段里的地址仍然无条件信任 (由站长自己填写)。
 
 ## 兼容性
 

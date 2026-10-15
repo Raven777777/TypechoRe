@@ -151,7 +151,9 @@
     display: inline-flex;
   }
 
-  /* 代码块语言徽标与复制按钮 (按钮由 app.js 注入)
+  /* ---------- 代码块语言徽标与复制按钮 (按钮由 app.js 注入)
+     按钮定位在 <pre> 上, 而 <pre> 自身不滚动 (交由内部的 <code> 滚动),
+     这样代码左右滚动时按钮不会跟着移动。
      注: 正文排版相关的 .prose-theme 规则统一放在文件末尾的「层外」区块,
      因为 @tailwindcss/typography 的规则在 utilities 层, 在 components 层里覆盖不掉。 */
   .code-block-tools {
@@ -242,9 +244,58 @@
     background-color: var(--color-accent);
   }
 
+  /* ---------- 切页加载指示 (由 app.js 控制显隐) ----------
+     内容等待期间用一层淡淡的遮罩 + 转圈提示过渡, 避免新页面「突兀」地出现。
+     只有停留超过约 130ms 的跳转才会显示, 命中预取的快速跳转不会闪烁。 */
+  .page-loading {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: color-mix(in oklab, var(--color-white) 40%, transparent);
+    opacity: 0;
+    transition: opacity 0.2s var(--ease-out-quint);
+  }
+
+  .dark .page-loading {
+    background-color: color-mix(in oklab, var(--color-zinc-950) 40%, transparent);
+  }
+
+  .page-loading[hidden] {
+    display: none;
+  }
+
+  .page-loading.is-visible {
+    opacity: 1;
+  }
+
+  .page-loading-spinner {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+    border: 2px solid var(--color-accent-ring);
+    border-top-color: var(--color-accent);
+    animation: page-loading-spin 0.7s linear infinite;
+  }
+
+  @keyframes page-loading-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  @media (min-width: 40rem) {
+    .page-loading-spinner {
+      width: 1.75rem;
+      height: 1.75rem;
+    }
+  }
+
   /* ---------- 页面过渡 (Swup) ---------- */
   html.is-changing .transition-fade {
-    transition: opacity 0.24s var(--ease-out-quint), transform 0.24s var(--ease-out-quint);
+    transition: opacity 0.28s var(--ease-out-quint), transform 0.28s var(--ease-out-quint);
     opacity: 1;
     transform: none;
   }
@@ -256,7 +307,7 @@
 
   html.is-rendering .transition-fade {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
 
   /* 原生 View Transitions 模式下改由浏览器负责动画 */
@@ -269,7 +320,7 @@
   }
 
   ::view-transition-new(main-content) {
-    animation: 0.28s var(--ease-out-quint) both vt-fade-in;
+    animation: 0.32s var(--ease-out-quint) both vt-fade-in;
   }
 
   @keyframes vt-fade-out {
@@ -494,14 +545,55 @@
   color: var(--color-zinc-100);
 }
 
-/* 代码块: 直角 + 无描边 */
+/* 代码块: 直角 + 无描边
+   结构: <pre class="code-block"> (不滚动, 定位工具栏) > <code class="code-scroll"> (横向滚动) */
 .prose-theme pre {
   position: relative;
+  overflow: visible;
   border-radius: 0;
   padding: 1.15rem 1.25rem;
   font-size: 0.875rem;
   line-height: 1.7;
   tab-size: 4;
+}
+
+/* 开启增强后: <pre> 本身不滚动, 也不再加左右内边距 ——
+   绝对定位的复制按钮如果落在滚动容器里, 会跟着代码一起左右移动。
+   间距交给负责横向滚动的 <code>, 这样按钮始终贴在代码块右上角。 */
+.prose-theme pre.code-block {
+  padding-inline: 0;
+  padding-bottom: 0;
+  overflow-x: visible;
+}
+
+.prose-theme pre.code-block > code.code-scroll {
+  display: block;
+  /* 上下内边距与 <pre> 的 1.15rem 对齐; 横向滚动条会占在 padding-bottom 里 */
+  padding: 1.15rem 1.25rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+/* 代码向左滚到按钮下面时, 用一层与代码块同色的渐隐把文字盖掉, 保证按钮清晰可读 */
+.prose-theme pre.code-block::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  width: 4rem;
+  height: 3rem;
+  pointer-events: none;
+  background-image: linear-gradient(
+    to right,
+    transparent,
+    var(--tw-prose-pre-bg, oklch(0.21 0.015 265)) 1.25rem
+  );
+}
+
+.prose-theme pre.code-block > .code-block-tools {
+  z-index: 2;
 }
 
 .prose-theme pre code {
