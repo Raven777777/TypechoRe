@@ -16,6 +16,11 @@ $cardThumb = themeThumbnail($this);
 /** @var array<int, array{name: string, permalink: string}> $cardCategories */
 $cardCategories = $this->categories;
 $cardPrimary = $cardCategories[0] ?? null;
+/* 目标页第二列的形态提示 (写成链接上的 data-aside-target): 从列表页点进去时, app.js
+   在拿到目标文档之前就靠它判断第二列会不会换 —— 没有它只能保守处理, 而卡片上的分类
+   链接去的是列表页, 形态与文章页不同, 所以两种提示分别算。 */
+$cardAside = themeContentAsideKind($this);
+$listAside = themeListAsideKind();
 ?>
 <article class="card card-hover group relative flex flex-col overflow-hidden sm:flex-row" itemscope itemtype="http://schema.org/BlogPosting">
     <?php if (null !== $cardThumb): ?>
@@ -27,13 +32,13 @@ $cardPrimary = $cardCategories[0] ?? null;
     <div class="flex min-w-0 flex-1 flex-col gap-3 p-5">
         <div class="flex flex-wrap items-center gap-2">
             <?php if (null !== $cardPrimary): ?>
-                <a class="chip relative z-10" href="<?php echo themeEsc((string) $cardPrimary['permalink']); ?>"><?php echo themeEsc((string) $cardPrimary['name']); ?></a>
+                <a class="chip relative z-10" data-skeleton="list" data-aside-target="<?php echo themeEsc($listAside); ?>" href="<?php echo themeEsc((string) $cardPrimary['permalink']); ?>"><?php echo themeEsc((string) $cardPrimary['name']); ?></a>
             <?php endif; ?>
             <time class="meta-text" datetime="<?php $this->date('c'); ?>" title="<?php $this->date(); ?>"><?php echo themeIcon('calendar', 'size-3.5'); ?><?php $this->dateWord(); ?></time>
         </div>
 
         <h2 class="text-lg leading-snug font-semibold tracking-tight" itemprop="headline">
-            <a class="card-link transition-colors group-hover:text-accent" href="<?php $this->permalink(); ?>" itemprop="url"><?php $this->title(); ?></a>
+            <a class="card-link transition-colors group-hover:text-accent" data-aside-target="<?php echo themeEsc($cardAside); ?>" href="<?php $this->permalink(); ?>" itemprop="url"><?php $this->title(); ?></a>
         </h2>
 
         <p class="line-clamp-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400" itemprop="description">
@@ -41,7 +46,7 @@ $cardPrimary = $cardCategories[0] ?? null;
         </p>
 
         <div class="mt-auto flex flex-wrap items-center gap-4 pt-1">
-            <a class="meta-text relative z-10 transition-colors hover:text-accent" href="<?php $this->permalink(); ?>#comments">
+            <a class="meta-text relative z-10 transition-colors hover:text-accent" data-aside-target="<?php echo themeEsc($cardAside); ?>" href="<?php $this->permalink(); ?>#comments">
                 <?php echo themeIcon('message-circle', 'size-3.5'); ?>
                 <span><?php $this->commentsNum(_t('暂无评论'), _t('1 条评论'), _t('%d 条评论')); ?></span>
             </a>

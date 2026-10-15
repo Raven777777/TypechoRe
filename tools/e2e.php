@@ -718,6 +718,77 @@ assertTrue(str_contains($postBody, 'E2E 回归文章'), 'published post title mi
 $managePosts = assertResponse($site->get('/admin/manage-posts.php'), [200], 'GET manage-posts after publish');
 assertTrue(str_contains($managePosts, 'E2E 回归文章'), 'published post missing in the admin list');
 
+// ---------------------------------------------------------------- 切页时第二列的形态提示
+
+step('aside hint (第二列会不会变, default-2026)');
+/**
+ * 取出列表页上指向某个地址的链接带的 data-aside-target
+ *
+ * 第二列 (侧边栏 / 文章目录) 是 #main 的兄弟节点, 不在 Swup 容器里: 无刷新切页时
+ * `asideKindForSession()` 必须在**拿到目标文档之前**决定骨架屏要不要画它, 依据就是
+ * 卡片链接上这个提示。所以「提示」与「目标页真实渲染出来的第二列」必须一致 ——
+ * 提示说目录、目标页却是侧边栏时, 目录骨架会盖住一个内容没变的侧边栏
+ * (线上报的「侧边栏闪一下」就是这个)。
+ *
+ * 这段要的是预览主题 Default 2026 的标记, 而站点装的是 default 主题, 所以这里临时换
+ * 主题跑完再换回去 (主题选项就是 table.options 里的 `theme`)。
+ */
+$linkTagFor = static function (string $html, string $path): string {
+    $pattern = '#<a\b[^>]*href="[^"]*' . preg_quote($path, '#') . '"[^>]*>#';
+
+    return preg_match($pattern, $html, $tag) ? $tag[0] : '';
+};
+/** 那个链接上的提示 (找不到链接时返回 null) */
+$hintFor = static function (string $html, string $path) use ($linkTagFor): ?string {
+    return preg_match('/data-aside-target="([a-z]+)"/', $linkTagFor($html, $path), $found) ? $found[1] : null;
+};
+/** 页面真实渲染出来的第二列 */
+$asideOf = static function (string $html): string {
+    return preg_match('/data-aside="(sidebar|toc)"/', $html, $found) ? $found[1] : 'none';
+};
+
+$postPath = "/index.php/archives/{$cid}/";
+sitePhp($php, $siteDir, "\$db->query(\$db->update('table.options')->rows(['value' => 'default-2026'])->where('name = ?', 'theme'));");
+
+$home = assertResponse($site->get('/'), [200], 'GET / with Default 2026 (post without headings)');
+assertTrue(
+    'sidebar' === $hintFor($home, $postPath),
+    'card hint for a post without headings should be sidebar, got ' . var_export($hintFor($home, $postPath), true)
+    . ' link=' . var_export($linkTagFor($home, $postPath), true)
+);
+$postBody = assertResponse($site->get($postPath), [200], 'GET the post without headings (Default 2026)');
+assertTrue('sidebar' === $asideOf($postBody), 'a post without headings should render the sidebar column');
+
+/* 给这篇加上两个二级标题: 提示与目标页都要跟着变成目录 */
+$tocText = '<h2>第一节</h2><p>甲</p><h2>第二节</h2><p>乙</p>';
+sitePhp(
+    $php,
+    $siteDir,
+    "\$db->query(\$db->update('table.contents')->rows(['text' => " . var_export($tocText, true) . "])->where('cid = ?', {$cid}));"
+);
+
+$home = assertResponse($site->get('/'), [200], 'GET / with a post that has headings');
+assertTrue(
+    'toc' === $hintFor($home, $postPath),
+    'card hint for a post with headings should be toc, got ' . var_export($hintFor($home, $postPath), true)
+    . ' link=' . var_export($linkTagFor($home, $postPath), true)
+);
+$postBody = assertResponse($site->get($postPath), [200], 'GET the post with headings (Default 2026)');
+assertTrue('toc' === $asideOf($postBody), 'a post with headings should render the toc column');
+assertTrue(str_contains($postBody, 'id="toc"'), 'the toc column is missing on a post with headings');
+assertTrue(
+    str_contains($home, 'data-skeleton="list"'),
+    'category chips (they lead to list pages) should ask for the list skeleton'
+);
+
+/* 还原正文与主题, 免得影响后面的检查 */
+sitePhp(
+    $php,
+    $siteDir,
+    "\$db->query(\$db->update('table.contents')->rows(['text' => '<p>hello e2e</p>'])->where('cid = ?', {$cid}));"
+    . "\$db->query(\$db->update('table.options')->rows(['value' => 'default'])->where('name = ?', 'theme'));"
+);
+
 // ---------------------------------------------------------------- comment
 
 step('comment (anonymous visitor)');

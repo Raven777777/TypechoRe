@@ -1122,32 +1122,55 @@ function themePageWidthClass(): string
 }
 
 /**
+ * 某篇文章 / 独立页面上的第二列 (侧边栏 / 文章目录) 形态
+ *
+ * 页面自己有目录时第二列就是目录 (目录条目少于两个时 toc.php 不输出, 那一页就是侧边栏;
+ * 单栏布局没有侧边栏)。这里**刻意不按布局一刀切**: `toc.php` 不区分布局, 单栏布局下
+ * 有目录的文章照样会输出那一版 `<aside>`, 提示必须与页面真实渲染出来的东西一致。
+ *
+ * post-card.php 会把它写成卡片链接上的 data-aside-target: 从列表页点进某一篇时,
+ * app.js 在**拿到目标文档之前**就能确定第二列会不会变 —— 猜错会让骨架遮罩盖住
+ * 内容其实没变的侧边栏 (见 app.js 的 asideKindForSession)。
+ *
+ * @param \Widget\Archive $archive 这篇文章所在的归档组件 (列表页循环里也能用)
+ * @return string sidebar|toc|none
+ */
+function themeContentAsideKind(\Widget\Archive $archive): string
+{
+    if (themeOptionBool('showToc') && count(themeArticle($archive)['toc']) >= 2) {
+        return 'toc';
+    }
+
+    return themeSkeletonSidebar() ? 'sidebar' : 'none';
+}
+
+/**
+ * 列表页 / 归档页上的第二列形态 (与具体是哪个列表页无关)
+ *
+ * @return string sidebar|none
+ */
+function themeListAsideKind(): string
+{
+    if ('full' === themeOption('layout', 'sidebar')) {
+        return 'none';
+    }
+
+    return themeSkeletonSidebar() ? 'sidebar' : 'none';
+}
+
+/**
  * 当前页面第二列 (侧边栏 / 文章目录) 的形态标记
  *
- * 输出到 <html data-aside-kind>, 供 app.js 判断「这次跳转会不会换掉第二列」——
- * 骨架屏据此决定画不画那一列, 参见 app.js 的 asideWillChange()。
- *
- * 页面自己有目录时, 第二列就是目录 (layout=full 时不输出第二列);
- * 其余情况是侧边栏。
+ * 输出到 #page-skeleton 的 data-aside-kind (服务端渲染时的记录; 无刷新切页换掉这一列后
+ * 由 app.js 的 recordAsideKind() 补写)。判定本身看 DOM 里真实那一列, 见
+ * app.js 的 currentAsideKind()。
  *
  * @param \Widget\Archive $archive
  * @return string sidebar|toc|none
  */
 function themeAsideKind(\Widget\Archive $archive): string
 {
-    if ('full' === themeOption('layout', 'sidebar')) {
-        return 'none';
-    }
-
-    if ($archive->is('single') && themeOptionBool('showToc')) {
-        $article = themeArticle($archive);
-
-        if (count($article['toc']) >= 2) {
-            return 'toc';
-        }
-    }
-
-    return themeSkeletonSidebar() ? 'sidebar' : 'none';
+    return $archive->is('single') ? themeContentAsideKind($archive) : themeListAsideKind();
 }
 
 /**

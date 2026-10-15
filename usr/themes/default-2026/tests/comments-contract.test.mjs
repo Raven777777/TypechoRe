@@ -96,14 +96,23 @@ function functionBody(source, name) {
   /* 两种形态都预渲染好, 由 JS 切换 */
   check('同时输出侧边栏与目录两种骨架', footer.includes('data-skeleton-aside-variant="sidebar"') && footer.includes('data-skeleton-aside-variant="toc"'));
   check('两种骨架默认都是隐藏的', (footer.match(/data-skeleton-aside-variant="(?:sidebar|toc)" hidden/g) || []).length === 2);
-  check('本页第二列形态写在 data-aside-kind 上 (供 JS 判定)', footer.includes('data-aside-kind="<?php echo themeEsc($skeletonAsideKind); ?>"'));
+  check('本页第二列形态写在 data-aside-kind 上 (服务端渲染时的记录)', footer.includes('data-aside-kind="<?php echo themeEsc($skeletonAsideKind); ?>"'));
   check('形态由 themeAsideKind() 提供', php.includes('function themeAsideKind(') && footer.includes('themeAsideKind($this)'));
 
-  /* 形态判定要覆盖三种情况 */
-  const asideKind = functionBody(php, 'themeAsideKind');
-  check('形态判定: 单栏布局 → none', asideKind.includes("'full' === themeOption('layout', 'sidebar')") && asideKind.includes("return 'none'"));
-  check('形态判定: 有目录的文章页 → toc', asideKind.includes("'toc'"));
-  check('形态判定: 其余 → sidebar', asideKind.includes("'sidebar'"));
+  /* 形态判定要覆盖三种情况: 单栏 / 有目录的文章 / 其余列表页 */
+  const single = functionBody(php, 'themeContentAsideKind');
+  const list = functionBody(php, 'themeListAsideKind');
+  check('形态判定: 有目录的文章 → toc', single.includes("'toc'") && single.includes("themeOptionBool('showToc')"));
+  check('形态判定: 其余 → sidebar', single.includes("'sidebar'"));
+  check('单栏布局 → 侧边栏消失 (列表页与文章页共用同一个判定)', list.includes("'full' === themeOption('layout', 'sidebar')") && list.includes("return 'none'"));
+  check('文章页不按布局一刀切 (toc.php 不区分布局, 提示必须与页面一致)', !single.includes("'full' === themeOption('layout', 'sidebar')"));
+
+  /* 卡片链接上的目标形态提示: app.js 靠它在拿到目标文档之前就定下第二列怎么处理,
+     少了它, 「首页 → 没有目录的文章」只能保守处理 (也可能是错的另一种) */
+  const card = readFileSync(new URL('post-card.php', root), 'utf8');
+  check('★ 卡片链接带 data-aside-target 提示 (文章页形态)', card.includes('data-aside-target="<?php echo themeEsc($cardAside); ?>"'));
+  check('★ 分类链接带列表页提示 (形态 + 骨架面板)', card.includes('data-skeleton="list"') && card.includes('data-aside-target="<?php echo themeEsc($listAside); ?>"'));
+  check('提示由 themeContentAsideKind() / themeListAsideKind() 提供', card.includes('themeContentAsideKind($this)') && card.includes('themeListAsideKind()'));
 }
 
 /* ---------- 4. 骨架屏不画第二列时, 遮罩不许把那一列盖成空白 ----------
@@ -114,10 +123,18 @@ function functionBody(source, name) {
   const kept = functionBody(appJs, 'syncAsideKept');
 
   check('app.js 定义了 syncAsideKept()', kept.length > 0);
-  check('★ 只在「本次不画第二列」且当前页确实有那一列时才托起来', kept.includes("'none' === skeletonNextAsideKind") && kept.includes('ASIDE_SELECTOR'));
+  check('★ 只在「本次判定为 keep (这一列不会变)」且当前页确实有那一列时才托起来', kept.includes('ASIDE_KEEP === skeletonNextAsideKind') && kept.includes('ASIDE_SELECTOR'));
   check('★ 挂/摘跟着遮罩的显隐走 (淡出期间那一列必须一直浮着)', kept.includes('!overlay.hidden'));
   check('★ 摘标记的时机在遮罩真正隐藏之后', /overlay\.hidden = true;[\s\S]{0,200}syncAsideKept\(\)/.test(appJs));
   check('显示骨架时也算一次', /overlay\.hidden = false;[\s\S]{0,200}syncAsideKept\(\)/.test(appJs));
+
+  /* 判定不再读遮罩上的那份首屏记录: 切页会换掉第二列, 而那个属性没人更新 */
+  const current = functionBody(appJs, 'currentAsideKind');
+  check('★ 当前形态取自 DOM 里真实的那一列', current.includes('ASIDE_SELECTOR') && current.includes('dataset.aside'));
+  check('★ 不再读 #page-skeleton 上的 data-aside-kind (首屏之后它就过期了)', !current.includes('page-skeleton'));
+  const session = functionBody(appJs, 'asideKindForSession');
+  check('★ 拿不准 (目标是文章页、当前是侧边栏) 时按 keep 处理, 不赌一把', session.includes('ASIDE_KEEP'));
+  check('★ 链接提示优先 (targetAsideKind)', session.includes('targetAsideKind(visit)'));
 
   const rule = /html\.is-aside-kept \.page-aside \{([^}]*)\}/.exec(css);
   const navRule = /html\.is-aside-kept #site-nav \{([^}]*)\}/.exec(css);

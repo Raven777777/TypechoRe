@@ -73,7 +73,7 @@ const newDom = (html) => new JSDOM(html, { runScripts: 'dangerously', pretendToB
  */
 function makeNavigator(dom) {
   const doc = dom.window.document;
-  const api = new Function('window', 'document', `${code}\nreturn { deferContainerScripts, runDeferredScripts, syncPageAside, startContentEnter, cancelContentEnter, asideKindForSession };`)(dom.window, doc);
+  const api = new Function('window', 'document', `${code}\nreturn { deferContainerScripts, runDeferredScripts, syncPageAside, startContentEnter, cancelContentEnter, asideKindForSession, currentAsideKind, targetAsideKind };`)(dom.window, doc);
 
   const navigate = (incomingHtml) => {
     const incoming = new dom.window.DOMParser().parseFromString(incomingHtml, 'text/html');
@@ -222,50 +222,69 @@ function makeNavigator(dom) {
 
 /* ---------- 10. 骨架屏的第二列判定 ----------
    骨架屏要在等待期间就决定画不画第二列, 而那时**拿不到目标文档**
-   (swup 在 visit:start 之后才 fetch + DOMParser), 所以判定只能靠链接给的形态提示:
-   目标是列表页 → 一定不换; 目标是文章页 → 按目录画。
-   这里同时守住一条底线: 判定为「不画」(none) 的那些跳转, syncPageAside 必须真的
-   没换那一列 —— 否则用户会看到「骨架里没有、切完却冒出来一列」。 */
+   (swup 在 visit:start 之后才 fetch + DOMParser), 所以答案只来自两处:
+   链接上的 data-aside-target 提示 (精确) 与当前页 DOM 里那一列的形态。
+
+   四档判定: keep 不画且把真实那一列留在画面上 | none 不画也不留
+   | sidebar / toc 画对应骨架 (这一列真的会换)。
+
+   ⚠ 这里钉的是「首页 → /archives/76/ 侧边栏还是闪」那个 bug: 从列表页点进一篇
+   **没有目录**的文章时, 第二列两个页面都是侧边栏、一个字都不会变, 但早期版本
+   「目标是文章页 → 一律按目录画」, 于是目录骨架盖住侧边栏、遮罩淡出再露回来。 */
 {
   const list = makeNavigator(newDom(LIST_A));
-  check('10. ★ 列表页 → 列表页: 判定不画第二列 (首页 → /me.html 这类互切)', list.api.asideKindForSession('list') === 'none');
-  check('10. ★ 列表页 → 文章页: 判定画目录骨架', list.api.asideKindForSession('single') === 'toc');
+  check('10. ★ 列表页 → 列表页: 判定不画第二列 (首页 → /me.html 这类互切)', list.api.asideKindForSession('list') === 'keep');
+  check('10. ★ 列表页 → 文章页 (没有提示): 保守判成不画', list.api.asideKindForSession('single') === 'keep');
+
+  /* 链接提示 (post-card.php 写在卡片链接上的 data-aside-target) 给出精确答案 */
+  const hint = list.doc.createElement('a');
+  hint.setAttribute('data-aside-target', 'toc');
+  list.doc.querySelector('#main').appendChild(hint);
+  check('10. ★ 列表页 → 有目录的文章 (链接提示): 判定画目录骨架', list.api.asideKindForSession('single', { trigger: { el: hint } }) === 'toc');
+  hint.setAttribute('data-aside-target', 'sidebar');
+  check('10. ★ 列表页 → 没有目录的文章 (链接提示): 判定不画 (侧边栏没变)', list.api.asideKindForSession('single', { trigger: { el: hint } }) === 'keep');
+
+  /* 整张卡片都可点击 (链接铺满卡片), 触发元素常常是链接里的子节点 */
+  const nested = list.doc.createElement('span');
+  hint.appendChild(nested);
+  check('10. ★ 提示写在祖先节点上也认', list.api.asideKindForSession('single', { trigger: { el: nested } }) === 'keep');
 
   const post = makeNavigator(newDom(POST_A));
   check('10. ★ 文章页 (有目录) → 文章页: 判定画目录骨架 (每篇目录都不同)', post.api.asideKindForSession('single') === 'toc');
   check('10. ★ 文章页 (有目录) → 列表页: 判定画侧边栏骨架 (目录要让位)', post.api.asideKindForSession('list') === 'sidebar');
+  const backHint = post.doc.createElement('a');
+  backHint.setAttribute('data-aside-target', 'sidebar');
+  post.doc.querySelector('#main').appendChild(backHint);
+  check('10. ★ 文章页 → 没有目录的文章 (链接提示): 目录照样要让位', post.api.asideKindForSession('single', { trigger: { el: backHint } }) === 'sidebar');
 
   const empty = makeNavigator(newDom(NOT_FOUND));
   check('10. ★ 当前页没有第二列 → 列表页: 判定画侧边栏骨架', empty.api.asideKindForSession('list') === 'sidebar');
   check('10. ★ 当前页没有第二列 → 文章页: 判定画目录骨架', empty.api.asideKindForSession('single') === 'toc');
 
-  /* ★ 判定「不画」的跳转必须真的没换列; 判定画某种骨架的必须真的换了列 */
+  /* ★ 判定画某种骨架的跳转必须真的换了列 (没换却画骨架 = 侧边栏白闪一下);
+     keep 是保守档, 目标**可能**真的换了 (例如没有提示时点进一篇有目录的文章),
+     所以这里钉的是「实际情况与预期一致」—— 表格最后一列就是那次跳转到底换没换。 */
   const cases = [
-    [LIST_A, LIST_B, true],
-    [LIST_A, POST_A, false],
-    [POST_A, POST_B, false],
-    [POST_A, LIST_A, true],
-    [POST_A, NOT_FOUND, true],
-    [NOT_FOUND, POST_A, false],
-    [NOT_FOUND, LIST_A, true]
+    [LIST_A, LIST_B, 'list', 'keep', false],
+    [LIST_A, POST_A, 'single', 'keep', true],
+    [POST_A, POST_B, 'single', 'toc', true],
+    [POST_A, LIST_A, 'list', 'sidebar', true],
+    [POST_A, NOT_FOUND, 'list', 'sidebar', true],
+    [NOT_FOUND, POST_A, 'single', 'toc', true],
+    [NOT_FOUND, LIST_A, 'list', 'sidebar', true]
   ];
 
-  for (const [from, to, isListSession] of cases) {
+  for (const [from, to, sessionKind, expectedKind, swappedExpected] of cases) {
     const dom = newDom(from);
     const nav = makeNavigator(dom);
     const before = nav.doc.querySelector('.page-aside');
-    const kind = nav.api.asideKindForSession(isListSession ? 'list' : 'single');
+    const kind = nav.api.asideKindForSession(sessionKind);
     nav.navigate(to);
     const after = nav.doc.querySelector('.page-aside');
-    const swapped = before !== after;
     const name = (node) => (node ? node.dataset.aside || 'aside' : 'none');
 
-    check(
-      ('none' === kind ? '10. ★ 判定不画就必须真的没换 (' : '10. ★ 判定画骨架就必须真的换了 (')
-        + name(before) + ' → ' + name(after) + ')',
-      swapped === ('none' !== kind),
-      'kind=' + kind + ' swapped=' + swapped
-    );
+    check(`10. ★ 判定 (${name(before)} → ${name(after)}) = ${expectedKind}`, kind === expectedKind, 'kind=' + kind);
+    check(`10. ★ ${expectedKind} 档下换没换符合预期 (${name(before)} → ${name(after)})`, (before !== after) === swappedExpected, 'swapped=' + (before !== after));
   }
 
   /* 目录页之间互切必然换 (每篇目录都不同) */

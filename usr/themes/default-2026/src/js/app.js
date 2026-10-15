@@ -917,11 +917,16 @@ const ASIDE_SELECTOR = '.page-aside';
 const ASIDE_SWAPPED_CLASS = 'is-aside-swapped';
 /** 本次骨架屏不画第二列、而当前页那一列又确实存在时挂在 <html> 上 (见 syncAsideKept) */
 const ASIDE_KEPT_CLASS = 'is-aside-kept';
+/** 第二列「不画骨架, 但也不许被遮罩盖住」的那一档判定结果 (见 asideKindForSession) */
+const ASIDE_KEEP = 'keep';
+/** 模板写在链接上的目标页第二列形态提示 (见 post-card.php) */
+const ASIDE_HINT_ATTR = 'data-aside-target';
 
 let skeletonTimer = 0;
 let skeletonHideTimer = 0;
 let skeletonVisible = false;
-/* 本次骨架屏要不要带上第二列、带哪一种 (由 asideKindForSession 在 visit:start 判定) */
+/* 本次骨架屏的第二列画哪一种: none 不画 | keep 不画且把真实那一列留在画面上
+   | sidebar / toc 画对应骨架 (由 asideKindForSession 在 visit:start 判定) */
 let skeletonNextAsideKind = 'none';
 let enterTimer = 0;
 /* 本次跳转是否要播放入场动画 (同页锚点跳转不播) */
@@ -1058,7 +1063,7 @@ function showSkeleton(kind) {
   syncSkeletonAside(skeletonNextAsideKind);
   skeletonVisible = true;
   overlay.hidden = false;
-  /* 这次不画第二列 (当前页那一列本来就不会变) → 把那列真实内容托到遮罩之上 */
+  /* 这次不画第二列时, 把「本来就不会变」的那一列托到遮罩之上 (为什么不是每次: 见 syncAsideKept) */
   syncAsideKept();
   /* 等一帧再加类, 否则 hidden 刚取消时过渡不会触发。
      这一帧里可能已经被 hideSkeleton 收掉了 (超快跳转), 所以要再确认一次,
@@ -1071,9 +1076,9 @@ function showSkeleton(kind) {
 }
 
 /**
- * 骨架屏的第二列 (侧边栏 / 文章目录) 该不该出现, 以及该画成哪一种
+ * 第二列 (侧边栏 / 文章目录) 该不该出现, 以及该画成哪一种
  *
- * @param {'none'|'sidebar'|'toc'} kind
+ * @param {'none'|'keep'|'sidebar'|'toc'} kind
  */
 function syncSkeletonAside(kind) {
   const asideSkeleton = document.querySelector('[data-skeleton-aside]');
@@ -1101,66 +1106,117 @@ function syncSkeletonAside(kind) {
  * 空白, 等遮罩淡出再露回来, 看起来就是侧边栏闪了一下。这里给 <html> 挂上
  * is-aside-kept, CSS 据此把那一列提到遮罩之上; 遮罩彻底收掉后一起摘掉。
  *
+ * 只有判成 ASIDE_KEEP ('keep') 时才托: kind 为 none 表示这一列本来就没有 (或要被移除),
+ * 没有东西可托, 也不该把它留在画面上。
+ *
  * 显隐跟着 overlay.hidden 走: 淡出那 200ms 里遮罩还在画面上, 这一列必须一直浮着,
  * 否则又会被盖回去, 等于没修。
  */
 function syncAsideKept() {
   const overlay = document.getElementById('page-skeleton');
   const kept = !!overlay && !overlay.hidden
-    && 'none' === skeletonNextAsideKind
+    && ASIDE_KEEP === skeletonNextAsideKind
     && null !== document.querySelector(ASIDE_SELECTOR);
 
   document.documentElement.classList.toggle(ASIDE_KEPT_CLASS, kept);
 }
 
-/** 当前页面第二列的形态 (footer.php 写在 #page-skeleton 的 data-aside-kind 上) */
+/**
+ * 当前页面第二列的形态 —— 直接看 DOM 里真实的那一列
+ *
+ * 不读 #page-skeleton 上的 data-aside-kind: 那是服务端首屏渲染时写下的, 而无刷新切页
+ * 会把这一列整块换掉、没有人回头更新那个属性 (recordAsideKind 只是把它补上),
+ * 于是从第二次跳转起判定就会一直用首屏的形态 —— 首屏是列表页时, 从「有目录的文章」
+ * 切回列表页也会被当成「当前是侧边栏」。
+ *
+ * @returns {'none'|'sidebar'|'toc'}
+ */
 function currentAsideKind() {
-  const overlay = document.getElementById('page-skeleton');
-
-  if (overlay && overlay.dataset.asideKind) {
-    return overlay.dataset.asideKind;
-  }
-
-  /* 关掉骨架屏时没有那层标记, 退回看真实的那一列 */
   const aside = document.querySelector(ASIDE_SELECTOR);
 
-  return aside ? aside.dataset.aside || 'none' : 'none';
+  return aside && aside.dataset.aside ? aside.dataset.aside : 'none';
+}
+
+/**
+ * 从链接上读出目标页第二列的形态 (拿不到就算了)
+ *
+ * 模板知道目标页会渲染成什么样 (post-card.php 按那篇文章有没有目录写好提示),
+ * 而 swup 在 `visit:start` 时还拿不到目标文档 (fetch + DOMParser 都在之后) ——
+ * 链接上这个提示是唯一能在等待开始前就确定答案的来源。
+ *
+ * @param {object} [visit] swup 的 visit 对象
+ * @returns {'none'|'sidebar'|'toc'|null} 认不出来时为 null
+ */
+function targetAsideKind(visit) {
+  const el = visit && visit.trigger ? visit.trigger.el : null;
+  const hinted = el && 'function' === typeof el.closest ? el.closest(`[${ASIDE_HINT_ATTR}]`) : null;
+  const kind = hinted ? hinted.getAttribute(ASIDE_HINT_ATTR) : '';
+
+  return 'none' === kind || 'sidebar' === kind || 'toc' === kind ? kind : null;
 }
 
 /**
  * 按目标形态判断这次跳转的第二列骨架该画哪一种
  *
- * 关键约束: **拿不到目标文档**。swup 在 `visit:start` 之后才 fetch + DOMParser
- * (见 navigate.ts 的 performNavigation), 所以那时候 `visit.to.document` 是
- * undefined —— 早期版本靠它比对两边的 `data-aside`, 结果每次都判成「会换」,
- * 于是「首页 → /me.html」这种侧边栏一个字都不变的跳转也会闪一块侧边栏骨架。
+ * 关键约束: `visit:start` 时 **拿不到目标文档** —— swup 要等 fetch + DOMParser 之后才有
+ * `visit.to.document` (早期版本读它, 结果每次都判成「会换」)。所以答案只能来自两处:
+ * 链接上的提示 (targetAsideKind, 精确) 与当前页自己的形态 (currentAsideKind)。
  *
- * 现在只能靠链接给的形态提示 (`skeletonKind`) 加上当前页自己的形态:
+ * 判定结果有四档:
  *
- *   当前页没有第二列 → 目标页一定会有 → 一定会换;
- *   目标是列表页   → 列表页的第二列必定是侧边栏, 与当前页无关;
- *   目标是文章页   → 可能是目录也可能是侧边栏, 提前分不出来 → 一律按目录画。
+ *   keep    —— 不画骨架, 把真实那一列留在遮罩之上 (它不会变, 见 syncAsideKept);
+ *   none    —— 不画, 也不托 (当前页没有这一列, 或目标页没有);
+ *   toc / sidebar —— 画对应骨架: 这一列真的会换, 该被遮住再换成新的。
  *
- * 「文章页也可能没有目录」这一档故意画错: 目录骨架多出现一次只是多闪一下,
- * 而不画的话会在切页后凭空多出一列内容, 那更难接受。
+ * 「目录」这一档每次都要重画 (每篇文章的目录都不同; 同一页内的锚点跳转不会走到这里);
+ * 「侧边栏」是全站数据, 两边都是它时一个字都不会变。
+ *
+ * 拿不到提示、目标是文章 / 独立页面时, 无法提前知道那篇有没有目录 —— 这时**必须保守**:
+ * 当前页正是侧边栏的话, 它很可能一个字都不变, 那就按 keep 处理、别画骨架。
+ * 反过来 (一律按目录画) 会让「首页 → 没有目录的文章」先用目录骨架盖住侧边栏,
+ * 等遮罩淡出再露回侧边栏 —— 侧边栏没变却闪了一下, 就是线上报的那个 bug。
  *
  * @param {'list'|'single'} sessionKind
- * @returns {'none'|'sidebar'|'toc'}
+ * @param {object} [visit] swup 的 visit 对象 (用来读链接上的形态提示)
+ * @returns {'none'|'keep'|'sidebar'|'toc'}
  */
-function asideKindForSession(sessionKind) {
+function asideKindForSession(sessionKind, visit) {
   const current = currentAsideKind();
+  const target = targetAsideKind(visit);
 
-  /* 当前页连第二列都没有 (404 / 侧边栏区块全关): 目标页有什么都会是新出现的 */
-  if ('none' === current) {
-    return 'single' === sessionKind ? 'toc' : 'sidebar';
+  /* 链接给了精确答案: 两边形态一样就不动它, 不一样就画目标的骨架 */
+  if (target) {
+    if ('toc' === target) {
+      return 'toc';
+    }
+
+    return target === current ? ASIDE_KEEP : target;
   }
 
-  if ('single' === sessionKind) {
-    return 'toc';
+  /* 目标形态未知: 列表页的第二列必定是侧边栏 (与当前页无关);
+     文章 / 独立页面则只有「当前页不是侧边栏」时才敢按目录画 —— 是侧边栏就有可能不变。 */
+  const guessed = 'list' === sessionKind ? 'sidebar' : ('sidebar' === current ? null : 'toc');
+
+  if (null === guessed) {
+    return ASIDE_KEEP;
   }
 
-  /* 目标是列表页: 当前页是侧边栏时不会动; 当前页是目录则要换成侧边栏 */
-  return 'sidebar' === current ? 'none' : 'sidebar';
+  /* 侧边栏是全站数据: 两边都是它时一个字都不会变 (目录每篇都不同, 必须重画) */
+  return 'sidebar' === guessed && 'sidebar' === current ? ASIDE_KEEP : guessed;
+}
+
+/**
+ * 把当前第二列的形态补写回 #page-skeleton 的 data-aside-kind
+ *
+ * footer.php 只在服务端渲染时写一次, 而切页会换掉这一列 —— 判定不再读它
+ * (见 currentAsideKind), 但让这个属性与实际页面保持一致, 排查问题时才不会被误导。
+ */
+function recordAsideKind() {
+  const overlay = document.getElementById('page-skeleton');
+
+  if (overlay) {
+    overlay.dataset.asideKind = currentAsideKind();
+  }
 }
 
 function hideSkeleton() {
@@ -1205,7 +1261,7 @@ function hideSkeleton() {
  * 排一次骨架屏
  *
  * @param {'list'|'single'} kind 形态
- * @param {'none'|'sidebar'|'toc'} asideKind 第二列画哪一种 (none = 不画)
+ * @param {'none'|'keep'|'sidebar'|'toc'} asideKind 第二列怎么处理 (none / keep = 不画)
  */
 function scheduleSkeleton(kind, asideKind) {
   hideSkeleton();
@@ -1351,27 +1407,13 @@ function syncPageAside(visit) {
   const current = document.querySelector(ASIDE_SELECTOR);
   const incoming = incomingDoc ? incomingDoc.querySelector(ASIDE_SELECTOR) : null;
 
-  if (current && incoming) {
-    /* 侧边栏六个区块都是全站数据, 内容与当前页面无关 (实测首页与文章页的
-       侧边栏 HTML 逐字节相同), 所以同类型时不重建: 重建会整列重绘, 还会丢掉
-       hover / 焦点状态, 看起来就是侧边栏在闪, 也没必要为它播入场动画。
-       目录则必须每次替换 —— 不同文章的目录不同。 */
-    if ('sidebar' === current.dataset.aside && 'sidebar' === incoming.dataset.aside) {
-      return;
-    }
-
+  if (current && incoming && !asideUnchanged(current, incoming)) {
     current.replaceWith(incoming.cloneNode(true));
     markAsideSwapped();
-    return;
-  }
-
-  if (current) {
+  } else if (current && !incoming) {
     current.remove();
-    return;
-  }
-
-  /* 当前页没有这一列: 按模板结构插到 #main 之后 (目标文档里的位置也一样) */
-  if (incoming) {
+  } else if (!current && incoming) {
+    /* 当前页没有这一列: 按模板结构插到 #main 之后 (目标文档里的位置也一样) */
     const main = document.querySelector('#main');
 
     if (main) {
@@ -1379,6 +1421,24 @@ function syncPageAside(visit) {
       markAsideSwapped();
     }
   }
+
+  recordAsideKind();
+}
+
+/**
+ * 两边的第二列是不是同一块 (只有侧边栏能这么判)
+ *
+ * 侧边栏六个区块都是全站数据, 内容与当前页面无关 (实测首页与文章页的侧边栏 HTML
+ * 逐字节相同), 所以同类型时不重建: 重建会整列重绘, 还会丢掉 hover / 焦点状态,
+ * 看起来就是侧边栏在闪, 也没必要为它播入场动画。目录则必须每次替换 —— 不同文章的
+ * 目录不同。
+ *
+ * @param {Element} current 当前页的第二列
+ * @param {Element} incoming 目标页的第二列
+ * @returns {boolean}
+ */
+function asideUnchanged(current, incoming) {
+  return 'sidebar' === current.dataset.aside && 'sidebar' === incoming.dataset.aside;
 }
 
 /**
@@ -1446,9 +1506,9 @@ function boot() {
 
     if (enterNextContent) {
       const sessionKind = skeletonKind(visit.trigger && visit.trigger.el);
-      /* 第二列会不会被换掉: 拿不到目标文档, 只能按形态提示判断 (见 asideKindForSession)。
-         「侧边栏 → 侧边栏」时骨架屏里就不该出现侧边栏那一列。 */
-      scheduleSkeleton(sessionKind, asideKindForSession(sessionKind));
+      /* 第二列会不会被换掉: 拿不到目标文档, 只能靠链接上的形态提示与当前页的形态
+         判断, 拿不准时不画它的骨架 (见 asideKindForSession)。 */
+      scheduleSkeleton(sessionKind, asideKindForSession(sessionKind, visit));
     }
   });
 

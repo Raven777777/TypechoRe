@@ -97,8 +97,10 @@ const asideSkeleton = {
 /* 只让显隐状态可读: 与外层结构无关 */
 const variantOf = (name) => asideVariants.find((v) => v.getAttribute('data-skeleton-aside-variant') === name);
 const asideShownKind = () => (asideSkeleton.hidden ? 'none' : asideSkeleton.dataset.asideKind || null);
-/* 真实的那一列 (侧边栏 / 文章目录): 当前页有没有它由这个开关模拟 (见 syncAsideKept) */
-let realAsideExists = true;
+/* 真实的那一列 (侧边栏 / 文章目录): 它在不在、是哪一种由这个开关模拟 ——
+   app.js 现在直接看 DOM (currentAsideKind), 因为遮罩上的 data-aside-kind 是首屏
+   渲染时写下的, 切页换掉这一列之后不会有人更新它。 */
+let realAsideKind = 'sidebar';
 const documentStub = {
   getElementById: (id) => (id === 'page-skeleton' ? overlay : null),
   querySelector: (selector) => {
@@ -106,7 +108,7 @@ const documentStub = {
       return asideSkeleton;
     }
     if (selector === '.page-aside') {
-      return realAsideExists ? { dataset: { aside: 'sidebar' } } : null;
+      return 'none' === realAsideKind ? null : { dataset: { aside: realAsideKind } };
     }
     return null;
   },
@@ -153,6 +155,8 @@ const factory = new Function(
     showSkeleton,
     hideSkeleton,
     asideKindForSession,
+    currentAsideKind,
+    targetAsideKind,
     startContentEnter,
     cancelContentEnter,
     animConfig,
@@ -315,18 +319,27 @@ check('10. 淡出时长跟随 --anim-skeleton-fade (120ms) 收干净', overlay.h
    第二列常常与当前页无关 (列表页之间互切时侧边栏一个字都不变), 这时不该出现骨架。
    判定要记住一个硬约束: swup 到 content:replace 才解析目标文档, 所以 visit:start
    里 `visit.to.document` 是 undefined —— 早期版本读它, 结果每次都判成「会换」,
-   于是首页 → /me.html 这种列表页互切也会闪一块侧边栏骨架 (就是这个 bug)。 */
+   于是首页 → /me.html 这种列表页互切也会闪一块侧边栏骨架。
+
+   线上后来又报了一例: 首页 → 没有目录的文章 (/archives/76/) 时, 第二列同样是侧边栏、
+   一个字都不变, 但当时「目标是文章页 → 一律按目录画」, 目录骨架盖住了侧边栏, 遮罩
+   淡出再露回来 —— 看起来就是侧边栏刷新了一下。现在目标形态由卡片链接上的
+   data-aside-target 给出 (post-card.php), 拿不到提示又可能不变时按 keep 处理。 */
 setAnimConfig({ level: 'normal', skeleton: '1', vars: { '--anim-skeleton-fade': '220ms' } });
 
-/* 当前页约定为「列表页 + 侧边栏」(最常见的起点): 形态写在 #page-skeleton 的
-   data-aside-kind 上, currentAsideKind() 读它 */
+/* 当前页约定为「列表页 + 侧边栏」(最常见的起点): 形态由 DOM 里那一列决定,
+   遮罩上的 data-aside-kind 只是服务端渲染时的记录, 一并写上以贴近真实页面 */
 const setCurrentPageAside = (kind) => {
+  realAsideKind = kind;
   overlay.dataset.asideKind = kind;
 };
 
+/** 带链接形态提示的 visit 替身 (真实页面里是卡片链接上的 data-aside-target) */
+const hinted = (kind) => ({ trigger: { el: { closest: () => ({ getAttribute: () => kind }) } } });
+
 /* 12a: 列表页 → 列表页: 一定不换 */
 setCurrentPageAside('sidebar');
-check('12a. ★ 目标是列表页 → 判定不画第二列 (首页 → /me.html 这类互切)', api.asideKindForSession('list') === 'none');
+check('12a. ★ 目标是列表页 → 判定不画第二列 (首页 → /me.html 这类互切)', api.asideKindForSession('list') === 'keep');
 reset();
 api.scheduleSkeleton('list', api.asideKindForSession('list'));
 advance(150);
@@ -334,26 +347,48 @@ check('12a. 骨架显示但第二列不出现', overlay.hidden === false && asid
 api.hideSkeleton();
 advance(300);
 
-/* 12b: 列表页 → 文章页: 第二列会换 */
-check('12b. ★ 列表页 → 文章页: 判定画目录骨架', api.asideKindForSession('single') === 'toc');
+/* 12b: 列表页 → 文章页 (拿不到提示): 那篇文章可能没有目录, 第二列有可能不变 → 保守不画 */
+check('12b. ★ 列表页 → 文章页 (无提示): 判定不画第二列 (可能一个字都不变)', api.asideKindForSession('single') === 'keep');
 reset();
 api.scheduleSkeleton('single', api.asideKindForSession('single'));
 advance(150);
-check('12b. 画的是目录形态', asideShownKind() === 'toc' && variantOf('toc').hidden === false && variantOf('sidebar').hidden === true, JSON.stringify({ kind: asideShownKind() }));
+check('12b. ★ 保守档下不画第二列骨架, 并把真实那一列托到遮罩之上',
+  asideSkeleton.hidden === true && documentStub.documentElement.classList.contains('is-aside-kept'),
+  JSON.stringify({ kind: asideShownKind(), kept: documentStub.documentElement.classList.contains('is-aside-kept') }));
 api.hideSkeleton();
 advance(300);
-check('12b. 收起后第二列骨架也一起收回', asideSkeleton.hidden === true);
+
+/* 12b-2: 链接给了提示就用提示 —— 目标那篇有目录 → 画目录骨架 (它确实会换) */
+check('12b-2. ★ 提示 toc + 当前是侧边栏 → 画目录骨架', api.asideKindForSession('single', hinted('toc')) === 'toc');
+reset();
+api.scheduleSkeleton('single', api.asideKindForSession('single', hinted('toc')));
+advance(150);
+check('12b-2. 画的是目录形态', asideShownKind() === 'toc' && variantOf('toc').hidden === false && variantOf('sidebar').hidden === true, JSON.stringify({ kind: asideShownKind() }));
+api.hideSkeleton();
+advance(300);
+check('12b-2. 收起后第二列骨架也一起收回', asideSkeleton.hidden === true);
+
+/* 12b-3: 提示说目标那篇没有目录 → 与当前页一致, 一个字都不会变 → 不画也不动 */
+check('12b-3. ★ 提示 sidebar + 当前是侧边栏 → 不画 (线上首页 → /archives/76/ 就是这一档)',
+  api.asideKindForSession('single', hinted('sidebar')) === 'keep');
+check('12b-3. 提示里的其它值一律当没有提示', api.asideKindForSession('single', hinted('whatever')) === 'keep');
 
 /* 12c: 文章页 (有目录) → 文章页: 同样按目录画 (每篇目录都不同) */
 setCurrentPageAside('toc');
 check('12c. ★ 文章页 → 文章页: 判定画目录骨架', api.asideKindForSession('single') === 'toc');
 check('12c. ★ 文章页 (有目录) → 列表页: 画侧边栏骨架 (目录要让位)', api.asideKindForSession('list') === 'sidebar');
+check('12c. ★ 提示说目标那篇没有目录: 目录照样要让位给侧边栏', api.asideKindForSession('single', hinted('sidebar')) === 'sidebar');
 
 /* 12d: 当前页没有第二列时, 目标页有什么都会是新出现的 */
 setCurrentPageAside('none');
 check('12d. ★ 没有第二列 → 列表页: 画侧边栏骨架', api.asideKindForSession('list') === 'sidebar');
 check('12d. ★ 没有第二列 → 文章页: 画目录骨架', api.asideKindForSession('single') === 'toc');
+check('12d. currentAsideKind() 读的是 DOM (没有那一列就是 none)', api.currentAsideKind() === 'none');
 setCurrentPageAside('sidebar');
+check('12d. currentAsideKind() 跟着 DOM 走 (不读遮罩上那份首屏记录)', api.currentAsideKind() === 'sidebar');
+check('12d. ★ 没有任何提示时 targetAsideKind() 返回 null',
+  api.targetAsideKind({ trigger: { el: { closest: () => null } } }) === null && api.targetAsideKind(undefined) === null);
+check('12d. 链接上的提示能读出来', api.targetAsideKind(hinted('toc')) === 'toc' && api.targetAsideKind(hinted('sidebar')) === 'sidebar');
 
 /* 12e: 连着两次跳转, 上一次的显隐状态不许带到下一次 */
 reset();
@@ -396,9 +431,8 @@ const keptFlag = () => documentStub.documentElement.classList.contains('is-aside
 
 {
   setCurrentPageAside('sidebar');
-  realAsideExists = true;
   reset();
-  api.scheduleSkeleton('list', api.asideKindForSession('list'));   // → none: 不画第二列
+  api.scheduleSkeleton('list', api.asideKindForSession('list'));   // → keep: 不画第二列
   advance(150);
   check('13a. ★ 不画第二列时挂上 is-aside-kept', keptFlag() && overlay.hidden === false, JSON.stringify({ kept: keptFlag(), overlay: overlay.hidden, aside: asideShownKind() }));
 
@@ -424,7 +458,6 @@ const keptFlag = () => documentStub.documentElement.classList.contains('is-aside
 {
   /* 当前页没有第二列 (404): 没有东西可托, 不许挂 */
   setCurrentPageAside('none');
-  realAsideExists = false;
   reset();
   api.scheduleSkeleton('list', api.asideKindForSession('list'));
   advance(150);
@@ -432,7 +465,6 @@ const keptFlag = () => documentStub.documentElement.classList.contains('is-aside
   api.hideSkeleton();
   advance(300);
   check('13c. 收尾后依旧没有残留', keptFlag() === false);
-  realAsideExists = true;
   setCurrentPageAside('sidebar');
 }
 

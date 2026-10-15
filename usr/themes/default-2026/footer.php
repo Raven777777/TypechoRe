@@ -66,7 +66,8 @@ $footerText = themeOption('footerText');
  *
  * 第二列 (侧边栏 / 文章目录) 与形态面板平级, 两种骨架都先渲染好, 由 app.js 按
  * 「这次跳转会不会换掉那一列」切换显隐 (见 syncSkeletonAside)。
- * 本页第二列的形态写在 data-aside-kind 上, 供 app.js 读取。
+ * 本页第二列的形态写在 data-aside-kind 上 (服务端渲染时的记录; 判定看 DOM 里真实
+ * 那一列, 切页换掉它之后 app.js 会把这里的值补上)。
  */
 $skeletonContainer = themeContainerClass();
 $skeletonAsideKind = themeAsideKind($this);
@@ -133,6 +134,8 @@ $skeletonAsideKind = themeAsideKind($this);
          *
          * 两种形态都渲染, 而不是只渲染当前页那一种: 目标是列表页 → 侧边栏, 目标是
          * 文章页 → 目录 (文章页的目录数量要读完全文才知道, 骨架屏等不起)。
+         * 目标那篇到底有没有目录, 由卡片链接上的 data-aside-target 提前告诉 app.js;
+         * 拿不到提示时它宁可这一列不画 (见 asideKindForSession), 也不赌一把。
          * 这一列在没切换时是空的、默认 hidden, 多出来的标记不影响首屏。
          */
         ?>
