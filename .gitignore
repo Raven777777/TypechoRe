@@ -22,3 +22,7 @@ usr/*.sqlite3-*
 # 系统与编辑器杂项
 Thumbs.db
 .DS_Store
+
+# 本地临时目录 (PHPStan 缓存等; Windows 上跑 phpstan 需要把 TMPDIR/TEMP/TMP 指到可写目录)
+.tmp/
+.tmp-test/
