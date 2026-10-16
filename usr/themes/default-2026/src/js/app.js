@@ -163,8 +163,8 @@ const COPY_IDLE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" f
 const COPY_DONE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 
 /* notice-box 的两种外观: 出错 (琥珀) / 一般回执 (灰底) */
-const NOTICE_ERROR_CLASS = 'mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm whitespace-pre-line text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200';
-const NOTICE_INFO_CLASS = 'mb-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm whitespace-pre-line text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200';
+const NOTICE_ERROR_CLASS = 'mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm whitespace-pre-line text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200';
+const NOTICE_INFO_CLASS = 'mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm whitespace-pre-line text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200';
 
 /** 复制文本, 优先使用异步剪贴板 API, 失败时退回 execCommand */
 async function copyText(text) {
@@ -496,19 +496,58 @@ function enhanceCommentBox() {
     return input;
   };
 
-  /* 插入/取出 #respond-xxx 时, 需要一个位置固定的占位节点记住它原本在哪 */
+  /* 插入/取出 #respond-xxx 时, 需要一个位置固定的占位节点记住它原本在哪。
+     内核的内联 TypechoComment.reply() 挂在那条「回复」链接的 onclick 上, 会先我们一步
+     跑, 它建的占位节点只有 id (respond-xxx-holder) 而没有我们的 data-* 标记 —— 必须
+     认出来复用: 否则会在评论里面再建一个同 id 的节点, 「取消回复」时评论框会被搬回
+     那条评论里面 (页面里也会出现两个同 id 的元素)。 */
   const holderFor = () => {
     let holder = comments.querySelector('[data-respond-holder]');
+
+    if (!holder && respond) {
+      holder = document.getElementById(respond.id + '-holder');
+    }
 
     if (!holder) {
       holder = document.createElement('div');
       holder.id = respond ? respond.id + '-holder' : 'respond-holder';
-      holder.hidden = true;
-      holder.setAttribute('data-respond-holder', '');
       respond.parentNode.insertBefore(holder, respond);
     }
 
+    if (!holder.hasAttribute('data-respond-holder')) {
+      holder.setAttribute('data-respond-holder', '');
+      holder.hidden = true;
+    }
+
     return holder;
+  };
+
+  /**
+   * 收起回复框并复位回复状态 (「取消回复」与提交成功后共用)
+   *
+   * 三件事一起做: 摘掉隐藏的 parent 字段 (不摘的话下一条评论会被当成回复发出去)、
+   * 把评论框搬回占位节点、折叠 <details>。
+   */
+  const resetRespond = () => {
+    const parent = parentField(false);
+    const holder = comments.querySelector('[data-respond-holder]');
+
+    if (parent) {
+      parent.remove();
+    }
+
+    if (holder && holder.parentNode) {
+      holder.parentNode.insertBefore(respond, holder);
+      holder.remove();
+    }
+
+    if (cancelLink) {
+      cancelLink.style.display = 'none';
+    }
+
+    if (respond && 'open' in respond) {
+      respond.open = false;
+    }
   };
 
   /* 表单内容与评论内容一般长, 按内容高度自适应; 太长时退回 auto */
@@ -661,6 +700,11 @@ function enhanceCommentBox() {
           comments.appendChild(respond);
         }
 
+        /* 回复框默认是收起的 <details>: 点「回复」时展开成卡片 */
+        if ('open' in respond) {
+          respond.open = true;
+        }
+
         if (cancelLink) {
           cancelLink.style.display = '';
         }
@@ -674,19 +718,7 @@ function enhanceCommentBox() {
       bindOnce(cancelLink, 'Cancel', (event) => {
         event.preventDefault();
 
-        const holder = comments.querySelector('[data-respond-holder]');
-        const parent = parentField(false);
-
-        if (parent) {
-          parent.remove();
-        }
-
-        if (holder && holder.parentNode) {
-          holder.parentNode.insertBefore(respond, holder);
-          holder.remove();
-        }
-
-        cancelLink.style.display = 'none';
+        resetRespond();
         autoGrow();
       });
     }
@@ -781,7 +813,8 @@ function enhanceCommentBox() {
         const fragment = document.createDocumentFragment();
 
         incoming.childNodes.forEach((node) => {
-          if (node.nodeType === 1 && node.id === previousRespond?.id) {
+          /* 回复框与回执节点由我们自己管 (下面会放回去), 抓回来的那份跳过 */
+          if (node.nodeType === 1 && (node.id === previousRespond?.id || node.id === noticeBox?.id)) {
             return;
           }
           fragment.appendChild(document.importNode(node, true));
@@ -806,6 +839,16 @@ function enhanceCommentBox() {
 
       if (previousHolder && previousHolder.parentNode === null && previousRespond) {
         previousRespond.after(previousHolder);
+      }
+
+      /* 重铺那一支会把 #notice-box 一起摘下来 (它是我们自己管的节点, 抓回来的那份被
+         跳过), 放回回复框后面, 否则刚显示出来的提交回执会跟着消失。 */
+      if (noticeBox && noticeBox.parentNode === null) {
+        if (previousRespond && previousRespond.parentNode === comments) {
+          previousRespond.after(noticeBox);
+        } else {
+          comments.appendChild(noticeBox);
+        }
       }
 
       /* 新列表里的评论脚本 (回复链接等) 由增强逻辑重新接手;
@@ -869,6 +912,11 @@ function enhanceCommentBox() {
       textarea.value = '';
       autoGrow();
       await refreshComments(window.location.href, jumpTo);
+
+      /* 提交完成后收起回复框 (它只在「回复 / 添加新回复」时出现);
+         回执写在回复框外面的 #notice-box 里, 收起后依然看得见。 */
+      resetRespond();
+      autoGrow();
     } catch (error) {
       showNotice(SUBMIT_FAILED, NOTICE_ERROR_CLASS);
     } finally {

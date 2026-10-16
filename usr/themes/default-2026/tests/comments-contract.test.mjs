@@ -62,7 +62,7 @@ function functionBody(source, name) {
 
   check('★ 主题不再注册 contentEx 兜底钩子 (它跑在 stripTags 之前, 注定无效)', !init.includes("filter('contentEx'"));
   check('★ 主题里没有重复实现标签白名单', !php.includes('themeCommentAllowedTags') && !php.includes('themeStripCommentTags'));
-  check('themeInit() 仍然收紧嵌套评论层级', init.includes('commentsMaxNestedLevels') || init.includes('commentsMaxNestingLevels = 4'));
+  check('★ themeInit() 不再覆盖后台的「评论回复层数」(收紧了第 5 层会被内核挂到第 3 层上)', !/commentsMaxNestingLevels\s*=/.test(init));
   check('themeInit() 不再自己渲染评论 (交给内核)', !init.includes('Markdown::convert'));
 }
 
@@ -104,8 +104,18 @@ function functionBody(source, name) {
   const list = functionBody(php, 'themeListAsideKind');
   check('形态判定: 有目录的文章 → toc', single.includes("'toc'") && single.includes("themeOptionBool('showToc')"));
   check('形态判定: 其余 → sidebar', single.includes("'sidebar'"));
-  check('单栏布局 → 侧边栏消失 (列表页与文章页共用同一个判定)', list.includes("'full' === themeOption('layout', 'sidebar')") && list.includes("return 'none'"));
-  check('文章页不按布局一刀切 (toc.php 不区分布局, 提示必须与页面一致)', !single.includes("'full' === themeOption('layout', 'sidebar')"));
+  check('★ 单栏布局下侧边栏消失 (列表页与文章页共用同一个判定)', list.includes("'full' === themeOption('layout', 'sidebar')") && list.includes("return 'none'"));
+  check('★ 单栏布局下文章页也没有第二列 (栅格都没画, aside 会掉在评论区下方)', single.includes("'full' === themeOption('layout', 'sidebar')") && single.includes("return 'none'"));
+
+  /* 单栏布局下目录改为正文上方的折叠块 (与窄屏那一版共用) —— 模板只在真的
+     有第二列时才载入 toc.php / sidebar.php, 并且单栏下那块不再 lg:hidden */
+  const post = readFileSync(new URL('post.php', root), 'utf8');
+  const page = readFileSync(new URL('page.php', root), 'utf8');
+  check('★ 文章页只在 toc / sidebar 时载入第二列',
+    /'toc' === \$postAside[\s\S]{0,80}need\('toc\.php'\)/.test(post) && /'sidebar' === \$postAside[\s\S]{0,80}need\('sidebar\.php'\)/.test(post));
+  check('★ 独立页面同样', /'toc' === \$pageAside/.test(page) && /'sidebar' === \$pageAside/.test(page));
+  check('★ 单栏布局下目录折叠块不再 lg:hidden (窄屏那一版就地升级)',
+    post.includes("'toc' === $postAside ? ' lg:hidden' : ''") && page.includes("'toc' === $pageAside ? ' lg:hidden' : ''"));
 
   /* 卡片链接上的目标形态提示: app.js 靠它在拿到目标文档之前就定下第二列怎么处理,
      少了它, 「首页 → 没有目录的文章」只能保守处理 (也可能是错的另一种) */

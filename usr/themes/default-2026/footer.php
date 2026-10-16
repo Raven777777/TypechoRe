@@ -13,19 +13,18 @@ $footerText = themeOption('footerText');
 ?>
 </div><!-- end #page-wrap -->
 
-<footer class="mt-4 border-t border-zinc-200/80 py-10 text-sm text-zinc-500 dark:border-zinc-800/80 dark:text-zinc-400">
-    <div class="mx-auto flex w-full <?php echo themeEsc(themePageWidthClass()); ?> flex-col gap-4 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-        <div class="space-y-1">
-            <p>
-                &copy; <?php echo date('Y'); ?>
-                <a class="font-medium text-zinc-700 transition-colors hover:text-accent dark:text-zinc-300" href="<?php $this->options->siteUrl(); ?>"><?php $this->options->title(); ?></a>
-            </p>
+<?php /* 页脚: 宽屏与页眉等高 (都是 h-14 的横条 + 1px 边框); 窄屏换成上下两行居中 (手机上挤成一团) */ ?>
+<footer class="mt-4 border-t border-zinc-200/80 text-sm text-zinc-500 dark:border-zinc-800/80 dark:text-zinc-400">
+    <div class="mx-auto flex min-h-14 w-full <?php echo themeEsc(themePageWidthClass()); ?> flex-col items-center gap-y-1 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:px-6 sm:py-2 lg:px-8">
+        <p class="flex min-w-0 items-center gap-2">
+            <span>&copy; <?php echo date('Y'); ?></span>
+            <a class="truncate font-medium text-zinc-700 transition-colors hover:text-accent dark:text-zinc-300" href="<?php $this->options->siteUrl(); ?>"><?php $this->options->title(); ?></a>
             <?php if ('' !== $footerText): ?>
-                <p class="text-xs leading-relaxed"><?php echo $footerText; ?></p>
+                <span class="hidden min-w-0 truncate text-xs sm:inline" title="<?php echo themeEsc(strip_tags((string) $footerText)); ?>">· <?php echo $footerText; ?></span>
             <?php endif; ?>
-        </div>
+        </p>
 
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+        <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs sm:ml-auto sm:justify-end sm:gap-x-4">
             <a class="transition-colors hover:text-accent" href="<?php $this->options->feedUrl(); ?>"><?php _e('文章 RSS'); ?></a>
             <a class="transition-colors hover:text-accent" href="<?php $this->options->commentsFeedUrl(); ?>"><?php _e('评论 RSS'); ?></a>
             <?php if ($this->user->hasLogin()): ?>
@@ -34,7 +33,8 @@ $footerText = themeOption('footerText');
             <?php else: ?>
                 <a class="transition-colors hover:text-accent" href="<?php $this->options->adminUrl('login.php'); ?>"><?php _e('登录'); ?></a>
             <?php endif; ?>
-            <span class="text-zinc-400 dark:text-zinc-500">
+            <?php /* 窄屏那一行已经很满 (版权 + 四个链接), 署名只在 sm 以上出现 */ ?>
+            <span class="hidden text-zinc-400 sm:inline dark:text-zinc-500">
                 <?php echo sprintf(
                     _t('由 %s 强力驱动'),
                     '<a class="transition-colors hover:text-accent" href="' . themeEsc(\Typecho\Common::PROJECT_URL) . '">'
@@ -85,19 +85,17 @@ $skeletonAsideKind = themeAsideKind($this);
                                 <div class="skeleton-block h-44 w-full rounded-none sm:h-full sm:min-h-32"></div>
                             </div>
                             <div class="flex min-w-0 flex-1 flex-col gap-3 p-5">
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <div class="skeleton-block h-6 w-16 rounded-full"></div>
-                                    <div class="skeleton-block h-3.5 w-24"></div>
-                                </div>
                                 <div class="skeleton-block h-5 w-3/4"></div>
                                 <div class="space-y-2">
                                     <div class="skeleton-block h-3.5 w-full"></div>
                                     <div class="skeleton-block h-3.5 w-11/12"></div>
                                     <div class="skeleton-block h-3.5 w-2/3"></div>
                                 </div>
-                                <div class="mt-auto flex flex-wrap items-center gap-4 pt-1">
+                                <div class="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+                                    <div class="skeleton-block h-6 w-16 rounded-full"></div>
                                     <div class="skeleton-block h-3.5 w-20"></div>
                                     <div class="skeleton-block h-3.5 w-16"></div>
+                                    <div class="skeleton-block h-3.5 w-24"></div>
                                 </div>
                             </div>
                         </div>
@@ -109,9 +107,10 @@ $skeletonAsideKind = themeAsideKind($this);
             <div class="page-skeleton-panel" data-skeleton-panel="single">
                 <div class="card overflow-hidden" aria-hidden="true">
                     <div class="space-y-4 border-b border-zinc-200/80 p-6 sm:p-8 dark:border-zinc-800/80">
-                        <div class="skeleton-block h-6 w-20 rounded-full"></div>
-                        <div class="skeleton-block h-8 w-4/5"></div>
-                        <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+                        <div class="skeleton-block h-8 w-3/4"></div>
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <div class="skeleton-block h-6 w-20 rounded-full"></div>
+                            <div class="skeleton-block h-4 w-24"></div>
                             <div class="skeleton-block h-4 w-20"></div>
                             <div class="skeleton-block h-4 w-28"></div>
                             <div class="skeleton-block h-4 w-16"></div>

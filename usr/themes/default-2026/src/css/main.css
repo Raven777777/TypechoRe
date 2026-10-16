@@ -353,6 +353,20 @@
     display: none;
   }
 
+  /* 第二列 (侧边栏 / 文章目录) 只在桌面栅格存在时出现。
+     窄屏下它是「分页之后又冒出来的一整列」—— 反馈里就是这个问题: 手机上先看完正文和
+     页码, 下面再加一个侧边栏。窄屏本来就有替代品: 文章目录在 post.php 里另有一份
+     <details> (带 lg:hidden), 侧边栏那堆小工具在手机上只是噪音。
+     断点必须与栅格生效的宽度一致 (lg = 64rem), 否则会出现「栅格还没生效、第二列先
+     出现」的错位。写在这一层而不是给模板加 hidden/lg:block: 第二列的选择器要能压过
+     [data-skeleton-aside][hidden] 的 display: none, 而 utilities 层里的 lg:block 会反压它。 */
+  @media (width < 64rem) {
+    .page-aside,
+    [data-skeleton-aside] {
+      display: none;
+    }
+  }
+
   /* ---------- 页面过渡 (Swup) ----------
      旧内容: 淡出并轻微上移。
      新内容: 容器替换后 app.js 给 <html> 加上 is-entering, 触发下面这套动画 ——
@@ -498,42 +512,79 @@
     @apply border-accent font-medium text-accent;
   }
 
-  /* ---------- 评论 ---------- */
+  /* ---------- 评论 ----------
+     紧凑 + 扁平: 一条评论 = 元信息行 + 正文 + 子评论, 全部左对齐 —— 不缩进、不设底色、
+     不带左侧竖线, 嵌套回复也不单独分级 (多深的回复都与顶层同列), 同层之间只用一条
+     极细的分隔线断开。
+
+       [头像] 井水玉藻 10-15 23:39 回复     ← 元信息一行 (回复只在悬停时浮出)
+       正文
+       子评论 (与父评论正文完全同列)
+
+     内核 (var/Widget/Comments/Archive.php 的 threadedCommentsCallback) 输出的节点顺序是
+     author / meta / content / reply / children —— 「回复」在正文后面, 直接排下去会单独占一行。
+     这里用 flex-wrap + order 把视觉顺序扳回 author / meta / reply / content / children:
+     前三项留在第一行 (回复紧跟时间, 不再 margin-left: auto 顶到最右, 那会在中间空一大段),
+     content 与 children 各占满一整行。
+     不用 grid 是因为 content 要跨列, 而跨列项的 max-content 会把网格列撑开。
+
+     间距: 每条评论 py-2 (上下各 0.5rem) 再压一条分隔线 —— 视觉间隔 33px → 17px。 */
   .comment-list,
   .comment-children {
     @apply m-0 list-none p-0;
   }
 
-  .comment-children {
-    @apply mt-4 space-y-4 border-l border-zinc-200 pl-4 dark:border-zinc-800;
-  }
-
   .comment-body {
-    @apply relative py-4;
+    @apply relative flex flex-wrap items-center gap-x-2.5 gap-y-1 py-2;
   }
 
-  .comment-list > .comment-body + .comment-body {
+  /* 扁平排版没有底色/竖线可依靠, 同层评论之间靠一条极细的分隔线断开。
+     每一层都被包在自己的 ol.comment-list 里 (内核 threadedComments() 会把
+     singleCommentOptions 的 before/after 一并输出), 所以这一条对任意嵌套深度都生效;
+     后一条覆盖「子评论列表的第一条」, 免得嵌套回复直接粘在父评论正文后面。 */
+  .comment-list > .comment-body + .comment-body,
+  .comment-children > .comment-list > .comment-body:first-child {
     @apply border-t border-zinc-200/80 dark:border-zinc-800/80;
   }
 
   .comment-body .comment-author {
-    @apply flex items-center gap-3;
+    order: 1;
+
+    @apply flex min-w-0 items-center;
   }
 
+  /* 头像关闭时内核只输出一个空的 <span itemprop="image">, 所以间距不挂 .comment-author 的
+     gap 上, 而是挂到头像自己身上 (margin-right): 没有头像时昵称直接贴到左边缘。 */
   .comment-body .comment-author img {
-    @apply size-9 shrink-0 rounded-full;
+    @apply mr-2.5 size-9 shrink-0 rounded-full;
   }
 
   .comment-body .comment-author .fn {
-    @apply text-sm font-semibold not-italic;
+    @apply truncate text-sm font-semibold not-italic;
   }
 
+  /* 元信息行: 昵称 → 时间 → 回复 (三者同一行, 时间紧跟昵称) */
   .comment-body .comment-meta {
-    @apply mt-1 text-xs text-zinc-500 dark:text-zinc-400;
+    order: 2;
+
+    @apply flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400;
+  }
+
+  /* 正文与子评论都占满一整行, 并且与元信息行左对齐 (不缩进、不分级) */
+  .comment-body .comment-content,
+  .comment-body .comment-children {
+    order: 4;
+    flex: 1 0 100%;
   }
 
   .comment-body .comment-content {
-    @apply mt-3 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300;
+    @apply mt-1 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300;
+  }
+
+  .comment-body .comment-children {
+    order: 5;
+
+    @apply mt-1.5;
   }
 
   .comment-body .comment-content p {
@@ -596,27 +647,76 @@
     @apply rounded-md bg-zinc-100 px-1.5 py-0.5 font-mono text-[0.8125rem] text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100;
   }
 
+  /* 回复按钮: 紧跟「昵称 时间 [作者]」排在元信息行上 (order: 3 把它从 DOM 里的正文后面
+     提到这一行), 平时完全隐藏, 鼠标悬停这一条或键盘聚焦到它 (tab) 时才淡入 ——
+     减少视觉噪音, 也不再在中间留出一段空白。 */
   .comment-body .comment-reply {
-    @apply mt-2 text-xs;
+    order: 3;
+
+    @apply shrink-0 text-xs;
   }
 
   .comment-body .comment-reply a {
-    @apply text-zinc-500 transition-colors hover:text-accent dark:text-zinc-400;
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs text-zinc-500 transition duration-200 hover:bg-accent-soft hover:text-accent dark:text-zinc-400;
   }
 
-  /* 回复时评论框会被搬到这条评论里 (app.js 的回复处理器):
-     缩小上下留白, 并在左侧压一条竖线, 表明「这是在回复上面那条」。 */
-  .comment-body .respond {
-    @apply mt-4 mb-4 border-l-2 border-accent/40 pl-3 sm:pl-4;
-  }
+  /* 触屏没有 hover: 只在真的支持悬停的设备上隐藏 (触屏照常可见, 否则点不到) */
+  @media (hover: hover) {
+    .comment-body .comment-reply a {
+      @apply opacity-0;
+    }
 
-  .comment-body.comment-by-author > .comment-author .fn::after {
-    content: "作者";
-    @apply ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-[0.6875rem] font-normal text-accent;
+    .comment-body:hover .comment-reply a,
+    .comment-body:focus-within .comment-reply a {
+      @apply opacity-100;
+    }
   }
 
   .comment-awaiting-moderation {
     @apply ml-2 not-italic text-amber-600 dark:text-amber-400;
+  }
+
+  /* ---------- 回复框 (默认收起, 点它或某条评论的「回复」才展开成卡片) ----------
+     <details> 让展开/收起在无 JS 时也能用: 收起时只剩一颗虚线按钮, 展开后整块变成
+     卡片。点「回复」时由 app.js / 内核脚本把它搬进那条评论并展开
+     (见 app.js 的 resetRespond / holderFor)。 */
+  .respond {
+    @apply mt-6 rounded-2xl;
+  }
+
+  .respond[open] {
+    @apply border border-zinc-200/90 bg-white p-5 shadow-card sm:p-6 dark:border-zinc-800/90 dark:bg-zinc-900/40;
+  }
+
+  /* 收起时它就是一颗虚线胶囊 (只包住文字, 不铺满整行) */
+  .respond-summary {
+    @apply flex w-fit cursor-pointer list-none items-center gap-2 rounded-full border border-dashed border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-500 transition-colors select-none hover:border-accent/50 hover:bg-accent-soft hover:text-accent dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-accent/50 dark:hover:bg-accent-soft dark:hover:text-accent;
+  }
+
+  .respond-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* 展开后标题行不再是按钮, 而是卡片的第一行 */
+  .respond[open] > .respond-summary {
+    @apply mb-4 w-full border-0 bg-transparent p-0 text-zinc-900 dark:text-zinc-100;
+  }
+
+  .respond-chevron {
+    @apply transition-transform duration-200;
+  }
+
+  .respond[open] .respond-chevron {
+    @apply rotate-180;
+  }
+
+  /* 回复某条评论时评论框会被搬进那条评论里: 占满一整行, 排在子评论后面。
+     order: 6 得写在最后 —— DOM 里它是被 append 进去的, 前面那些 order 会把它顶到开头;
+     写在 .respond[open] 之后则是为了让 margin-top 盖掉 .respond 的 mt-6。 */
+  .comment-body > .respond {
+    order: 6;
+
+    @apply mt-2 flex-[1_0_100%];
   }
 
   /* ---------- 表单控件 ---------- */
@@ -855,6 +955,33 @@ html.is-aside-kept #site-nav {
 .prose-theme :where(h1, h2, h3, h4, h5, h6) {
   scroll-margin-top: 6rem;
   text-wrap: balance;
+}
+
+/* 正文链接: 不用「纯色文字 + 悬停才划线」那种没有着力点的样式。
+   平时是一条跟着主色走的浅色下划线 (主色 38%), 悬停时下划线变实并浮出一层极浅的主色底;
+   负 padding/margin 互相抵消, 保证高亮块不改变文字排布。 */
+.prose-theme :where(a) {
+  padding: 0.05em 0.18em;
+  margin: -0.05em -0.18em;
+  border-radius: 0.3rem;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in oklab, var(--color-accent) 38%, transparent);
+  transition: color 0.15s ease, background-color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.prose-theme :where(a:hover) {
+  text-decoration-color: var(--color-accent);
+  background-color: var(--color-accent-soft);
+}
+
+/* 图片链接 (封面图/插图常整张包在链接里): 高亮块和下划线在这里都没有意义 */
+.prose-theme :where(a:has(img)) {
+  padding: 0;
+  margin: 0;
+  background-color: transparent;
+  text-decoration-line: none;
 }
 
 /* 行内代码: 去掉 typography 默认的反引号, 换成胶囊底 */

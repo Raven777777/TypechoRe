@@ -12,6 +12,9 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 $article = themeArticle($this);
 $hasToc = themeOptionBool('showToc') && count($article['toc']) >= 2;
 
+/* 第二列形态 (sidebar|toc|none)。单栏布局没有第二列, 目录改为正文上方的折叠块 */
+$pageAside = themeContentAsideKind($this);
+
 $this->need('header.php');
 ?>
 <main id="main" class="min-w-0 transition-fade">
@@ -21,7 +24,7 @@ $this->need('header.php');
         </header>
 
         <?php if ($hasToc): ?>
-            <details class="no-print border-b border-zinc-200/80 px-6 py-4 sm:px-8 lg:hidden dark:border-zinc-800/80">
+            <details class="no-print border-b border-zinc-200/80 px-6 py-4 sm:px-8 dark:border-zinc-800/80<?php echo 'toc' === $pageAside ? ' lg:hidden' : ''; ?>">
                 <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
                     <?php echo themeIcon('list', 'size-4'); ?><?php _e('页面目录'); ?>
                     <span class="ml-auto text-xs text-zinc-400"><?php echo count($article['toc']), _e(' 节'); ?></span>
@@ -32,7 +35,7 @@ $this->need('header.php');
             </details>
         <?php endif; ?>
 
-        <div class="prose prose-zinc prose-theme max-w-none p-6 sm:p-8 dark:prose-invert prose-headings:font-semibold prose-a:font-medium prose-a:no-underline hover:prose-a:underline prose-img:my-6 prose-pre:my-6" itemprop="articleBody">
+        <div class="prose prose-zinc prose-theme max-w-none p-6 sm:p-8 dark:prose-invert prose-headings:font-semibold prose-a:font-medium prose-img:my-6 prose-pre:my-6" itemprop="articleBody">
             <?php echo $article['html']; ?>
         </div>
     </article>
@@ -40,9 +43,9 @@ $this->need('header.php');
     <?php $this->need('comments.php'); ?>
 </main>
 
-<?php if ($hasToc): ?>
+<?php if ('toc' === $pageAside): ?>
     <?php $this->need('toc.php'); ?>
-<?php else: ?>
+<?php elseif ('sidebar' === $pageAside): ?>
     <?php $this->need('sidebar.php'); ?>
 <?php endif; ?>
 <?php $this->need('footer.php'); ?>

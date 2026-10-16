@@ -196,16 +196,23 @@ function themeConfig(\Typecho\Widget\Helper\Form $form): void
 }
 
 /**
- * 主题初始化: 在归档渲染前调整少量运行时设置
+ * 主题初始化: 内核在归档渲染前会调用这个钩子 (主题目前不需要在这里改任何设置)
  *
  * @param \Widget\Archive $archive
  */
 function themeInit(\Widget\Archive $archive): void
 {
-    /** 主题的嵌套评论视觉层次最多支持 4 层, 避免深层嵌套挤压正文宽度 */
-    \Widget\Options::alloc()->commentsMaxNestingLevels = 4;
-
     /**
+     * 这里**故意什么都不改**: 评论行为全部交给后台 admin/options-discussion.php 的设置
+     * (是否分页 / 每页多少条 / 默认第几页 / 正序还是倒序 / 是否嵌套回复 / 最多几层),
+     * 内核 `Widget\Comments\Archive::execute()` 已经按这些选项查库、分页、排序 —— 主题插手
+     * 只会让后台设置看起来失灵。
+     *
+     * 曾经在这里把 commentsMaxNestingLevels 收紧成 4 (担心深层嵌套挤窄正文): 于是后台设的
+     * 「5 层」不生效 —— 越过上限的那一层会被内核挂到上上层 (`execute()` 里 levels 超限的那段),
+     * 到第 4 层连「回复」链接也不再输出 (`___isTopLevel()`)。现在评论区是扁平排版, 层级只
+     * 决定「回复挂在哪、能不能再回」, 视觉上已经没有缩进压力。
+     *
      * 评论 Markdown 由内核负责, 主题不再兜底
      *
      * `Widget\Base\Comments::___content()` 最后会把评论压成 `<p>` + `<br>`, 但它在
@@ -531,6 +538,7 @@ function themeIcon(string $name, string $class = 'size-5'): string
         'arrow-left'     => '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
         'arrow-right'    => '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
         'calendar'       => '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+        'chevron-down'   => '<path d="m6 9 6 6 6-6"/>',
         'chevron-up'     => '<path d="m18 15-6-6-6 6"/>',
         'clock'          => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
         'folder'         => '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
@@ -1124,9 +1132,11 @@ function themePageWidthClass(): string
 /**
  * 某篇文章 / 独立页面上的第二列 (侧边栏 / 文章目录) 形态
  *
- * 页面自己有目录时第二列就是目录 (目录条目少于两个时 toc.php 不输出, 那一页就是侧边栏;
- * 单栏布局没有侧边栏)。这里**刻意不按布局一刀切**: `toc.php` 不区分布局, 单栏布局下
- * 有目录的文章照样会输出那一版 `<aside>`, 提示必须与页面真实渲染出来的东西一致。
+ * 单栏布局 ('full') 没有第二列 —— 栅格都没画, 硬塞一份 `<aside>` 只会掉在评论区下方
+ * 成为页面底部的一坨 (而且单栏的人本来就不要侧栏)。所以单栏下这里一律返回 none,
+ * 文章的目录改由 post.php 在正文上方用折叠块输出 (与窄屏那一版共用同一段标记)。
+ *
+ * 有第二列时: 页面自己有目录 (条目 >= 2) 就是目录 (toc.php), 否则是侧边栏。
  *
  * post-card.php 会把它写成卡片链接上的 data-aside-target: 从列表页点进某一篇时,
  * app.js 在**拿到目标文档之前**就能确定第二列会不会变 —— 猜错会让骨架遮罩盖住
@@ -1137,6 +1147,10 @@ function themePageWidthClass(): string
  */
 function themeContentAsideKind(\Widget\Archive $archive): string
 {
+    if ('full' === themeOption('layout', 'sidebar')) {
+        return 'none';
+    }
+
     if (themeOptionBool('showToc') && count(themeArticle($archive)['toc']) >= 2) {
         return 'toc';
     }

@@ -108,7 +108,7 @@ npm run test:php     # 主题纯函数: 目录渲染/折叠 + 动效档位表 (�
 | 动效强度 | 关闭 / 轻盈 / 标准 / 明显, 控制切页上浮的距离、时长与卡片错峰 |
 | 切页骨架屏 | 等待新内容时是否显示占位骨架 (与动效强度相互独立) |
 | 链接预取 | 鼠标悬停在链接上时是否在后台提前取回目标页面; 关掉可省流量与服务器请求, 代价是首次点击变慢 |
-| 文章目录 | 自动为二至三级标题生成目录 (四级标题仍生成锚点), 可见条目少于两个时不显示 |
+| 文章目录 | 自动为二至三级标题生成目录 (四级标题仍生成锚点), 可见条目少于两个时不显示; 单栏布局下改为正文上方的折叠块 |
 | 预计阅读时间 | 中英文混排估算 |
 | 列表摘要字数 | 列表页卡片的摘要长度 |
 | 侧边栏内容 | 最新文章 / 最近回复 / 分类 / 归档 / 标签 / 其它 |
@@ -121,6 +121,12 @@ npm run test:php     # 主题纯函数: 目录渲染/折叠 + 动效档位表 (�
 
 **新增一个设置项**: 在 `functions.php` 的 `themeConfig()` 里添加表单项,
 模板中用 `themeOption('键名', '默认值')` / `themeOptionBool()` / `themeOptionInt()` 读取。
+
+**改正文链接样式**: 正文链接 (`.prose-theme :where(a)`) 平时是一条 38% 主色的浅下划线,
+悬停时下划线变实并浮出一层极浅主色底 (`.prose-theme :where(a:hover)`)。这两条规则写在
+`src/css/main.css` 的层外 (unlayered), 所以盖得住 typography 插件的 `prose-a:*` 工具类 ——
+`post.php` / `page.php` 上不再需要 `prose-a:no-underline hover:prose-a:underline`。
+整张包在链接里的图片 (`a:has(img)`) 会被排除, 不会出现下划线和高亮块。
 
 **改配色**: 绝大多数颜色来自 Tailwind 调色板 (`zinc`) 与 `--color-accent`,
 在 `src/css/main.css` 的 `@theme` 中调整后重新构建即可。代码令牌的颜色是
@@ -260,7 +266,11 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
   `enhancePage()`, 不去重放它。
 
 **第二列 (侧边栏 / 文章目录)**: 文章页与独立页面在「有目录」时是**用目录整列替换掉侧边栏**
-(`post.php` / `page.php` 里的 `if ($hasToc) toc.php else sidebar.php`)。这一列是 `#main`
+(`post.php` / `page.php` 按 `themeContentAsideKind()` 的结果载入 `toc.php` 或 `sidebar.php`)。
+**单栏布局 (`layout = full`) 没有第二列**: 栅格都没画, 硬塞一份 `<aside>` 只会掉在评论区
+下方、成为页面底部的一坨 —— 所以 `themeContentAsideKind()` 在单栏下一律返回 `none`, 目录
+改由模板在正文上方输出折叠块 (与窄屏那一版共用同一段标记, 见 `post.php` 的 `$postAside`;
+有第二列时那块只在 `lg` 以下显示)。这一列是 `#main`
 的兄弟节点, 不在 Swup 容器里 —— 如果不管它, 从列表页进文章就看不到目录 (必须 F5),
 从文章回列表页又会留着上一页的目录。因此两个模板的 `<aside>` 都带同一个稳定类
 `page-aside`, `app.js` 的 `syncPageAside()` 在容器替换后整列同步 (目标页有就替换、
@@ -280,6 +290,17 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
 会通过 `archiveDescription = plainExcerpt` 提前渲染并缓存正文, 主题注册的钩子会错过正文。
 插件不受此限制 (插件在引导阶段注册钩子), 其过滤结果依然会体现在 `$archive->content` 中。
 
+## 窄屏 (手机)
+
+- **第二列 (侧边栏 / 文章目录) 在 `lg` 以下整体隐藏** (`.page-aside` + 骨架屏的
+  `[data-skeleton-aside]`, 断点与栅格生效的 `lg` = 64rem 同一挡)。窄屏时那一列是「正文和
+  分页看完之后又冒出来的一整列」, 只是噪音; 窄屏本来就有替代品 —— 文章目录在 `post.php`
+  里另有一份 `<details>`。隐藏写在大屏栅格所在的层里, 而不是给模板加 `hidden lg:block`:
+  `lg:block` 属于 utilities 层, 会反压 `[data-skeleton-aside][hidden]` 的 `display: none`。
+- **页脚窄屏两行居中**: `© 年份 + 站点标题` 一行, 链接一行 (`sm` 以下隐藏「由 … 强力驱动」,
+  否则那一行在 375px 上要挤五个链接), `sm` 以上恢复成「左版权 / 右链接」的单行横条 ——
+  这时它与页眉等高 (都是 `h-14` + 1px 边框)。
+
 ## 性能与可访问性
 
 - 单个 CSS (约 14 KB gzip) + 单个 JS (约 40 KB gzip), 均为长期缓存 (filemtime 版本号)。
@@ -296,7 +317,54 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
 - 正文按 Markdown / HTML 原文解析, 逐个跳过 `![附件](file.zip)`、`<img src="a.pdf">`
   这类非图片后缀 (没有后缀的地址 (图床 / 动态缩略图接口) 视为图片)。
 - 附件按 Typecho 的附件类型判断 (`attachment->isImage`), 压缩包、PDF、音视频不会进卡片。
+- 卡片缩略图**不低于 4:3**: 桌面端定宽 `14rem`、最小高度 `10.5rem` (正好是 `14rem` 的
+  4:3), 再往上跟着卡片高度走 —— 卡片比图高时图片把整列填满, 不会在缩略图下面空出一条
+  白边。图片用 `absolute inset-0` + `object-cover` 铺满: flex 容器里百分比高度靠父元素定高,
+  而父元素高度由内容撑开时, 图片的固有高度会反过来把卡片顶得很高 (竖图尤其明显) ——
+  绝对定位把图片摘出文档流就没这个问题, 小图会被放大填满、大图被裁切, 都不会变形。
+  外层 `bg-zinc-100` 是兜底底色, 图加载失败时不会露出一块死白。窄屏是一张通栏横幅 (`h-44`),
+  不跟比例走 (4:3 通栏会高得离谱)。
 - 所以「上传了别的文件」不会再把卡片图片搞坏, 自定义字段里的地址仍然无条件信任 (由站长自己填写)。
+
+## 评论区
+
+- **行为完全跟随后台「设置 → 讨论」**: 是否分页 / 每页多少条 / 默认显示第一页还是最后一页 /
+  新的还是旧的在前 / 是否开启嵌套回复 / 最多几层 —— 这些都由内核
+  `Widget\Comments\Archive::execute()` 读选项实现, 主题**不覆盖任何一项**。
+  一个坑: 主题曾经在 `themeInit()` 里把 `commentsMaxNestingLevels` 收紧成 4 (担心深层
+  嵌套挤窄正文), 后果是后台设的「5 层」不生效 —— 越过上限的那层会被内核挂到上上层,
+  到第 4 层连「回复」链接也不再输出; 现在评论区是扁平排版, 层级只决定「回复挂在哪」, 没有
+  必要再收紧。
+- **扁平排版**: 一条评论 = 元信息行 (`[头像] 井水玉藻 10-15 23:39 回复`) + 正文, 全部
+  左对齐 —— 不缩进、不设底色、不带左侧竖线, 嵌套回复也不单独分级。同层之间只压一条极细分
+  隔线 (`.comment-list > .comment-body + .comment-body` 对任意深度都生效, 因为每一层都被包在
+  自己的 `ol.comment-list` 里; 另外一条 `.comment-children > .comment-list > .comment-body:first-child`
+  免得嵌套回复粘在父评论正文后面)。视觉间隔 `33px → 17px`。
+  内核输出的节点顺序是 `author / meta / content / reply / children` —— 「回复」在正文之后,
+  直接排下去会单独占一行 (看上去就像孤零零飘在最右边), 所以主题**不改内核标记**, 只用
+  `.comment-body` 上的 `flex-wrap` + `order` 把视觉顺序扳成
+  `author(1) / meta(2) / reply(3) / content(4) / children(5)`, 回复框搬进评论里是 `order: 6`
+  (否则那个 `order: 0` 的回复框会被顶到最上面)。
+  不用 grid 是因为正文要跨列, 而跨列项的 `max-content` 会把网格列撑开。
+- **关了 Gravatar 就不再请求头像**: 评论列表是内核输出的, `Comments::gravatar()` 自己会看
+  `commentsAvatar` 选项; 但登录身份的 `Users::gravatar()` 不看, 所以 `comments.php` 里那次
+  调用额外判了一次。头像关闭时元信息行也不留空位 —— 头像间距挂在头像自己的 `margin-right` 上,
+  而不是 `.comment-author` 的 `gap` (内核在关闭时仍会输出一个空的 `<span itemprop="image">`)。
+- **「回复」平时隐藏**: 只在 `@media (hover: hover)` 里给 `opacity: 0`, 悬停这条评论或键盘聚焦
+  到它时淡入 —— 触屏没有 hover, 照常可见, 否则点不到。用 `opacity` 而不是 `display`,
+  悬停时不会因为按钮突然出现而挤动排版。
+- **回复框默认收起**: `#respond-xxx` 本身就是 `<details>`, 收起时它就是一颗虚线胶囊
+  (只包住文字, 不铺满整行); 点它, 或点某条评论的「回复」
+  (`app.js` 与内核的内联脚本会把评论框搬进那条评论并展开), 才展开成卡片。
+  提交成功后 `resetRespond()` 收起评论框并清掉隐藏的 `parent` 字段。
+- **提交回执在回复框外面**: `#notice-box` 是 `#comments` 的直接子节点 (不在 `<details>` 里),
+  否则收起评论框会把「评论已提交, 通过审核后显示」一起藏起来; `refreshComments()` 重铺评论区时
+  会把它放回原位。
+- 回复框搬进评论后由 `.comment-body > .respond` 占满一整行, `order: 6` 决定它排在子评论后面;
+  该规则写在 `.respond[open]` 之后, 顺便盖掉 `.respond` 的 `mt-6`。
+- 占位节点优先复用内核内联脚本建的 `#respond-xxx-holder` (它只有 id, 没有主题的 `data-*` 标记),
+  否则会在评论里再建一个同 id 的节点, 「取消回复」会把评论框搬回那条评论里面。
+- 头像是 36px、日期用 `m-d H:i` (同一年的评论不再重复年份)。
 
 ## 开源组件与来源
 
@@ -323,7 +391,8 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
 ## 兼容性
 
 - 主题不单独提高 PHP 版本要求；运行 TypechoRe 整站仍需要 PHP 8.5+。主题本身无额外 PHP 扩展依赖。
-- 移动端导航使用原生 `<details>`, 评论表单是普通 POST, 因此无 JavaScript 时功能完整。
+- 移动端导航与评论回复框都用原生 `<details>`, 评论表单是普通 POST, 因此无 JavaScript 时功能完整
+  (无 JS 时点「回复」不会把评论框搬进那条评论, 但可以手动展开「添加新回复」照常提交)。
 - Swup 会跳过后台 (`/admin/`)、动作路由 (`/action/`)、`install.php`、跨域链接、
   带 `onclick` 的链接 (评论回复 / 取消回复) 与带 `download` / `target` 的链接。
 - 正文中的锚点标题使用可读 slug (保留中文), 同名标题自动追加序号, 与页面已有锚点

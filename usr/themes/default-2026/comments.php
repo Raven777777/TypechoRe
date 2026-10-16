@@ -10,14 +10,17 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 }
 
 $comments = $this->comments();
+/* ?replyTo=<coid>: 内核会给表单 action 补上 parent 字段 (无 JS 也能回复), 同时把
+   「取消回复」链接显示出来; 回复框跟着默认展开, 两边保持一致。 */
+$replyTo = (int) $this->request->filter('int')->get('replyTo');
 ?>
 <div id="comments" class="no-print mt-10">
     <?php if ($comments->have()): ?>
         <h2 class="widget-title"><?php echo themeIcon('message-circle', 'size-4'); ?><?php $this->commentsNum(_t('暂无评论'), _t('1 条评论'), _t('%d 条评论')); ?></h2>
 
         <?php $comments->listComments([
-            'avatarSize' => 40,
-            'dateFormat' => 'Y-m-d H:i'
+            'avatarSize' => 36,
+            'dateFormat' => 'm-d H:i'
         ]); ?>
 
         <?php $comments->pageNav('&laquo;', '&raquo;', 1, '...', [
@@ -27,20 +30,30 @@ $comments = $this->comments();
     <?php endif; ?>
 
     <?php if ($this->allow('comment')): ?>
-        <div id="<?php $this->respondId(); ?>" class="respond card mt-8 p-5 sm:p-6">
+        <?php /* 回复框默认收起成一颗按钮 (<details>): 点它或点某条评论的「回复」才展开成
+                 卡片 (后者由 app.js / 内核脚本展开); 无 JS 时 <details> 自己也能展开。 */ ?>
+        <details id="<?php $this->respondId(); ?>" class="respond"<?php if ($replyTo > 0): ?> open<?php endif; ?>>
+            <summary class="respond-summary">
+                <?php echo themeIcon('message-circle', 'size-4'); ?>
+                <span><?php _e('添加新回复'); ?></span>
+                <?php echo themeIcon('chevron-down', 'respond-chevron size-4'); ?>
+            </summary>
+
             <div class="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h2 id="response" class="text-base font-semibold tracking-tight"><?php _e('添加新评论'); ?></h2>
+                <h2 id="response" class="sr-only"><?php _e('添加新回复'); ?></h2>
                 <div class="cancel-comment-reply ml-auto text-xs text-zinc-500 dark:text-zinc-400"><?php $comments->cancelReply(); ?></div>
             </div>
-
-            <div id="notice-box" class="mb-4 hidden rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm whitespace-pre-line text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200" hidden></div>
 
             <?php /* data-respond-id: 评论框容器 id (respond-XXX) 的完整值, app.js 的
                      回复/取消回复靠它定位容器, 不要去拼 cid —— theId 不是纯数字。 */ ?>
             <form id="comment-form" class="space-y-3" method="post" action="<?php $this->commentUrl(); ?>" data-respond-id="<?php echo themeEsc($this->respondId); ?>" data-comment-anchor="<?php echo themeEsc($this->theId); ?>" data-submit-failed="<?php echo themeEsc(_t('提交失败, 请稍后再试。')); ?>" data-waiting-text="<?php echo themeEsc(_t('评论已提交, 通过审核后显示。')); ?>" data-comment-submit>
                 <?php if ($this->user->hasLogin()): ?>
                     <div class="comment-identity">
-                        <?php $this->user->gravatar(24, 'X', null, 'comment-avatar'); ?>
+                        <?php /* 后台关掉 Gravatar 头像服务后不该再请求头像: Comments::gravatar() 会
+                                 自己看 commentsAvatar 选项, 但 Users::gravatar() 不看, 所以这里判一次。 */ ?>
+                        <?php if ($this->options->commentsAvatar): ?>
+                            <?php $this->user->gravatar(24, 'X', null, 'comment-avatar'); ?>
+                        <?php endif; ?>
                         <span class="min-w-0 truncate">
                             <a class="font-medium text-zinc-700 transition-colors hover:text-accent dark:text-zinc-200" href="<?php $this->options->profileUrl(); ?>"><?php $this->user->screenName(); ?></a><span class="mx-1 text-zinc-300 dark:text-zinc-600">·</span><a class="transition-colors hover:text-accent" href="<?php $this->options->logoutUrl(); ?>"><?php _e('退出'); ?></a>
                         </span>
@@ -97,7 +110,10 @@ $comments = $this->comments();
                     <button class="btn btn-ghost comment-submit" type="submit"><?php _e('提交评论'); ?></button>
                 </div>
             </form>
-        </div>
+        </details>
+
+        <?php /* 提交回执放在回复框外面: 收起回复框后依然看得见 */ ?>
+        <div id="notice-box" class="mt-4 hidden rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm whitespace-pre-line text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200" hidden></div>
     <?php else: ?>
         <p class="card mt-8 p-6 text-sm text-zinc-500 dark:text-zinc-400"><?php _e('评论已关闭'); ?></p>
     <?php endif; ?>
