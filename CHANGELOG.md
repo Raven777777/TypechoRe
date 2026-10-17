@@ -5,6 +5,54 @@
 
 ## 未发布
 
+### 仓库与文档整理
+
+- 新增 [`tools/README.md`](tools/README.md): 逐个说明构建/打包/质量检查脚本的用途、常用命令与调用关系,
+  并注明 `tools/` 与 `tests/` 均不会进发布包; `.tools/`(PHPStan / Semgrep) 可随时删除, 下次运行自动重建
+- 文档侧边栏把 `代码质量与 PHP 8.5` 与新增的 `TypePHP 原生二进制实验` 拆到单独的「开发与构建」分组,
+  `docs/README.md`、`README.md` 补上指向这两篇与 `tools/README.md` 的链接
+- 修正两个失效的文档相对链接: `docs/guide/deployment.md` 的 `tools/assets/README.md`(少一层 `../`)、
+  `docs/guide/installation.md` 的截图路径(`../../img/` 应为 `../img/`)
+- 清理仓库内的临时产物: `.tmp-test/`(E2E 与 PHPStan 缓存)、`dist/` 旧包、`php-errors.log`、
+  测试留下的 `usr/*.db`、空的 `tools/phpstan/` 与 `__pycache__/`(均在 `.gitignore` 里)
+
+### 实验: TypePHP 原生二进制
+
+- 新增 `docs/guide/typephp.md` 与 `tools/typephp/runner/`(`project.yml` + `main.php`),
+  记录用 [TypePHP](https://github.com/swoole/typephp) 编译原生可执行文件的完整配方与结论:
+  Windows x64 上能构建成功(`tpc.exe` 29.5 MiB, 全套工具链 32 分钟), 原生入口已能把 `GET /`
+  交给站点并渲染出 37,493 字节的首页 HTML, `pdo_sqlite`/`mbstring`/`openssl` 等扩展在原生进程里可用
+- 结论: TypePHP 的 AOT 只能编译 `main.php` 这类带显式 `main()` 的入口, 框架代码仍由链接进来的
+  Zend 运行时 `include` 解释执行; `--nano`(不依赖任何 DLL)模式拒绝 `include`/`require`,
+  与 TypechoRe 全站模板引导方式不兼容。产物需随包携带 `php8ts.dll`、`phpx.dll`、
+  mpdecimal/gmp/mpfr 与 `php.ini`, 不是单文件二进制。**未接入 CI 与发布流程**;
+  另外 TypePHP/PHPX 是 GPL-3.0, 分发前需先确认与本项目 GPL-2.0 的兼容性
+
+### 发布包: 打包时用 Parcel 压缩前端资源
+
+- 新增 `tools/assets/`(Parcel 2.16.4, 仅构建时使用) 与 `tools/minify_assets.py`:
+  `tools/build_release.py` 现在会把发布集里的 CSS 与自包含 HTML 交给 Parcel 压缩后再进包,
+  仓库里的文件不会被改写。当前 8 个样式表 167.5 KiB → 150.5 KiB (-10.2%),
+  `usr/themes/default/normalize.css` 与 `admin/css/normalize.css` 各缩到约三分之一。
+  发布包里目前没有静态 `.html` 文件, HTML 这一路是给主题/插件以后放的静态页留的;
+  `install.php` 与主题模板是 PHP 文件(HTML 里嵌 `<?php ?>`), 不交给 Parcel ——
+  它的 HTML 流水线会把 PHP 标签当文本处理并改写外部引用
+- Parcel 是打包器: CSS 的相对 `url(...)` 会被当资源依赖改名并平坦化, 所以压缩前先换成
+  `url(#__typechore_asset_N__)` 片段占位、压缩后换回原文; 含相对 `@import` 的样式表跳过。
+  JS 不压缩 —— 包里全是已压缩的构建产物 (Vite 的 `dist/app.js`、`admin/js/` 里的 jQuery 等
+  vendor 包), 重新打包会把它们包进 IIFE 并丢掉 `window.jQuery` 这类全局入口
+- `tools/build_release.py` 新增 `--skip-minify`(不压缩) 与 `--require-minify`(压缩失败即报错);
+  没有 Node 或未装 `tools/assets/` 依赖时默认只警告并跳过压缩。`SHA256SUMS.txt` 的摘要是
+  按包内字节(即压缩之后)算的
+- 发布包不再包含 `admin/src/`(1.5 MB 的 JS/SCSS 源码, 压缩前源文件, 全仓库无运行时引用):
+  共减少 89 个文件, ZIP 从 1.3 MiB 降到 1.0 MiB
+- `tests/build_release.py` 新增断言: `admin/src/` 不在包内、样式表确实被压缩、
+  每个 `url(...)` 引用与源文件逐字一致、没有遗留占位符; 另外用临时样本实际跑一次 HTML 压缩
+  (自包含页面变小且注释被去掉, 引用同目录 `theme.css` 的页面保持原样);
+  `tools/quality.ps1`、`.github/workflows/release.yml` 与 `quality.yml` 会先装好 Parcel 工具链
+- `docs/guide/deployment.md`、`docs/guide/quality.md`、`tools/assets/README.md` 记录了
+  构建命令与「为什么 JS 不压缩」的实测原因
+
 ### 新主题 Default 2026 (预览版)
 
 - 新增 `usr/themes/default-2026`: 现代、优雅、以性能为先的默认主题,

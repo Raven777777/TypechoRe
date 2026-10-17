@@ -28,6 +28,8 @@
 * [部署与恢复及生产包构建](docs/guide/deployment.md)
 * [Passkey / WebAuthn](docs/guide/passkey.md)
 * [代码质量与 PHP 8.5 检查报告](docs/guide/quality.md)
+* [TypePHP 原生二进制实验](docs/guide/typephp.md)
+* [构建与开发脚本说明](tools/README.md)
 * [更新日志](CHANGELOG.md)
 
 ## 许可证
