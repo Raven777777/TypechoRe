@@ -5,6 +5,18 @@ dist/
 # 主题构建产物需要随仓库分发 (开箱即用), 单独放行
 !usr/themes/*/dist/
 
+# 发布包压缩用的 Parcel 工具链依赖 (由 npm ci --prefix tools/assets 安装)
+tools/assets/node_modules/
+tools/assets/.parcel-cache/
+.parcel-cache/
+__pycache__/
+
+# TypePHP 实验 (docs/guide/typephp.md) 在本地编译出的中间产物与二进制
+tools/typephp/runner/build/
+tools/typephp/runner/*.exe
+tools/typephp/runner/*.lib
+tools/typephp/runner/*.exp
+
 # 数据库凭据 (含密钥路径等敏感配置, 安装时生成)
 config.inc.php
 

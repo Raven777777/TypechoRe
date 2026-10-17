@@ -17,8 +17,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/assets/package-lock.json
+      - name: Install the Parcel toolchain
+        run: npm ci --prefix tools/assets
       - name: Build release package
-        run: python tools/build_release.py
+        # --require-minify: 没装成功 Parcel 就直接失败, 不静默地把未压缩资源发出去
+        run: python tools/build_release.py --require-minify
       - name: Upload package to the GitHub release
         uses: softprops/action-gh-release@v2
         with:

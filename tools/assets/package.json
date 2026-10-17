@@ -1,0 +1,13 @@
+{
+  "name": "typechore-build-assets",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Parcel 工具链: 供 tools/build_release.py 在打包时压缩发布包里的 CSS 与自包含 HTML",
+  "license": "GPL-2.0-or-later",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "parcel": "2.16.4"
+  }
+}

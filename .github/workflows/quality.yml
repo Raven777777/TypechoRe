@@ -20,6 +20,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      # 发布包里的 CSS 由 Parcel 压缩 (tools/minify_assets.py), 测试会校验压缩确实生效
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/assets/package-lock.json
       - name: Lint, test, analyze
         shell: pwsh
         env:

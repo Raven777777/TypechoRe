@@ -2,15 +2,24 @@
 
 ## 发布包内容
 
-构建用于网站根目录的代码 ZIP（需要 Python 3.9+，无额外依赖）：
+构建用于网站根目录的代码 ZIP（需要 Python 3.9+；打包时用 Parcel 压缩 CSS，
+需要 Node 18+ 并先装一次构建依赖，没装也能打包，只是不压缩）：
 
 ```bash
-python tools/build_release.py
+npm ci --prefix tools/assets        # 仅首次 / 依赖变更后, 只服务于构建
+python tools/build_release.py        # 自动压缩 CSS/HTML
+python tools/build_release.py --skip-minify     # 不压缩, 也不需要 Node
+python tools/build_release.py --require-minify  # 压缩失败即报错 (CI 用)
 ```
 
-输出为 `dist/TypechoRe-<版本>.zip`，解压后文件直接位于网站根目录。发布包包含 `LICENSE.txt`、`admin/`、`install/`、`usr/`、`var/` 及入口文件；不会包含本地 `config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、日志、备份、缓存或用户上传文件，也不会包含只服务于开发/构建的文件（主题的 `tests/`、`src/`、`package.json` / `vite.config.js` 等 Node 构建配置、`node_modules/` 与 `.gitignore`）。
+Parcel 会把发布包里的样式表压小约一成（例如 8 个样式表 167.5 KiB → 150.5 KiB），
+同时保证 `url(...)` 引用逐字不变。工具链位于 `tools/assets/`，`node_modules/` 已被 Git 忽略，
+说明见 [`tools/assets/README.md`](../../tools/assets/README.md)。JS 不在压缩范围内：包里全是已压缩的
+构建产物，Parcel 重新打包会丢掉 `window.jQuery` 这类全局入口。
 
-包里还附带一份 `SHA256SUMS.txt`：逐文件（清单自己除外）的 SHA-256，格式与 `sha256sum` 一致。解压后可直接整包校验：
+输出为 `dist/TypechoRe-<版本>.zip`，解压后文件直接位于网站根目录。发布包包含 `LICENSE.txt`、`admin/`、`usr/`、`var/`、`install/` 及入口文件；不会包含本地 `config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、日志、备份、缓存或用户上传文件，也不会包含只服务于开发/构建的文件（主题的 `tests/`、`src/`、`package.json` / `vite.config.js` 等 Node 构建配置、后台的 `admin/src/`、`node_modules/` 与 `.gitignore`）。
+
+包里还附带一份 `SHA256SUMS.txt`：逐文件（清单自己除外）的 SHA-256，格式与 `sha256sum` 一致；摘要是按包内字节（即压缩之后的内容）算的。解压后可直接整包校验：
 
 ```bash
 sha256sum -c SHA256SUMS.txt        # macOS: shasum -a 256 -c SHA256SUMS.txt
@@ -121,7 +130,7 @@ limit_req_status 429;
 
 发布包由 `tools/build_release.py` 构建（或由 GitHub Release 自动构建），已排除
 `config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、`*.log`、`usr/uploads/` 与 `usr/backups/`，
-以及主题的 `tests/`、`src/` 与 Node 构建配置。部署前仍建议确认 zip 内没有遗留的数据库或日志文件，
+以及主题的 `tests/`、`src/`、Node 构建配置与后台的 `admin/src/`；包内样式表与静态 HTML 已在打包时压缩。部署前仍建议确认 zip 内没有遗留的数据库或日志文件，
 并用包内的 `SHA256SUMS.txt` 校验一次完整性。
 
 已安装的网站不需要重复访问：

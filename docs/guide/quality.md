@@ -22,7 +22,8 @@
 3. `tools/audit-override.php` 反射审计 `#[\Override]` 覆盖率
 4. `tests/integration.php` 数据库适配器集成测试（本地默认 SQLite）
 5. `tests/build_release.py` 发布包隔离测试（确认 SQLite 主库及 WAL/SHM/journal 文件、
-   主题开发文件不进入 ZIP，且包内 `SHA256SUMS.txt` 与每个文件的实际摘要一致）
+   主题开发文件与 `admin/src/` 不进入 ZIP，包内 `SHA256SUMS.txt` 与每个文件的实际摘要一致，
+   且 CSS 确实被 Parcel 压缩、`url()` 引用未被改写、静态 HTML 的压缩路径也走通了）
 6. PHPStan 静态分析（`phpstan.neon`，**level 5**）
 7. `tools/e2e.php` 真实站点端到端回归（发布包 + PHP 内置服务器）
 8. Semgrep 安全扫描（`p/php`、`p/security-audit`、`p/owasp-top-ten`、`p/secrets`；
@@ -108,9 +109,19 @@ CI 只跑 SQLite。
 同一个测试还会实际读取 ZIP，确认：
 
 - 主题里只服务于开发/构建的文件（`usr/themes/*/tests/`、`src/`、`package.json`、`vite.config.js` 等）
-  没有被打包，而主题构建产物 `usr/themes/*/dist/` 确实在包里（避免「排除过宽」）；
+  与后台的压缩前源码（`admin/src/`）没有被打包，而主题构建产物 `usr/themes/*/dist/` 与
+  `admin/js/`、`admin/css/` 确实在包里（避免「排除过宽」）；
 - 包内的 `SHA256SUMS.txt` 恰好覆盖除它自己以外的每个文件，且每一行的摘要在重新读取该文件字节后
-  仍然一致 —— 这条断言不依赖构建脚本自身的 `verify()`，相当于从外部复核一次清单。
+  仍然一致 —— 这条断言不依赖构建脚本自身的 `verify()`，相当于从外部复核一次清单；
+- 样式表在打包时被 Parcel 压缩过（`usr/themes/default/normalize.css` 至少缩小一半），
+  且每个 `url(...)` 引用与源文件逐字一致 —— 防止 Parcel 把图片/字体当依赖改名或平坦化；
+- 自包含的静态 HTML 会被压缩，而引用了同目录 `.css` / 脚本的 HTML 会保持原样（这条用临时
+  样本在现场跑一次 Parcel，同样只在装了 `tools/assets/` 依赖时执行）。
+
+注意 `install.php` 与主题模板是 PHP 文件（HTML 里嵌 `<?php ?>`），**不会**被当成 HTML 压缩：
+Parcel 的 HTML 流水线会把 PHP 标签当文本处理并改写外部引用，收益远小于风险。
+
+没有 Node 或未装 `tools/assets/` 依赖时上述压缩相关断言会打印 `SKIP`；`tools/quality.ps1` 会自动装好。
 
 ## 已完成检查
 

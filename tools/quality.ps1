@@ -25,6 +25,21 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not install Semgrep.' }
     }
 
+    # 发布包里的 CSS 由 Parcel 压缩 (tools/minify_assets.py); 没有 Node 时测试会打印 SKIP
+    $parcelRoot = Join-Path $root 'tools/assets'
+    $npm = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npm) {
+        Write-Host 'WARNING: npm was not found; release-package stylesheets will not be minified.'
+    } elseif (-not (Test-Path (Join-Path $parcelRoot 'node_modules/parcel'))) {
+        Push-Location $parcelRoot
+        try {
+            & $npm.Source ci --no-audit --no-fund
+            if ($LASTEXITCODE -ne 0) { throw 'Could not install the Parcel toolchain (tools/assets).' }
+        } finally {
+            Pop-Location
+        }
+    }
+
     if ($env:PHP_EXE) {
         $php = $env:PHP_EXE
     } elseif ($windows -and (Test-Path (Join-Path $root 'php-8.5.10/php.exe'))) {
