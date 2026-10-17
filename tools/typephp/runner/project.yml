@@ -1,0 +1,13 @@
+# TypePHP 工程: 把 runner/main.php 编译成原生可执行文件
+#
+# 用法 (需要先按 docs/guide/typephp.md 构建出 tpc.exe):
+#   tpc.exe tools/typephp/runner/project.yml --job 2
+# 产物: tools/typephp/runner/build/typechore-runner.exe (由下方 output 决定)
+name: typechore-runner
+mode: bin
+build-dir: build
+output: typechore-runner
+cxx-std: c++17
+
+sources:
+  - main.php
