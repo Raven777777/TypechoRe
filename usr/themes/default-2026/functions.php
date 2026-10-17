@@ -56,7 +56,7 @@ function themeConfig(\Typecho\Widget\Helper\Form $form): void
         null,
         '#4f6bf5',
         _t('强调色'),
-        _t('十六进制颜色值, 如 #4f6bf5, 用于链接、按钮与高亮状态')
+        _t('十六进制颜色值, 如 #4f6bf5。只填一个颜色, 主题会自动派生出「填充 / 填充上的字 / 当文字用」三个变体, 保证每种用途的对比度都达标')
     );
     $form->addInput($accentColor);
 
@@ -144,7 +144,7 @@ function themeConfig(\Typecho\Widget\Helper\Form $form): void
         null,
         110,
         _t('列表摘要字数'),
-        _t('列表页每张卡片显示的摘要字数, 建议 60 - 200')
+        _t('列表页每张卡片显示的摘要字数, 建议 60 - 200 (超出 10 - 500 的部分会被忽略)')
     );
     $form->addInput($excerptLength);
 
@@ -239,6 +239,17 @@ function themeInit(\Widget\Archive $archive): void
  * @param string $html
  * @return string
  */
+/**
+ * 在标签收尾(`>` 或 `/>`)之前插入属性
+ */
+function themeInsertAttr(string $tag, string $attrs): string
+{
+    $closing = str_ends_with($tag, '/>') ? '/>' : '>';
+    $head = substr($tag, 0, -strlen($closing));
+
+    return rtrim($head) . $attrs . $closing;
+}
+
 function themeLazyImages(string $html): string
 {
     if (false === stripos($html, '<img')) {
@@ -252,16 +263,25 @@ function themeLazyImages(string $html): string
             $tag = $match[0];
             ++$seen;
 
-            if (1 === $seen || false !== stripos($tag, 'loading=')) {
+            /* 首图通常是 LCP 元素: 保它的加载优先级, 只补异步解码 */
+            if (1 === $seen) {
+                if (false === stripos($tag, 'fetchpriority=')) {
+                    $tag = themeInsertAttr($tag, ' fetchpriority="high"');
+                }
+
+                return false === stripos($tag, 'decoding=') ? themeInsertAttr($tag, ' decoding="async"') : $tag;
+            }
+
+            $lazy = false === stripos($tag, 'loading=');
+            $async = false === stripos($tag, 'decoding=');
+
+            if (!$lazy && !$async) {
                 return $tag;
             }
 
-            $closing = str_ends_with($tag, '/>') ? '/>' : '>';
-            $extra = ' loading="lazy" decoding="async"';
+            $extra = ($lazy ? ' loading="lazy"' : '') . ($async ? ' decoding="async"' : '');
 
-            return false === stripos($tag, 'decoding=')
-                ? substr($tag, 0, -strlen($closing)) . $extra . $closing
-                : $tag;
+            return themeInsertAttr($tag, $extra);
         },
         $html
     );
@@ -349,15 +369,307 @@ function themeEsc($value): string
 }
 
 /**
+ * 主题选项默认值 (全主题唯一来源)
+ *
+ * themeConfig() 里的表单默认值、前台读取时的回退值都从这里取,
+ * 避免同一个数字在三个文件里各写一份、改一处漏两处。
+ *
+ * @return array<string, mixed>
+ */
+function themeDefaults(): array
+{
+    return [
+        'accentColor'     => '#4f6bf5',
+        'colorScheme'     => 'auto',
+        'fontStyle'       => 'sans',
+        'layout'          => 'sidebar',
+        'animLevel'       => 'normal',
+        'showSkeleton'    => '1',
+        'showToc'         => '1',
+        'showReadingTime' => '1',
+        'excerptLength'   => '110',
+        'preloadLinks'    => '1',
+        'sidebarBlock'    => ['ShowRecentPosts', 'ShowRecentComments', 'ShowCategory', 'ShowArchive', 'ShowTagCloud', 'ShowOther'],
+    ];
+}
+
+/**
+ * 取单个默认值
+ *
+ * @param string $name
+ * @param string $fallback
+ * @return string
+ */
+function themeDefault(string $name, string $fallback = ''): string
+{
+    $defaults = themeDefaults();
+    $value = $defaults[$name] ?? null;
+
+    return is_scalar($value) ? (string) $value : $fallback;
+}
+
+/**
+ * 把一个「会 echo 的东西」(内核的 title() / author() / excerpt() 等) 转成安全字符串
+ *
+ * 内核这些方法直接把原始值打出来, 用户填的标题里带 `<` 就会破标记,
+ * 模板里一律用 `<?php echo themeText(fn () => $this->title()); ?>` 代替裸 echo。
+ *
+ * @param callable $printer
+ * @return string
+ */
+function themeText(callable $printer): string
+{
+    ob_start();
+    $printer();
+
+    return themeEsc((string) ob_get_clean());
+}
+
+/**
+ * 列表摘要字数 (夹取到 10 - 500)
+ *
+ * 后台填 0 / 负数会让 substr 得到畸形结果, 填极大值等于把全文搬上列表页。
+ *
+ * @return int
+ */
+function themeExcerptLength(): int
+{
+    return max(10, min(500, themeOptionInt('excerptLength', (int) themeDefault('excerptLength', '110'))));
+}
+
+/**
+ * 当前请求是否是单篇 / 独立页面
+ *
+ * @return bool
+ */
+function themeIsSingle(): bool
+{
+    try {
+        return (bool) \Widget\Archive::alloc()->is('single');
+    } catch (\Throwable) {
+        return false;
+    }
+}
+
+/**
+ * #rgb / #rrggbb → [r, g, b]
+ *
+ * @param string $hex
+ * @return array{0: int, 1: int, 2: int}
+ */
+function themeColorRgb(string $hex): array
+{
+    $hex = ltrim($hex, '#');
+
+    if (3 === strlen($hex) || 4 === strlen($hex)) {
+        $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+    }
+
+    return [
+        (int) hexdec(substr($hex, 0, 2)),
+        (int) hexdec(substr($hex, 2, 2)),
+        (int) hexdec(substr($hex, 4, 2)),
+    ];
+}
+
+/**
+ * [r, g, b] → #rrggbb
+ *
+ * @param array<int, int|float> $rgb
+ * @return string
+ */
+function themeColorHex(array $rgb): string
+{
+    return sprintf('#%02x%02x%02x', (int) round($rgb[0]), (int) round($rgb[1]), (int) round($rgb[2]));
+}
+
+/**
+ * 单个通道的线性化 (WCAG 相对亮度)
+ *
+ * @param int|float $channel 0 - 255
+ * @return float
+ */
+function themeColorLinear($channel): float
+{
+    $value = ((float) $channel) / 255;
+
+    return $value <= 0.04045 ? $value / 12.92 : (($value + 0.055) / 1.055) ** 2.4;
+}
+
+/**
+ * 相对亮度
+ *
+ * @param array<int, int|float> $rgb
+ * @return float
+ */
+function themeColorLuminance(array $rgb): float
+{
+    return 0.2126 * themeColorLinear($rgb[0])
+        + 0.7152 * themeColorLinear($rgb[1])
+        + 0.0722 * themeColorLinear($rgb[2]);
+}
+
+/**
+ * 两色对比度 (1 - 21)
+ *
+ * @param array<int, int|float> $a
+ * @param array<int, int|float> $b
+ * @return float
+ */
+function themeColorContrast(array $a, array $b): float
+{
+    $la = themeColorLuminance($a);
+    $lb = themeColorLuminance($b);
+    $light = max($la, $lb);
+    $dark = min($la, $lb);
+
+    return ($light + 0.05) / ($dark + 0.05);
+}
+
+/**
+ * 两色按权重混合 ($weight 是 $a 的占比)
+ *
+ * @param array<int, int|float> $a
+ * @param array<int, int|float> $b
+ * @param float $weight 0 - 1
+ * @return array{0: int, 1: int, 2: int}
+ */
+function themeColorMix(array $a, array $b, float $weight): array
+{
+    return [
+        (int) round($a[0] * $weight + $b[0] * (1 - $weight)),
+        (int) round($a[1] * $weight + $b[1] * (1 - $weight)),
+        (int) round($a[2] * $weight + $b[2] * (1 - $weight)),
+    ];
+}
+
+/**
+ * 把强调色朝 $target 混合, 直到与 $bg 的对比度不低于 $min (取最接近原色的那一档)
+ *
+ * @param array<int, int|float> $accent
+ * @param array<int, int|float> $target
+ * @param array<int, int|float> $bg
+ * @param float $min
+ * @return array{0: int, 1: int, 2: int}
+ */
+function themeColorInk(array $accent, array $target, array $bg, float $min): array
+{
+    $best = $target;
+
+    for ($step = 0; $step <= 100; $step += 2) {
+        $candidate = themeColorMix($accent, $target, $step / 100);
+
+        if (themeColorContrast($candidate, $bg) < $min) {
+            break;
+        }
+
+        $best = $candidate;
+    }
+
+    return $best;
+}
+
+/**
+ * 强调色派生的四个 CSS 变量 (只输出一串声明, 由模板写进 style 属性)
+ *
+ * 后台只让填一个颜色, 但一个颜色实际上要扮三种角色:
+ *   填充 (按钮底色 / 分页当前页) → 需要「填充上的字」用哪个颜色
+ *   文字 (正文链接 / 可点元素)   → 需要压暗到 4.5:1 以上
+ *   焦点环 / 描边              → 同文字色, 不能拿填充色直接当描边用
+ * 直接拿 #66ccff 这类亮色当文字用, 白底上只有 1.8:1 —— 所以在这里按亮度算。
+ *
+ * @return string
+ */
+function themeAccentStyle(): string
+{
+    static $style = null;
+
+    if (null !== $style) {
+        return $style;
+    }
+
+    $accent = themeAccent();
+    $rgb = themeColorRgb($accent);
+
+    /** 浅色模式: 朝深蓝压暗, 与白底达到 4.6:1 */
+    $inkLight = themeColorInk($rgb, [6, 18, 31], [255, 255, 255], 4.6);
+    /** 深色模式: 朝白提亮, 与页面底色达到 4.6:1 */
+    $inkDark = themeColorInk($rgb, [255, 255, 255], [10, 10, 12], 4.6);
+
+    /** 填充上的字: 两个候选里对比度高的那个 */
+    $onDark = themeColorContrast($rgb, [11, 16, 32]) >= themeColorContrast($rgb, [255, 255, 255]);
+    $onAccentRgb = $onDark ? [11, 16, 32] : [255, 255, 255];
+
+    /**
+     * 填充色本身也要能托住上面的字 (例如 #4f6bf5 + 白字只有 4.42:1),
+     * 差一点点时把填充朝字色的反方向推几档, 视觉上几乎看不出来, 对比度却达标。
+     */
+    $fill = $rgb;
+
+    for ($step = 0; $step < 60 && themeColorContrast($fill, $onAccentRgb) < 4.5; ++$step) {
+        $fill = themeColorMix($fill, $onDark ? [255, 255, 255] : [0, 0, 0], 0.96);
+    }
+
+    return $style = '--theme-accent: ' . $accent
+        . '; --theme-accent-fill: ' . themeColorHex($fill)
+        . '; --theme-accent-on: ' . themeColorHex($onAccentRgb)
+        . '; --theme-accent-ink: ' . themeColorHex($inkLight)
+        . '; --theme-accent-ink-dark: ' . themeColorHex($inkDark);
+}
+
+/**
+ * 自定义 CSS (剥掉能提前闭合 <style> 的序列, 避免把后续标记变成可执行内容)
+ *
+ * @return string
+ */
+function themeCustomCss(): string
+{
+    $css = themeOption('customCss');
+
+    if ('' === trim($css)) {
+        return '';
+    }
+
+    return str_ireplace(['</style', '</script'], ['<\\/style', '<\\/script'], $css);
+}
+
+/**
+ * 页脚附加内容 (允许安全 HTML: 去掉脚本类标签与事件属性)
+ *
+ * 后台说明里承诺「支持 HTML」, 所以不能整体转义; 但也不能把后台输入的
+ * script / onclick / javascript: 原样吐到前台。同一个值在 footer.php 里
+ * 既当 title 又当正文, 所以统一走这个出口。
+ *
+ * @return string
+ */
+function themeFooterHtml(): string
+{
+    $html = themeOption('footerText');
+
+    if ('' === trim($html)) {
+        return '';
+    }
+
+    $html = preg_replace('#<(script|style|iframe|object|embed)\b[^>]*>.*?</\1\s*>#is', '', $html) ?? '';
+    $html = preg_replace('#<(script|style|iframe|object|embed)\b[^>]*/?>#is', '', $html) ?? '';
+    $html = preg_replace('#\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#is', '', $html) ?? '';
+    $html = preg_replace('#(href|src)\s*=\s*("|\')\s*javascript:[^"\']*\2#is', '$1="#"', $html) ?? '';
+
+    return $html;
+}
+
+/**
  * 强调色 (校验十六进制格式, 非法时回退到默认值)
  *
  * @return string
  */
 function themeAccent(): string
 {
-    $accent = themeOption('accentColor', '#4f6bf5');
+    $accent = themeOption('accentColor', themeDefault('accentColor', '#4f6bf5'));
 
-    return preg_match('/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $accent) ? $accent : '#4f6bf5';
+    return preg_match('/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $accent)
+        ? $accent
+        : themeDefault('accentColor', '#4f6bf5');
 }
 
 /**
@@ -934,7 +1246,17 @@ function themeThumbnail(\Widget\Archive $archive): ?array
         return $cache[$cid] = ['url' => $contentUrl, 'alt' => $title];
     }
 
-    /** 3. 图片附件 (跳过压缩包 / 文档等非图片附件, 取第一张真正的图片) */
+    /**
+     * 3. 图片附件 (跳过压缩包 / 文档等非图片附件, 取第一张真正的图片)
+     *
+     * 附件要单独查一次库: 列表页一张卡片查一次就是 N+1 (首页 10 篇 = 10 次额外查询),
+     * 而列表页的卡片本来就有「无图」形态。所以只有单篇页才走这一步,
+     * 列表页的无图文章直接落回无图卡 —— 少 10 次查询, 视觉上也更干净。
+     */
+    if (!$archive->is('single')) {
+        return $cache[$cid] = null;
+    }
+
     $attachments = $archive->attachments(20);
 
     while ($attachments->next()) {
@@ -1092,7 +1414,7 @@ function themePageNav(\Widget\Archive $archive): void
  */
 function themeHasBlock(string $block): bool
 {
-    $defaults = ['ShowRecentPosts', 'ShowRecentComments', 'ShowCategory', 'ShowArchive', 'ShowTagCloud', 'ShowOther'];
+    $defaults = themeDefaults()['sidebarBlock'];
 
     if (!themeOptionsSaved()) {
         return in_array($block, $defaults, true);
@@ -1126,7 +1448,38 @@ function themeOptionsSaved(): bool
  */
 function themePageWidthClass(): string
 {
-    return 'full' === themeOption('layout', 'sidebar') ? 'max-w-4xl' : 'max-w-7xl';
+    /* 版心宽度由 main.css 的 --container-page 单点控制 (现在是 70rem),
+       full 布局 (无侧栏) 收窄到 4xl。 */
+    return 'full' === themeOption('layout', 'sidebar') ? 'max-w-4xl' : 'max-w-[var(--container-page)]';
+}
+
+/**
+ * 目录条目数 (只用来决定「这一页该显示目录还是侧边栏」)
+ *
+ * 单篇页直接用已经解析好的结果。列表页每张卡片也只需要一个布尔值,
+ * 而原来的写法会把每张卡片的整篇 Markdown 渲染一遍 (10 篇 = 10 次全文解析),
+ * 只为算一个提示位 —— 在原始 text 上数标题便宜得多, 而且猜错的代价只是
+ * 一次侧边栏遮罩 (app.js 本身也按保守档处理)。
+ *
+ * @param \Widget\Archive $archive
+ * @return int
+ */
+function themeTocEntryCount(\Widget\Archive $archive): int
+{
+    if ($archive->is('single')) {
+        return count(themeArticle($archive)['toc']);
+    }
+
+    $text = (string) $archive->text;
+
+    if ('' === $text) {
+        return 0;
+    }
+
+    $count = (int) preg_match_all('~^\s{0,3}\#{2,3}\s+\S~m', $text);
+    $count += (int) preg_match_all('#<h[23]\b#i', $text);
+
+    return $count;
 }
 
 /**
@@ -1151,7 +1504,7 @@ function themeContentAsideKind(\Widget\Archive $archive): string
         return 'none';
     }
 
-    if (themeOptionBool('showToc') && count(themeArticle($archive)['toc']) >= 2) {
+    if (themeOptionBool('showToc') && themeTocEntryCount($archive) >= 2) {
         return 'toc';
     }
 
@@ -1216,9 +1569,18 @@ function themeContainerClass(): string
 {
     $base = 'mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8 ' . themePageWidthClass();
 
-    return 'full' === themeOption('layout', 'sidebar')
-        ? $base
-        : $base . ' lg:grid lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-start lg:gap-10';
+    if ('full' === themeOption('layout', 'sidebar')) {
+        return $base;
+    }
+
+    /* 这一页根本没有第二列时不要留一个 15rem 的空洞 (页面右侧会空出一整栏) */
+    $asideKind = themeIsSingle() ? themeContentAsideKind(\Widget\Archive::alloc()) : themeListAsideKind();
+
+    if ('none' === $asideKind) {
+        return $base;
+    }
+
+    return $base . ' lg:grid lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-start lg:gap-10';
 }
 
 /**
@@ -1296,4 +1658,127 @@ function themeTagCloud(): void
     }
 
     echo '</ul>';
+}
+
+/* ============================================================================
+   评论区渲染 (方案 B: 分组 + 回复卡片)
+   ----------------------------------------------------------------------------
+   内核的 listComments() 会调用全局函数 threadedComments($comments, $options)
+   (存在即接管默认输出), 所以这里完全接管标记, 换来三件事:
+   1. 一条主评论 + 它的全部回复 = 一个块, 块之间用一条细线分开;
+   2. 回复不再往右缩进 (缩进堆到第三层正文只剩三分之一宽度), 而是换成浅底卡片,
+      卡片头写「回复 某人」——层级只由卡片表达;
+   3. 同一条主评论下的所有后代回复被拍平到同一层 (见 themeCommentResolveDeferred),
+      所以第三层不会又套一层卡片。
+   ============================================================================ */
+
+/**
+ * 渲染一条评论 (由内核逐条回调)
+ *
+ * @param \Widget\Comments\Archive $comments 当前指向某条评论的评论组件
+ * @param \Typecho\Config         $options  listComments() 的展现配置
+ */
+function threadedComments(\Widget\Comments\Archive $comments, \Typecho\Config $options): void
+{
+    /** 渲染顺序是深度优先且同步的, 所以用一个栈就能知道「这条回复是回给谁的」 */
+    static $authorStack = [];
+
+    $levels = (int) $comments->levels;
+    $author = trim((string) $comments->author);
+    $parentAuthor = $levels > 0 && [] !== $authorStack ? (string) end($authorStack) : '';
+    $coid = (int) $comments->coid;
+    $theId = (string) $comments->theId;
+
+    echo '<article id="', themeEsc($theId), '" class="comment-body ', $levels > 0 ? 'rcomment' : 'tcomment', '">';
+
+    echo '<header class="c-head">';
+    /* 头像只给主评论: 回复卡片里再放一颗 26px 头像只会把行撑高 (demo 里也没有) */
+    if (0 === $levels) {
+        echo '<span class="c-avatar" data-initial="', themeEsc(mb_substr($author, 0, 1)), '">';
+        $comments->gravatar((int) $options->avatarSize);
+        echo '</span>';
+    }
+
+    /* 回复卡片先写「回复 某人」; 同一个人接着自己说话时不再重复昵称 */
+    if ('' !== $parentAuthor) {
+        echo '<span class="c-to">', themeEsc(_t('回复')), ' <b>', themeEsc($parentAuthor), '</b></span>';
+    }
+
+    if (0 === $levels || $author !== $parentAuthor) {
+        echo '<span class="c-name">', themeEsc($author), '</span>';
+    }
+    echo '<time class="c-time" datetime="', $comments->date('c'), '">',
+        themeEsc($comments->date((int) $comments->created >= (int) strtotime((string) date('Y') . '-01-01 00:00:00')
+            ? 'm-d H:i'
+            : 'Y-m-d')),
+        '</time>';
+
+    if ('approved' !== $comments->status) {
+        echo '<em class="comment-awaiting-moderation">', themeEsc(_t('等待审核')), '</em>';
+    }
+
+    /* 回复链接: 顶层评论也要能点 (内核的 reply() 只给子评论输出链接) */
+    $respondId = 'respond-' . (string) $comments->parentContent->theId;
+    $permalink = (string) $comments->permalink;
+    $base = str_ends_with($permalink, '#' . $theId)
+        ? substr($permalink, 0, -strlen($theId) - 1)
+        : $permalink;
+
+    /* 回复链接跟在时间后面, 靠 ml-auto 推到行尾 —— 独占一行的话每条评论白白高出 30px */
+    echo '<a class="c-reply" href="', themeEsc($base . '?replyTo=' . $coid . '#' . $respondId),
+        '" rel="nofollow" onclick="return TypechoComment.reply(\'', themeEsc($theId), '\', ', $coid,
+        ', this)">', themeEsc(_t('回复')), '</a>';
+
+    echo '</header>';
+
+    echo '<div class="c-body">';
+    $comments->content();
+    echo '</div>';
+
+    echo '</article>';
+
+    /* 回复一律排在卡片外面: 三层再套一层卡片会缩成一小块, 所以深层回复用
+       「占位符 + 事后替换」拍平成同一层 (见 themeCommentResolveDeferred)。 */
+    if (0 === $levels) {
+        $GLOBALS['themeThreadDefer'] = [];
+        $authorStack[] = $author;
+        ob_start();
+        $comments->threadedComments();
+        $inner = (string) ob_get_clean();
+        array_pop($authorStack);
+
+        /* 没人回复时不要输出空壳: .thread-replies 上的 mt-3 会给每条评论多垫 12px */
+        $inner = themeCommentResolveDeferred($inner);
+        if ('' !== trim($inner)) {
+            echo '<div class="thread-replies">', $inner, '</div>';
+        }
+    } elseif ($comments->children) {
+        /* 第二层以下的回复不塞进父卡片里, 先缓冲起来, 由块末尾统一摊平 */
+        $authorStack[] = $author;
+        ob_start();
+        $comments->threadedComments();
+        $inner = (string) ob_get_clean();
+        array_pop($authorStack);
+
+        $key = "\x02DEFER{$coid}\x02";
+        echo $key;
+        $GLOBALS['themeThreadDefer'][$key] = $inner;
+    }
+}
+
+/**
+ * 把「延迟渲染的深层回复」就地替换回原位 (可多层嵌套, 逐层展开)
+ */
+function themeCommentResolveDeferred(string $html): string
+{
+    $store = $GLOBALS['themeThreadDefer'] ?? [];
+    $guard = 0;
+
+    while ([] !== $store && $guard++ < 10 && preg_match('/\x02DEFER\d+\x02/', $html, $match)) {
+        $html = str_replace($match[0], (string) ($store[$match[0]] ?? ''), $html);
+    }
+
+    $GLOBALS['themeThreadDefer'] = [];
+
+    return $html;
 }

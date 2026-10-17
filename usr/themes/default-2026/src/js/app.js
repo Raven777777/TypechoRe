@@ -72,11 +72,19 @@ function storeThemeMode(mode) {
 }
 
 /* 系统外观变化时跟随 (仅 auto 模式), 只在模块加载时注册一次 */
-window.matchMedia(DARK_QUERY).addEventListener('change', () => {
+const darkMedia = window.matchMedia(DARK_QUERY);
+const onSystemThemeChange = () => {
   if (document.documentElement.dataset.themeMode === 'auto') {
     applyThemeMode('auto');
   }
-});
+};
+
+/* Safari < 14 只有 addListener, 没有 addEventListener */
+if (typeof darkMedia.addEventListener === 'function') {
+  darkMedia.addEventListener('change', onSystemThemeChange);
+} else if (typeof darkMedia.addListener === 'function') {
+  darkMedia.addListener(onSystemThemeChange);
+}
 
 Alpine.data('themeToggle', () => ({
   mode: 'auto',
@@ -292,6 +300,15 @@ function enhanceCodeBlocks() {
     code.classList.add('code-scroll');
     pre.classList.add('code-block');
   });
+
+  syncCodeOverflow();
+}
+
+/** 只有真的横向溢出时才显示右侧渐隐 (短代码块不该被淡化) */
+function syncCodeOverflow() {
+  document.querySelectorAll('#main .prose-theme pre.code-block > code.code-scroll').forEach((code) => {
+    code.parentElement.classList.toggle('is-scrollable', code.scrollWidth - code.clientWidth > 1);
+  });
 }
 
 /** 代码块与宽表格的横向滚动容器 */
@@ -319,7 +336,16 @@ function enhanceTocSpy() {
 
   const links = new Map();
   document.querySelectorAll('.js-toc a[href^="#"]').forEach((link) => {
-    const id = decodeURIComponent(link.hash.slice(1));
+    /* 畸形锚点 (例如 #%E4) 会让 decodeURIComponent 抛错, 以前它一抛整个 enhancePage()
+       后半段 (评论框、代码块、目录监视) 全部不执行。 */
+    let id = '';
+
+    try {
+      id = decodeURIComponent(link.hash.slice(1));
+    } catch (error) {
+      id = link.hash.slice(1);
+    }
+
     if (!id) {
       return;
     }
@@ -737,6 +763,7 @@ function enhanceCommentBox() {
     }
 
     noticeBox.className = className;
+    noticeBox.classList.remove('hidden');
     noticeBox.textContent = message;
     noticeBox.hidden = false;
   };
@@ -894,24 +921,59 @@ function enhanceCommentBox() {
         return;
       }
 
-      /* 服务端把「评论提交成功 / 需要审核」写在 __typecho_notice cookie 里,
-         由 enhanceNotice() 负责显示 (与整页提交后的表现一致)。 */
+      /* ---- 成败判定 ----
+         内核 (var/Widget/Feedback.php:260-267) 校验失败时写一条 notice cookie 然后
+         302 回原页; 成功时不写 notice, 直接跳到评论锚点。
+         以前这里只看 response.ok —— 而 goBack 也是 200, 于是邮箱格式错一次就被
+         当成成功, 接着 textarea.value = '' 把用户写好的整段评论清掉了。
+
+         注意不能读 __typecho_remember_text / __typecho_unapproved_comment:
+         这两个是 HttpOnly (var/Typecho/Cookie.php:46), document.cookie 看不见。
+         __typecho_notice 是内核显式传 false 写的, 才是前端能拿到的那一个。 */
+      const failed = /(?:^|;\s*)[^;=]*__typecho_notice=/.test(document.cookie);
+
+      /* enhanceNotice() 会读走并清掉 notice cookie —— 判定要先做 */
       enhanceNotice();
 
-      /* 审核中的评论不会出现在列表里, 这时给一句明确的回执 */
+      if (failed) {
+        /* 服务端已经给出具体原因 (邮箱不合法 / 含特殊字符 ...), 没有才兜一句 */
+        if (!noticeBox || noticeBox.hidden || !noticeBox.textContent.trim()) {
+          showNotice(SUBMIT_FAILED, NOTICE_ERROR_CLASS);
+        }
+
+        /* 正文与表单值原样留着: 用户只需改错的那一项 */
+        textarea.focus();
+        return;
+      }
+
+      textarea.value = '';
+      autoGrow();
+      await refreshComments(window.location.href, '');
+
+      /* 审核中的评论会以「您的评论正等待审核!」的 <em> 显示 (内核
+         var/Widget/Comments/Archive.php:373), 拿最新一条 (id 最大) 判断: 页面上
+         可能本来就有其他待审评论, 只看 class 会不会分。 */
+      const bodies = Array.from(comments.querySelectorAll('.comment-body[id]'));
+      const newestBody = bodies.reduce((latest, node) => {
+        const id = Number((node.id.match(/\d+$/) || [0])[0]);
+        const latestId = latest ? Number((latest.id.match(/\d+$/) || [0])[0]) : -1;
+        return id > latestId ? node : latest;
+      }, null);
+      const waiting = !!newestBody?.querySelector('.comment-awaiting-moderation');
+
       if (!noticeBox || noticeBox.hidden) {
         showNotice(
-          form.getAttribute('data-waiting-text') || '评论已提交。',
+          waiting
+            ? (form.getAttribute('data-waiting-text') || '评论已提交, 通过审核后显示。')
+            : (form.getAttribute('data-posted-text') || '评论已发布。'),
           NOTICE_INFO_CLASS
         );
       }
 
-      const waiting = document.cookie.includes('__typecho_unapproved_comment');
-      const jumpTo = waiting ? '' : (form.getAttribute('data-comment-anchor') || '');
-
-      textarea.value = '';
-      autoGrow();
-      await refreshComments(window.location.href, jumpTo);
+      if (!waiting && newestBody) {
+        /* 滚到最后一条评论: 刚发出去的那条就在末尾或它的父评论下面 */
+        newestBody.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' });
+      }
 
       /* 提交完成后收起回复框 (它只在「回复 / 添加新回复」时出现);
          回执写在回复框外面的 #notice-box 里, 收起后依然看得见。 */
@@ -935,6 +997,29 @@ document.addEventListener('click', (event) => {
   });
 });
 
+/**
+ * 头像关闭 (或评论者没有邮箱头像) 时, 用昵称首字给头像列兜底
+ *
+ * 内核默认模板只输出 <span class="comment-author"><span class="fn">昵称</span></span>,
+ * 首字只能在前端补; 样式侧用 .comment-author:not(:has(img))::before { content: attr(data-initial) }。
+ */
+function enhanceCommentAuthors() {
+  document.querySelectorAll('#comments .comment-author').forEach((node) => {
+    if (node.dataset.initial || node.querySelector('img')) {
+      return;
+    }
+
+    const name = (node.querySelector('.fn')?.textContent || '').trim();
+
+    if (!name) {
+      return;
+    }
+
+    /* Array.from 而不是 name[0]: 首字可能是占两个 UTF-16 单元的字符 */
+    node.dataset.initial = Array.from(name)[0];
+  });
+}
+
 /** 每次页面内容替换后需要重新执行的增强 */
 function enhancePage() {
   /* 先分词再装饰: 语言徽标与复制按钮都按 <code> 的类名 / textContent 取, 顺序不影响结果,
@@ -944,6 +1029,7 @@ function enhancePage() {
   enhanceOverflow();
   enhanceTocSpy();
   enhanceNotice();
+  enhanceCommentAuthors();
   enhanceCommentForm();
   enhanceCommentBox();
 }
@@ -1600,6 +1686,13 @@ function boot() {
   /* 供模板内联脚本或 Alpine 组件 (x-on:swup:page:view.document) 使用 */
   window.swup = swup;
 
+  /* 视口变化、字体加载完成后重新判断代码块是否需要右侧渐隐 */
+  window.addEventListener('resize', syncCodeOverflow, { passive: true });
+
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(syncCodeOverflow).catch(() => {});
+  }
+
   swup.hooks.on('visit:start', (visit) => {
     document.querySelectorAll('#site-nav details[open]').forEach((details) => {
       details.open = false;
@@ -1640,8 +1733,22 @@ function boot() {
     runDeferredScripts();
   });
 
-  swup.hooks.on('page:view', () => {
+  swup.hooks.on('page:view', (visit) => {
     enhancePage();
+
+    /* 无刷新切页后焦点会掉回 <body>: 键盘与读屏用户下一次 Tab 会从头开始。
+       把焦点送到新主区 (tabindex="-1" 保证可被 focus, 又不进 Tab 序列)。 */
+    if (enterNextContent && visit && visit.to && visit.to.url !== visit.from?.url) {
+      const main = document.getElementById('main');
+
+      if (main) {
+        if (!main.hasAttribute('tabindex')) {
+          main.setAttribute('tabindex', '-1');
+        }
+
+        main.focus({ preventScroll: true });
+      }
+    }
   });
 
   /* 跳转结束时收掉骨架屏; 请求失败 (swup 会退化成整页跳转) 时一并收干净。

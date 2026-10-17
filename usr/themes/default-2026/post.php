@@ -27,8 +27,8 @@ $this->need('header.php');
 ?>
 <main id="main" class="min-w-0 transition-fade">
     <article class="card overflow-hidden" itemscope itemtype="http://schema.org/BlogPosting">
-        <header class="border-b border-zinc-200/80 p-6 sm:p-8 dark:border-zinc-800/80">
-            <h1 class="text-2xl leading-tight font-bold tracking-tight sm:text-3xl" itemprop="headline"><?php $this->title(); ?></h1>
+        <header class="border-b border-line p-5 sm:p-7">
+            <h1 class="page-title" itemprop="headline"><?php echo themeText(fn () => $this->title()); ?></h1>
 
             <?php /* 元信息行: 分类 + 评论 + 作者 + 发布时间 + 预计阅读时间
                      (分类跟在标题下面, 不再压在标题上方) */ ?>
@@ -37,12 +37,12 @@ $this->need('header.php');
                     <a class="chip" href="<?php echo themeEsc((string) $postPrimary['permalink']); ?>"><?php echo themeEsc((string) $postPrimary['name']); ?></a>
                 <?php endif; ?>
                 <?php if ($this->allow('comment')): ?>
-                    <a class="meta-text transition-colors hover:text-accent" href="#comments">
+                    <a class="meta-text transition-colors hover:text-accent-ink" href="#comments">
                         <?php echo themeIcon('message-circle', 'size-4'); ?><?php $this->commentsNum(_t('暂无评论'), _t('1 条评论'), _t('%d 条评论')); ?>
                     </a>
                 <?php endif; ?>
-                <a class="meta-text transition-colors hover:text-accent" href="<?php $this->author->permalink(); ?>" rel="author" itemprop="author">
-                    <?php echo themeIcon('user', 'size-4'); ?><?php $this->author(); ?>
+                <a class="meta-text transition-colors hover:text-accent-ink" href="<?php $this->author->permalink(); ?>" rel="author" itemprop="author">
+                    <?php echo themeIcon('user', 'size-4'); ?><?php echo themeText(fn () => $this->author()); ?>
                 </a>
                 <time class="meta-text" datetime="<?php $this->date('c'); ?>" itemprop="datePublished"><?php echo themeIcon('calendar', 'size-4'); ?><?php $this->date(); ?></time>
                 <?php if ($showReadingTime): ?>
@@ -52,10 +52,10 @@ $this->need('header.php');
         </header>
 
         <?php if ($hasToc): ?>
-            <details class="no-print border-b border-zinc-200/80 px-6 py-4 sm:px-8 dark:border-zinc-800/80<?php echo 'toc' === $postAside ? ' lg:hidden' : ''; ?>">
-                <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+            <details class="no-print border-b border-line px-5 py-3 sm:px-7<?php echo 'toc' === $postAside ? ' lg:hidden' : ''; ?>">
+                <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-ink-1 [&::-webkit-details-marker]:hidden">
                     <?php echo themeIcon('list', 'size-4'); ?><?php _e('文章目录'); ?>
-                    <span class="ml-auto text-xs text-zinc-400"><?php echo count($article['toc']), _e(' 节'); ?></span>
+                    <span class="ml-auto text-[0.8125rem] text-ink-3"><?php echo (int) count($article['toc']), _e(' 节'); ?></span>
                 </summary>
                 <nav class="js-toc mt-3" aria-label="<?php echo themeEsc(_t('文章目录')); ?>">
                     <?php echo themeTocHtml($article['toc']); ?>
@@ -63,12 +63,13 @@ $this->need('header.php');
             </details>
         <?php endif; ?>
 
-        <div class="prose prose-zinc prose-theme max-w-none p-6 sm:p-8 dark:prose-invert prose-headings:font-semibold prose-a:font-medium prose-blockquote:font-normal prose-img:my-6 prose-pre:my-6" itemprop="articleBody">
+        <?php /* max-w-none 会把 typography 的 65ch 抹平; 行宽现在由 .prose-theme 的 36em 接管 */ ?>
+        <div class="prose prose-zinc prose-theme max-w-none p-5 sm:p-7 dark:prose-invert prose-headings:font-semibold prose-a:font-medium prose-blockquote:font-normal prose-img:my-5 prose-pre:my-5 prose-blockquote:my-5" itemprop="articleBody">
             <?php echo $article['html']; ?>
         </div>
 
         <?php if ([] !== $postTags): ?>
-            <footer class="flex flex-wrap items-center gap-2 border-t border-zinc-200/80 p-6 sm:px-8 dark:border-zinc-800/80">
+            <footer class="flex flex-wrap items-center gap-2 border-t border-line px-5 py-4 sm:px-7">
                 <?php foreach ($postTags as $tag): ?>
                     <a class="chip" href="<?php echo themeEsc((string) $tag['permalink']); ?>" rel="tag"><?php echo themeIcon('tag', 'size-3.5'); ?><?php echo themeEsc((string) $tag['name']); ?></a>
                 <?php endforeach; ?>
@@ -76,7 +77,7 @@ $this->need('header.php');
         <?php endif; ?>
     </article>
 
-    <nav class="post-nav mt-8 grid gap-4 sm:grid-cols-2 sm:gap-8" aria-label="<?php echo themeEsc(_t('上下篇导航')); ?>">
+    <nav class="post-nav" aria-label="<?php echo themeEsc(_t('上下篇导航')); ?>">
         <?php $prevPost = themeAdjacentPost($this, 'prev'); ?>
         <?php $nextPost = themeAdjacentPost($this, 'next'); ?>
         <?php if (null !== $prevPost): ?>

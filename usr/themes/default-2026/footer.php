@@ -9,39 +9,55 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
     exit;
 }
 
-$footerText = themeOption('footerText');
+$footerText = themeFooterHtml();
 ?>
 </div><!-- end #page-wrap -->
 
 <?php /* 页脚: 宽屏与页眉等高 (都是 h-14 的横条 + 1px 边框); 窄屏换成上下两行居中 (手机上挤成一团) */ ?>
-<footer class="mt-4 border-t border-zinc-200/80 text-sm text-zinc-500 dark:border-zinc-800/80 dark:text-zinc-400">
+<?php /* 文章 / 页面在窄屏下没有侧边栏, 分类与归档就彻底没有入口了。
+     这里给一条只在 < 64rem 显示的胶囊带 (.browse-strip 在宽屏隐藏)。 */ ?>
+<?php if (themeIsSingle() && themeSkeletonSidebar()): ?>
+    <div class="mx-auto w-full <?php echo themeEsc(themePageWidthClass()); ?> px-4 sm:px-6 lg:px-8">
+        <nav class="browse-strip mt-10" aria-label="<?php echo themeEsc(_t('浏览')); ?>">
+            <?php $footCategories = \Widget\Metas\Category\Rows::alloc(); ?>
+            <?php while ($footCategories->next()): ?>
+                <a class="chip shrink-0" href="<?php $footCategories->permalink(); ?>"><?php echo themeText(fn () => $footCategories->name()); ?><span class="widget-count"><?php echo (int) $footCategories->count; ?></span></a>
+            <?php endwhile; ?>
+            <?php \Widget\Contents\Post\Date::alloc('type=month&format=Y-m&pageSize=3')
+                ->parse('<a class="chip shrink-0" href="{permalink}">{date}</a>'); ?>
+        </nav>
+    </div>
+<?php endif; ?>
+
+<footer class="mt-4 border-t border-line text-sm text-ink-3">
     <div class="mx-auto flex min-h-14 w-full <?php echo themeEsc(themePageWidthClass()); ?> flex-col items-center gap-y-1 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:px-6 sm:py-2 lg:px-8">
         <p class="flex min-w-0 items-center gap-2">
             <span>&copy; <?php echo date('Y'); ?></span>
-            <a class="truncate font-medium text-zinc-700 transition-colors hover:text-accent dark:text-zinc-300" href="<?php $this->options->siteUrl(); ?>"><?php $this->options->title(); ?></a>
+            <a class="truncate font-medium text-ink-1 transition-colors hover:text-accent-ink" href="<?php $this->options->siteUrl(); ?>"><?php echo themeEsc((string) $this->options->title); ?></a>
             <?php if ('' !== $footerText): ?>
-                <span class="hidden min-w-0 truncate text-xs sm:inline" title="<?php echo themeEsc(strip_tags((string) $footerText)); ?>">· <?php echo $footerText; ?></span>
+                <?php /* 同一个值两处输出: title 要去标记, 正文按白名单 HTML 输出 —— 以前这里直接 echo 原文 */ ?>
+                <span class="hidden min-w-0 truncate text-xs sm:inline" title="<?php echo themeEsc(strip_tags($footerText)); ?>">· <?php echo $footerText; ?></span>
             <?php endif; ?>
         </p>
 
-        <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs sm:ml-auto sm:justify-end sm:gap-x-4">
-            <a class="transition-colors hover:text-accent" href="<?php $this->options->feedUrl(); ?>"><?php _e('文章 RSS'); ?></a>
-            <a class="transition-colors hover:text-accent" href="<?php $this->options->commentsFeedUrl(); ?>"><?php _e('评论 RSS'); ?></a>
+        <nav class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs sm:ml-auto sm:justify-end sm:gap-x-4" aria-label="<?php echo themeEsc(_t('页脚链接')); ?>">
+            <a class="transition-colors hover:text-accent-ink" href="<?php $this->options->feedUrl(); ?>"><?php _e('文章 RSS'); ?></a>
+            <a class="transition-colors hover:text-accent-ink" href="<?php $this->options->commentsFeedUrl(); ?>"><?php _e('评论 RSS'); ?></a>
             <?php if ($this->user->hasLogin()): ?>
-                <a class="transition-colors hover:text-accent" href="<?php $this->options->adminUrl(); ?>"><?php _e('管理后台'); ?></a>
-                <a class="transition-colors hover:text-accent" href="<?php $this->options->logoutUrl(); ?>"><?php _e('退出'); ?></a>
+                <a class="transition-colors hover:text-accent-ink" href="<?php $this->options->adminUrl(); ?>"><?php _e('管理后台'); ?></a>
+                <a class="transition-colors hover:text-accent-ink" href="<?php $this->options->logoutUrl(); ?>"><?php _e('退出'); ?></a>
             <?php else: ?>
-                <a class="transition-colors hover:text-accent" href="<?php $this->options->adminUrl('login.php'); ?>"><?php _e('登录'); ?></a>
+                <a class="transition-colors hover:text-accent-ink" href="<?php $this->options->adminUrl('login.php'); ?>"><?php _e('登录'); ?></a>
             <?php endif; ?>
             <?php /* 窄屏那一行已经很满 (版权 + 四个链接), 署名只在 sm 以上出现 */ ?>
-            <span class="hidden text-zinc-400 sm:inline dark:text-zinc-500">
+            <span class="hidden text-ink-3 sm:inline">
                 <?php echo sprintf(
                     _t('由 %s 强力驱动'),
-                    '<a class="transition-colors hover:text-accent" href="' . themeEsc(\Typecho\Common::PROJECT_URL) . '">'
-                        . themeEsc($this->options->software) . '</a>'
+                    '<a class="transition-colors hover:text-accent-ink" href="' . themeEsc(\Typecho\Common::PROJECT_URL) . '">'
+                        . themeEsc((string) $this->options->software) . '</a>'
                 ); ?>
             </span>
-        </div>
+        </nav>
     </div>
 </footer>
 
@@ -81,21 +97,19 @@ $skeletonAsideKind = themeAsideKind($this);
                 <div class="space-y-6">
                     <?php for ($skeletonCard = 0; $skeletonCard < 3; $skeletonCard++): ?>
                         <div class="card flex flex-col overflow-hidden sm:flex-row" aria-hidden="true">
-                            <div class="shrink-0 sm:w-56">
-                                <div class="skeleton-block h-44 w-full rounded-none sm:h-full sm:min-h-32"></div>
+                            <div class="card-media h-44 w-full shrink-0 bg-surface-2 sm:h-auto sm:min-h-[11rem] sm:w-56">
+                                <div class="skeleton-block h-full min-h-44 w-full rounded-none"></div>
                             </div>
-                            <div class="flex min-w-0 flex-1 flex-col gap-3 p-5">
-                                <div class="skeleton-block h-5 w-3/4"></div>
+                            <div class="flex min-w-0 flex-1 flex-col gap-2.5 p-5 sm:gap-3 sm:p-6">
+                                <div class="skeleton-block h-6 w-3/4"></div>
                                 <div class="space-y-2">
                                     <div class="skeleton-block h-3.5 w-full"></div>
                                     <div class="skeleton-block h-3.5 w-11/12"></div>
-                                    <div class="skeleton-block h-3.5 w-2/3"></div>
                                 </div>
                                 <div class="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
                                     <div class="skeleton-block h-6 w-16 rounded-full"></div>
                                     <div class="skeleton-block h-3.5 w-20"></div>
-                                    <div class="skeleton-block h-3.5 w-16"></div>
-                                    <div class="skeleton-block h-3.5 w-24"></div>
+                                    <div class="skeleton-block ml-auto h-3.5 w-16"></div>
                                 </div>
                             </div>
                         </div>
@@ -106,13 +120,12 @@ $skeletonAsideKind = themeAsideKind($this);
             <!-- 文章 / 独立页面形态: 与 post.php 的卡片头 + 正文段落同构 -->
             <div class="page-skeleton-panel" data-skeleton-panel="single">
                 <div class="card overflow-hidden" aria-hidden="true">
-                    <div class="space-y-4 border-b border-zinc-200/80 p-6 sm:p-8 dark:border-zinc-800/80">
+                    <div class="space-y-4 border-b border-line p-6 sm:p-8">
                         <div class="skeleton-block h-8 w-3/4"></div>
                         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
                             <div class="skeleton-block h-6 w-20 rounded-full"></div>
                             <div class="skeleton-block h-4 w-24"></div>
                             <div class="skeleton-block h-4 w-20"></div>
-                            <div class="skeleton-block h-4 w-28"></div>
                             <div class="skeleton-block h-4 w-16"></div>
                         </div>
                     </div>

@@ -19,15 +19,15 @@ $this->need('header.php');
 ?>
 <main id="main" class="min-w-0 transition-fade">
     <article class="card overflow-hidden" itemscope itemtype="http://schema.org/BlogPosting">
-        <header class="border-b border-zinc-200/80 p-6 sm:p-8 dark:border-zinc-800/80">
-            <h1 class="text-2xl leading-tight font-bold tracking-tight sm:text-3xl" itemprop="headline"><?php $this->title(); ?></h1>
+        <header class="border-b border-line p-5 sm:p-7">
+            <h1 class="page-title" itemprop="headline"><?php echo themeText(fn () => $this->title()); ?></h1>
         </header>
 
         <?php if ($hasToc): ?>
-            <details class="no-print border-b border-zinc-200/80 px-6 py-4 sm:px-8 dark:border-zinc-800/80<?php echo 'toc' === $pageAside ? ' lg:hidden' : ''; ?>">
-                <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+            <details class="no-print border-b border-line px-5 py-3 sm:px-7<?php echo 'toc' === $pageAside ? ' lg:hidden' : ''; ?>">
+                <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-ink-1 [&::-webkit-details-marker]:hidden">
                     <?php echo themeIcon('list', 'size-4'); ?><?php _e('页面目录'); ?>
-                    <span class="ml-auto text-xs text-zinc-400"><?php echo count($article['toc']), _e(' 节'); ?></span>
+                    <span class="ml-auto text-[0.8125rem] text-ink-3"><?php echo (int) count($article['toc']), _e(' 节'); ?></span>
                 </summary>
                 <nav class="js-toc mt-3" aria-label="<?php echo themeEsc(_t('页面目录')); ?>">
                     <?php echo themeTocHtml($article['toc']); ?>
@@ -35,7 +35,7 @@ $this->need('header.php');
             </details>
         <?php endif; ?>
 
-        <div class="prose prose-zinc prose-theme max-w-none p-6 sm:p-8 dark:prose-invert prose-headings:font-semibold prose-a:font-medium prose-img:my-6 prose-pre:my-6" itemprop="articleBody">
+        <div class="prose prose-zinc prose-theme max-w-none p-5 sm:p-7 dark:prose-invert prose-headings:font-semibold prose-a:font-medium prose-img:my-5 prose-pre:my-5 prose-blockquote:my-5" itemprop="articleBody">
             <?php echo $article['html']; ?>
         </div>
     </article>

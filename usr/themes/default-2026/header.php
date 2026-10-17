@@ -22,10 +22,10 @@ $themeSkeleton = themeSkeletonEnabled();
 $themePreload = themePreloadLinks();
 ?>
 <!DOCTYPE html>
-<html lang="<?php echo themeEsc(str_replace('_', '-', (string) $this->options->lang)); ?>" class="<?php echo themeEsc($themeFont); ?><?php echo 'dark' === $themeScheme ? ' dark' : ''; ?>"<?php if ('auto' !== $themeScheme): ?> data-theme-mode="<?php echo themeEsc($themeScheme); ?>"<?php endif; ?> data-default-theme-mode="<?php echo themeEsc($themeScheme); ?>" data-anim="<?php echo themeEsc($themeAnimLevel); ?>" data-skeleton="<?php echo $themeSkeleton ? '1' : '0'; ?>" data-preload="<?php echo $themePreload ? '1' : '0'; ?>" style="--theme-accent: <?php echo themeEsc(themeAccent()); ?>; <?php echo themeEsc(themeAnimStyle()); ?>">
+<html lang="<?php echo themeEsc(str_replace('_', '-', (string) $this->options->lang)); ?>" class="<?php echo themeEsc($themeFont); ?><?php echo 'dark' === $themeScheme ? ' dark' : ''; ?>"<?php if ('auto' !== $themeScheme): ?> data-theme-mode="<?php echo themeEsc($themeScheme); ?>"<?php endif; ?> data-default-theme-mode="<?php echo themeEsc($themeScheme); ?>" data-anim="<?php echo themeEsc($themeAnimLevel); ?>" data-skeleton="<?php echo $themeSkeleton ? '1' : '0'; ?>" data-preload="<?php echo $themePreload ? '1' : '0'; ?>" style="<?php echo themeEsc(themeAccentStyle()); ?>; <?php echo themeEsc(themeAnimStyle()); ?>">
 <head>
     <meta charset="<?php $this->options->charset(); ?>">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#ffffff" data-light="#ffffff" data-dark="#09090b">
     <title><?php $this->archiveTitle([
@@ -52,7 +52,7 @@ $themePreload = themePreloadLinks();
     </script>
 
     <?php if ($this->options->faviconUrl): ?>
-        <link rel="icon" href="<?php $this->options->faviconUrl(); ?>">
+        <link rel="icon" href="<?php echo themeEsc((string) $this->options->faviconUrl); ?>">
     <?php endif; ?>
 
     <link rel="stylesheet" href="<?php echo themeAsset('dist/style.css'); ?>">
@@ -66,33 +66,34 @@ $themePreload = themePreloadLinks();
         <?php echo themeSiteJsonLd(); ?>
     <?php endif; ?>
 
-    <?php $customCss = themeOption('customCss'); ?>
+    <?php $customCss = themeCustomCss(); ?>
     <?php if ('' !== $customCss): ?>
         <style><?php echo $customCss; ?></style>
     <?php endif; ?>
 </head>
 <body class="min-h-dvh">
-<a class="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-[80] focus:rounded-full focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:text-white" href="#main"><?php _e('跳到主要内容'); ?></a>
+<a class="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-[80] focus:rounded-full focus:bg-accent-fill focus:px-4 focus:py-2 focus:text-sm focus:text-on-accent" href="#main"><?php _e('跳到主要内容'); ?></a>
 
-<div id="site-nav" class="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/85 backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/80">
+<div id="site-nav" class="sticky top-0 z-50 border-b border-line bg-surface-0/85 backdrop-blur-md">
     <div class="mx-auto flex h-14 w-full <?php echo themeEsc(themePageWidthClass()); ?> items-center gap-3 px-4 sm:px-6 lg:px-8">
         <div class="flex min-w-0 items-center gap-2">
             <?php if ($this->options->logoUrl): ?>
                 <a class="flex items-center" href="<?php $this->options->siteUrl(); ?>">
-                    <img class="h-8 w-auto" src="<?php $this->options->logoUrl(); ?>" alt="<?php $this->options->title(); ?>">
+                    <?php /* 固定宽高声明避免 CLS: 没有它, 图加载完成前导航会从 32px 跳一下 */ ?>
+                    <img class="h-8 w-auto" src="<?php echo themeEsc((string) $this->options->logoUrl); ?>" alt="<?php echo themeEsc((string) $this->options->title); ?>" width="128" height="32">
                 </a>
             <?php else: ?>
-                <a class="truncate text-base font-semibold tracking-tight transition-colors hover:text-accent" href="<?php $this->options->siteUrl(); ?>">
-                    <?php $this->options->title(); ?>
+                <a class="truncate text-base font-semibold tracking-tight transition-colors hover:text-accent-ink" href="<?php $this->options->siteUrl(); ?>">
+                    <?php echo themeEsc((string) $this->options->title); ?>
                 </a>
             <?php endif; ?>
         </div>
 
         <nav class="ml-auto hidden items-center gap-1 lg:flex" aria-label="<?php echo themeEsc(_t('站点导航')); ?>">
-            <a class="rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800<?php echo $this->is('index') ? ' font-medium text-accent' : ' text-zinc-600 dark:text-zinc-300'; ?>" href="<?php $this->options->siteUrl(); ?>"><?php _e('首页'); ?></a>
+            <a class="rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-surface-2<?php echo $this->is('index') ? ' font-medium text-accent-ink' : ' text-ink-2'; ?>" href="<?php $this->options->siteUrl(); ?>"<?php if ($this->is('index')): ?> aria-current="page"<?php endif; ?>><?php _e('首页'); ?></a>
             <?php \Widget\Contents\Page\Rows::alloc()->to($pages); ?>
             <?php while ($pages->next()): ?>
-                <a class="rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800<?php echo $this->is('page', $pages->slug) ? ' font-medium text-accent' : ' text-zinc-600 dark:text-zinc-300'; ?>" href="<?php $pages->permalink(); ?>"><?php $pages->title(); ?></a>
+                <a class="rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-surface-2<?php echo $this->is('page', $pages->slug) ? ' font-medium text-accent-ink' : ' text-ink-2'; ?>" href="<?php $pages->permalink(); ?>"<?php if ($this->is('page', $pages->slug)): ?> aria-current="page"<?php endif; ?>><?php echo themeText(fn () => $pages->title()); ?></a>
             <?php endwhile; ?>
             <a class="icon-btn" href="<?php $this->options->feedUrl(); ?>" title="<?php echo themeEsc(_t('订阅文章 RSS')); ?>" aria-label="<?php echo themeEsc(_t('订阅文章 RSS')); ?>"><?php echo themeIcon('rss', 'size-4'); ?></a>
         </nav>
@@ -106,7 +107,9 @@ $themePreload = themePreloadLinks();
         </form>
 
         <div class="ml-auto flex items-center gap-1 lg:ml-1" x-data="themeToggle">
-            <button class="icon-btn" type="button" @click="cycle()" :title="label" :aria-label="label">
+            <?php /* aria-label 只能是服务端渲染的固定值: 全交给 Alpine 的话, JS 一旦没跑起来
+                     这颗按钮就是无名按钮 (读屏只会念「按钮」) */ ?>
+            <button class="icon-btn" type="button" @click="cycle()" :title="label" aria-label="<?php echo themeEsc(_t('切换明暗主题')); ?>" :aria-label="label">
                 <span class="theme-icon theme-icon-auto"><?php echo themeIcon('monitor', 'size-5'); ?></span>
                 <span class="theme-icon theme-icon-light"><?php echo themeIcon('sun', 'size-5'); ?></span>
                 <span class="theme-icon theme-icon-dark"><?php echo themeIcon('moon', 'size-5'); ?></span>
@@ -125,16 +128,16 @@ $themePreload = themePreloadLinks();
                 </form>
                 <ul class="m-0 list-none space-y-0.5 p-0">
                     <li>
-                        <a class="block rounded-lg px-3 py-2 text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800<?php echo $this->is('index') ? ' font-medium text-accent' : ' text-zinc-700 dark:text-zinc-200'; ?>" href="<?php $this->options->siteUrl(); ?>"><?php _e('首页'); ?></a>
+                        <a class="block rounded-lg px-3 py-2 text-sm transition-colors hover:bg-surface-2<?php echo $this->is('index') ? ' font-medium text-accent-ink' : ' text-ink-2'; ?>" href="<?php $this->options->siteUrl(); ?>"<?php if ($this->is('index')): ?> aria-current="page"<?php endif; ?>><?php _e('首页'); ?></a>
                     </li>
                     <?php \Widget\Contents\Page\Rows::alloc()->to($mobilePages); ?>
                     <?php while ($mobilePages->next()): ?>
                         <li>
-                            <a class="block rounded-lg px-3 py-2 text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800<?php echo $this->is('page', $mobilePages->slug) ? ' font-medium text-accent' : ' text-zinc-700 dark:text-zinc-200'; ?>" href="<?php $mobilePages->permalink(); ?>"><?php $mobilePages->title(); ?></a>
+                            <a class="block rounded-lg px-3 py-2 text-sm transition-colors hover:bg-surface-2<?php echo $this->is('page', $mobilePages->slug) ? ' font-medium text-accent-ink' : ' text-ink-2'; ?>" href="<?php $mobilePages->permalink(); ?>"<?php if ($this->is('page', $mobilePages->slug)): ?> aria-current="page"<?php endif; ?>><?php echo themeText(fn () => $mobilePages->title()); ?></a>
                         </li>
                     <?php endwhile; ?>
                     <li>
-                        <a class="block rounded-lg px-3 py-2 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800" href="<?php $this->options->feedUrl(); ?>"><?php _e('文章 RSS'); ?></a>
+                        <a class="block rounded-lg px-3 py-2 text-sm text-ink-2 transition-colors hover:bg-surface-2" href="<?php $this->options->feedUrl(); ?>"><?php _e('文章 RSS'); ?></a>
                     </li>
                 </ul>
             </div>

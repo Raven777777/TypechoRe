@@ -22,7 +22,7 @@ if (count($toc) < 2) {
     里面的 lg:sticky 就没有可滚动的行程, 目录会跟着正文滚走 (被导航栏盖住)。
 -->
 <aside class="page-aside mt-10 min-w-0 lg:mt-0 lg:self-stretch" data-aside="toc" aria-label="<?php echo themeEsc(_t('文章目录')); ?>">
-    <div id="toc" class="card no-print p-5 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto">
+    <div id="toc" class="card no-print p-5 lg:sticky lg:top-[calc(var(--spacing-nav)+1.25rem)] lg:max-h-[calc(100dvh-var(--spacing-nav)-2.5rem)] lg:overflow-y-auto">
         <h2 class="widget-title"><?php echo themeIcon('list', 'size-4'); ?><?php _e('文章目录'); ?></h2>
         <nav class="js-toc" aria-label="<?php echo themeEsc(_t('文章目录')); ?>">
             <?php echo themeTocHtml($toc, true); ?>
