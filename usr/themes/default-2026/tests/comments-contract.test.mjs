@@ -163,5 +163,160 @@ function functionBody(source, name) {
   );
 }
 
+/* ---------- 5. <details>: 展开收起动画 + 点别处自动收回 ----------
+   回复框和窄屏导航菜单都是 <details>, 原生展开没有中间态; 以前只能再点一次触发器
+   才收得回去 (点别处没反应)。 */
+{
+  const collapse = functionBody(appJs, 'setCollapseOpen');
+  const header = readFileSync(new URL('header.php', root), 'utf8');
+
+  check('app.js 有 setCollapseOpen()', collapse.length > 0);
+  check('★ 用 Web Animations 做高度 + 透明度过渡', collapse.includes('.animate(') && collapse.includes("height: '0px'"));
+  check(
+    '★ 只在动画期间裁切 (常驻 overflow:hidden 会裁掉表情面板)',
+    collapse.includes("body.style.overflow = 'hidden'") && collapse.includes("removeProperty('overflow')")
+  );
+  check(
+    '★ 收起要等动画走完再真正 open = false (关早了内容会先消失)',
+    /animation\.finished\.then\(\(\) => \{\s*finish\(\);\s*details\.open = false;/.test(collapse)
+  );
+  check(
+    '★ 高度和内边距一起过渡 (否则最后一帧会「啪」地少掉一截)',
+    collapse.includes("paddingTop: '0px'") && collapse.includes("'paddingTop'") && collapse.includes('pxValue')
+  );
+  check(
+    '★ 绝对定位的面板 (窄屏菜单) 只做位移 + 淡入, 不去压扁内容也不缩放',
+    collapse.includes('getComputedStyle(body).position') && collapse.includes("translateY(-8px)") && !collapse.includes('scale(')
+  );
+  check(
+    '★ 回复浮层不做高度动画 (不从中间展开), 只淡入 + 上浮',
+    collapse.includes("classList.contains('respond-floating')") && collapse.includes('translateY(14px)')
+  );
+  check(
+    '★ 遮罩跟着卡片一起淡出 (不能等 remove 时「啪」地一下没了)',
+    collapse.includes('data-respond-backdrop') && collapse.includes("fill: 'forwards'")
+  );
+  check('★ 连点两次: 先掐掉上一次没走完的动画', collapse.includes('getAnimations') && collapse.includes('.cancel()'));
+  check('★ prefers-reduced-motion 时直接切换', collapse.includes('prefersReducedMotion()'));
+
+  check('点 summary 走动画版 (preventDefault 挡住原生 toggle)', appJs.includes("closest('summary')") && appJs.includes('event.preventDefault();'));
+  check('★ 点别处自动收起 (回复框以前只能再点一次「回复」)', appJs.includes('pointerdown') && appJs.includes('closeCollapses(null)'));
+  check(
+    '★ 触发器与折叠块内部的点击不触发收起 (否则点回复会立刻收回)',
+    appJs.includes('COLLAPSE_TRIGGER_SELECTOR') && appJs.includes("closest('details[data-collapse][open]')")
+  );
+  check('Esc 也能收起', appJs.includes("'Escape' === event.key"));
+
+  check('comments.php 的回复框带 data-collapse', comments.includes('class="respond" data-collapse'));
+  check('comments.php 的回复框内容包在 data-collapse-body 里', comments.includes('data-collapse-body'));
+  check(
+    '★ 胶囊 (回复框) 在页码之上, 不落到分页下面',
+    comments.indexOf('class="respond"') > -1 && comments.indexOf('class="respond"') < comments.indexOf('page-navigator')
+  );
+  check('header.php 的窄屏菜单同时带 data-nav-collapse 与 data-collapse', header.includes('data-nav-collapse data-collapse'));
+}
+
+/* ---------- 6. 窄屏分类带: 位置统一到内容上方 ----------
+   以前文章页把这条带子放在页脚: 手机上要滑到分页之后才出现, 看着像分页多出来的
+   一列, 也和列表页对不上。 */
+{
+  const post = readFileSync(new URL('post.php', root), 'utf8');
+  const page = readFileSync(new URL('page.php', root), 'utf8');
+  const index = readFileSync(new URL('index.php', root), 'utf8');
+  const archive = readFileSync(new URL('archive.php', root), 'utf8');
+
+  check('functions.php 定义了 themeBrowseStrip()', php.includes('function themeBrowseStrip('));
+  check('★ 文章页把分类带放在正文上方', post.indexOf('themeBrowseStrip(') > 0 && post.indexOf('themeBrowseStrip(') < post.indexOf('<article'));
+  check('页面页同样放在正文上方', page.indexOf('themeBrowseStrip(') > 0 && page.indexOf('themeBrowseStrip(') < page.indexOf('<article'));
+  check('首页 / 归档页改用同一个 helper', index.includes('themeBrowseStrip(_t(') && archive.includes('themeBrowseStrip(_t('));
+  check('归档页把当前分类标出来', archive.includes(', false, true)'));
+  check('★ 页脚不再重复输出那条带子', !footer.includes('browse-strip'));
+  check('helper 只在需要窄屏替代入口时才出现', php.includes('if (!themeSkeletonSidebar()) {'));
+
+  check(
+    '★ 断点用经典 min/max-width 写法 (范围内的宽高语法在老 WebView 上不认)',
+    !/@media \(width [<>]/.test(css) && css.includes('@media (max-width: 63.9375rem)')
+  );
+}
+
+/* ---------- 7. 回复: parent 不能丢 + 面板覆盖页面而不是挤进去 ---------- */
+{
+  const respondBlock = functionBody(appJs, 'enhanceCommentBox');
+
+  /* 内核对 theId 做 JSON 编码 (双引号), 以前的单引号正则抠不到 —— parent 被写成
+     空串, 回复就变成了新的顶层评论。 */
+  check('★ 回复链接带 data-reply-to / data-reply-target', php.includes("data-reply-target=") && php.includes("data-reply-to="));
+  check('★ app.js 从 data-reply-to 取父评论 id', respondBlock.includes('link.dataset.replyTo'));
+  check(
+    '★ onclick 兜底正则两种引号都认',
+    respondBlock.includes(String.raw`reply\(\s*['"][^'"]*['"]\s*,\s*(\d+)`)
+  );
+
+  check('★ 面板搬进浮层 (不被后面的评论推下去)', respondBlock.includes('layerFor().appendChild(respond)'));
+  check('浮层是覆盖层: fixed + 遮罩', css.includes('.respond-layer {') && /@apply fixed inset-0/.test(css) && css.includes('.respond-layer-backdrop'));
+  check(
+    '遮罩不用 ink 色派生 (深色模式下会一片亮灰), 深浅各一套浓度',
+    // eslint-disable-next-line no-template-curly-in-string
+    css.includes('background-color: var(--veil)') && (css.match(/--veil:/g) || []).length >= 2 && !/bg-ink-1\//.test(css)
+  );
+  check('浮层上有遮罩节点 (点它等于点空白处)', respondBlock.includes('data-respond-backdrop'));
+  check('★ 面板回原位时浮层整块撤掉', respondBlock.includes('dropLayer()'));
+  check(
+    '★ 不管怎么合上的都复位回复状态 (否则下一个人会被当成在回复)',
+    appJs.includes("new CustomEvent('collapse:closed')") && appJs.includes('respond.classList.contains(\'respond-floating\')')
+  );
+  check('回复中的那条评论有标记', respondBlock.includes("classList.add('is-reply-target')") && css.includes('.comment-body.is-reply-target'));
+  check('切页时清掉上一条页面留下的浮层', functionBody(appJs, 'enhancePage').includes('layer.remove()'));
+
+  check('标题行文字能换成「回复 @某人」', comments.includes('data-respond-title') && respondBlock.includes('setRespondTitle'));
+  check('「取消回复」挪进标题行 (原来独占一行白占 28px)', comments.indexOf('cancel-comment-reply') < comments.indexOf('</summary>'));
+  check('写评论的卡片更紧凑: 内边距与输入框高度都收小', /p-4 shadow-card sm:p-5/.test(css) && comments.includes('min-h-[84px]'));
+  check(
+    '★ 点胶囊展开也复用回复的浮层 (版面不跳)',
+    respondBlock.includes('openRespondFromSummary') && respondBlock.includes('layerFor().appendChild(respond)')
+  );
+
+  const repliesRule = /\.thread-replies \{([^}]*)\}/.exec(css);
+  check(
+    '回复卡片上移 16px, 并与分割线保持 16px',
+    Boolean(repliesRule) && /@apply -mt-1\.5 .*pb-4/.test(repliesRule[1]),
+    repliesRule ? repliesRule[1].trim() : '找不到 .thread-replies 规则'
+  );
+}
+
+/* ---------- 8. 浮层里开着面板的时候: 胶囊不能消失, 也不能在页脚「缩一下」 ---------- */
+{
+  const respondBlock = functionBody(appJs, 'enhanceCommentBox');
+  const refreshBlock = appJs.slice(appJs.indexOf('const refreshComments = async'));
+  const resetBlock = appJs.slice(appJs.indexOf('const resetRespond = () =>'), appJs.indexOf('openRespondFromSummary = (details)'));
+
+  check(
+    '★ 「取消回复」拆掉内核的 cancelReply 行内 onclick (它会把卡片先搬回页脚, 淡出就变成在底部缩一下)',
+    respondBlock.includes("cancelLink.removeAttribute('onclick')")
+  );
+  check(
+    '★ 面板搬进浮层时原位留一颗幽灵胶囊 (不再「胶囊被点没了」+ 版面塌一下)',
+    respondBlock.includes("holder.className = 'respond-placeholder'")
+      && respondBlock.includes('holder.textContent = defaultTitle')
+      && css.includes('.respond-placeholder {')
+  );
+  check(
+    '★ 收起的归一化: 浮层里先淡出再归位, 归位的那一步不再播动画',
+    resetBlock.includes('wasFloating && respond.open')
+      && resetBlock.includes('setCollapseOpen(respond, false);\n        return;')
+      && (resetBlock.match(/setCollapseOpen\(respond, false\)/g) || []).length === 1
+  );
+  check(
+    '占位节点丢了也不把面板留在浮层里',
+    resetBlock.includes('comments.insertBefore(respond, notice)') && resetBlock.includes('comments.appendChild(respond)')
+  );
+  check(
+    '★ 刷新评论列表时不动浮层里的面板 (否则浮层瞬间空掉, 面板被拽回文档流)',
+    refreshBlock.includes('respondIsFloating')
+      && refreshBlock.includes('if (previousRespond && !respondIsFloating)')
+      && refreshBlock.includes('previousRespond && !respondIsFloating)')
+  );
+}
+
 console.log(`\n${failures === 0 ? '全部通过' : failures + ' 项失败'}`);
 process.exit(failures === 0 ? 0 : 1);

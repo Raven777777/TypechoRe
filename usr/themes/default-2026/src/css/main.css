@@ -105,6 +105,10 @@
     --shadow-1: 0 1px 2px oklch(0.24 0.02 265 / 0.05), 0 10px 30px -18px oklch(0.24 0.02 265 / 0.35);
     --shadow-2: 0 2px 6px oklch(0.24 0.02 265 / 0.07), 0 18px 46px -20px oklch(0.24 0.02 265 / 0.42);
 
+    /* 浮层遮罩: 不能拿 ink-1 派生的颜色 (深色模式下 ink-1 是近白, 叠出来一片亮灰),
+       直接用一层中性暗纱, 深浅两套各给一个浓度 */
+    --veil: oklch(0.24 0.02 265 / 0.3);
+
     /* 强调色派生 (值由 functions.php 写在内联 style 上, 这里是兜底) */
     --accent-ink: var(--theme-accent-ink, color-mix(in oklab, var(--theme-accent, #4f6bf5) 60%, #06121f));
 
@@ -143,6 +147,9 @@
 
     --shadow-1: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 12px 30px -18px oklch(0 0 0 / 0.8);
     --shadow-2: 0 1px 0 oklch(1 0 0 / 0.06) inset, 0 20px 48px -22px oklch(0 0 0 / 0.9);
+
+    /* 深色下的遮罩: 纯黑压一档, 不用白色调的 ink-1 (那样整屏都发亮) */
+    --veil: oklch(0 0 0 / 0.62);
 
     --accent-ink: var(--theme-accent-ink-dark, color-mix(in oklab, var(--theme-accent, #4f6bf5) 82%, #ffffff));
   }
@@ -474,7 +481,7 @@
      断点必须与栅格生效的宽度一致 (lg = 64rem), 否则会出现「栅格还没生效、第二列先
      出现」的错位。写在这一层而不是给模板加 hidden/lg:block: 第二列的选择器要能压过
      [data-skeleton-aside][hidden] 的 display: none, 而 utilities 层里的 lg:block 会反压它。 */
-  @media (width < 64rem) {
+  @media (max-width: 63.9375rem) {
     .page-aside,
     [data-skeleton-aside] {
       display: none;
@@ -803,9 +810,12 @@
     @apply rounded-md bg-surface-3 px-1.5 py-0.5 font-mono text-[0.8125rem] text-ink-1;
   }
 
-  /* ---------- 回复卡片 (demo: padding 10px 14px, 圆角 md, 卡片间距 12px) ---------- */
+  /* ---------- 回复卡片 (demo: padding 10px 14px, 圆角 md, 卡片间距 12px) ----------
+     上方: 父评论的 padding-bottom (16px) 减 6px = 10px, 也就是整块回复比原先上移 16px;
+     下方: 再留 16px 到下一个对话块的分割线 (原先紧贴分割线)。
+     上下相抵, 后面的评论位置不变, 只是卡片整体抬高、底部透出空隙。 */
   .thread-replies {
-    @apply mt-2.5 flex flex-col gap-3;
+    @apply -mt-1.5 flex flex-col gap-3 pb-4;
   }
 
   /* 内核给子列表套的那层容器只添乱 (深层回复已由 PHP 拍平到同一层) */
@@ -847,7 +857,7 @@
   }
 
   .respond[open] {
-    @apply border border-line bg-surface-1 p-5 shadow-card sm:p-6;
+    @apply border border-line bg-surface-1 p-4 shadow-card sm:p-5;
   }
 
   /* 收起时它就是一颗虚线胶囊 (只包住文字, 不铺满整行) */
@@ -859,22 +869,67 @@
     display: none;
   }
 
-  /* 展开后标题行不再是按钮, 而是卡片的第一行 */
+  /* 展开后标题行不再是按钮, 而是卡片的第一行。标题与表单之间的间距放在
+     .respond-body 的 padding-top 上 (而不是这里的 margin): 收起时它要跟着高度
+     一起过渡掉, 否则最后一帧会「啪」地少掉一截。 */
   .respond[open] > .respond-summary {
-    @apply mb-4 w-full border-0 bg-transparent p-0 text-ink-1;
+    @apply w-full border-0 bg-transparent p-0 text-ink-1;
+  }
+
+  /* 回复框的包裹层: app.js 的收起动画就作用在它身上 (高度 + padding-top + 透明度) */
+  .respond-body {
+    @apply pt-3;
   }
 
   .respond-chevron {
     @apply transition-transform duration-200;
   }
 
+  /* 面板搬进浮层时留在原位的幽灵胶囊: 外形跟 `.respond-summary` 一致,
+     但不可点 (aria-hidden), 作用只是「胶囊没被点没」+ 不把版面塔下去。 */
+  .respond-placeholder {
+    @apply mt-8 flex w-fit items-center gap-2 rounded-full border border-dashed border-line px-4 py-2 text-sm font-medium text-ink-3 select-none;
+  }
+
   .respond[open] .respond-chevron {
     @apply rotate-180;
   }
 
-  /* 回复某条评论时评论框会被搬进那条评论里 */
-  .comment-body > .respond {
-    @apply mt-4;
+  /* ---------- 回复浮层 ----------
+     回复某条评论时, 面板整块搬进 #respond-layer: 覆盖在页面上, 后面的评论不再被
+     推下去, 长列表里也不会把面板挤到屏幕外。窄屏是底部抽屉, 宽屏居中。 */
+  /* 遮罩淡入: 只动透明度, 不碰模糊 (否则动画期间整屏重绘) */
+  @keyframes veil-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .respond-layer {
+    @apply fixed inset-0 z-[80] flex items-end justify-center overflow-y-auto p-3 sm:items-center sm:p-6;
+  }
+
+  .respond-layer-backdrop {
+    @apply absolute inset-0 backdrop-blur-[2px];
+    background-color: var(--veil);
+    animation: veil-in var(--anim-fade-duration) ease-out both;
+  }
+
+  .respond-layer > .respond {
+    @apply relative mt-0 max-h-[calc(100dvh-1.5rem)] w-full max-w-[38rem] sm:max-h-[calc(100dvh-3rem)];
+    /* 动画期间的高度由 WAAPI 接管, 不要把过渡交给 CSS */
+  }
+
+  .respond-floating[open] {
+    @apply shadow-xl;
+  }
+
+  /* 正在回复的那条评论: 面板浮在上面, 总得看得出在回谁 */
+  .comment-body.is-reply-target {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent-ink) 30%, transparent);
   }
 
   /* ---------- 表单控件 ----------
@@ -969,7 +1024,7 @@
     @apply -translate-x-0.5;
   }
 
-  @media (width >= 40rem) {
+  @media (min-width: 40rem) {
     .post-nav-next {
       @apply text-right;
     }
@@ -1072,7 +1127,7 @@
     @apply snap-start;
   }
 
-  @media (width >= 64rem) {
+  @media (min-width: 64rem) {
     .browse-strip {
       display: none;
     }

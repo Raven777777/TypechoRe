@@ -48,14 +48,8 @@ $archiveLabel = $archiveLabels[$archiveType] ?? '';
         </p>
     </header>
 
-    <?php if (themeSkeletonSidebar()): ?>
-        <nav class="browse-strip mb-5" aria-label="<?php echo themeEsc(_t('浏览分类')); ?>">
-            <?php \Widget\Metas\Category\Rows::alloc()->to($stripCategories); ?>
-            <?php while ($stripCategories->next()): ?>
-                <a class="chip shrink-0<?php echo (string) $stripCategories->slug === (string) $this->getArchiveSlug() ? ' is-active' : ''; ?>" href="<?php echo themeEsc((string) $stripCategories->permalink); ?>"><?php echo themeEsc((string) $stripCategories->name); ?><span class="widget-count"><?php echo (int) $stripCategories->count; ?></span></a>
-            <?php endwhile; ?>
-        </nav>
-    <?php endif; ?>
+    <?php /* 归档页同样给窄屏一条分类带, 当前分类高亮 */ ?>
+    <?php themeBrowseStrip(_t('浏览分类'), false, true); ?>
 
     <?php if ($this->have()): ?>
         <div class="space-y-6">

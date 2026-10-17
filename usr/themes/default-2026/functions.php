@@ -1568,6 +1568,40 @@ function themeSkeletonSidebar(): bool
 }
 
 /**
+ * 窄屏的分类 / 归档横滑带
+ *
+ * 侧边栏在 < 64rem 时整列隐藏, 分类和归档在手机上就没有入口了, 所以补一条只在窄屏出现
+ * 的胶囊带 (.browse-strip 在宽屏 display:none)。
+ *
+ * 位置统一在内容上方 —— 列表页、文章页、页面页都一样。以前文章页把它放在页脚,
+ * 手机上要滑到「分页之后」才冒出来, 看着像是分页多出来的一列, 也和列表页对不上。
+ *
+ * @param string $label       读屏用的名字
+ * @param bool   $withArchive 是否带上最近 3 个月归档 (文章 / 页面页用)
+ * @param bool   $withActive  是否给当前分类加高亮 (归档页用)
+ */
+function themeBrowseStrip(string $label, bool $withArchive = false, bool $withActive = false): void
+{
+    if (!themeSkeletonSidebar()) {
+        return;
+    }
+
+    $archiveSlug = $withActive ? (string) \Widget\Archive::alloc()->getArchiveSlug() : '';
+    ?>
+    <nav class="browse-strip mb-5" aria-label="<?php echo themeEsc($label); ?>">
+        <?php \Widget\Metas\Category\Rows::alloc()->to($stripCategories); ?>
+        <?php while ($stripCategories->next()): ?>
+            <a class="chip shrink-0<?php echo $withActive && (string) $stripCategories->slug === $archiveSlug ? ' is-active' : ''; ?>" href="<?php echo themeEsc((string) $stripCategories->permalink); ?>"><?php echo themeEsc((string) $stripCategories->name); ?><span class="widget-count"><?php echo (int) $stripCategories->count; ?></span></a>
+        <?php endwhile; ?>
+        <?php if ($withArchive): ?>
+            <?php \Widget\Contents\Post\Date::alloc('type=month&format=Y-m&pageSize=3')
+                ->parse('<a class="chip shrink-0" href="{permalink}">{date}</a>'); ?>
+        <?php endif; ?>
+    </nav>
+    <?php
+}
+
+/**
  * 正文容器类名 (含内边距与栅格)
  *
  * @return string
@@ -1732,8 +1766,15 @@ function threadedComments(\Widget\Comments\Archive $comments, \Typecho\Config $o
         : $permalink;
 
     /* 回复链接跟在时间后面, 靠 ml-auto 推到行尾 —— 独占一行的话每条评论白白高出 30px */
+    /* data-reply-*: app.js 靠这三个属性知道「回复谁」(target = 评论节点 id,
+       to = 父评论 coid, author = 昵称)。onclick 只作为无 JS / 兜底路径。
+       别只留 onclick: 里面的 theId 是 JSON 编码的 (双引号), 从 JS 里用单引号正则
+       去抠会抠空, parent 传成空串, 回复就变成了新的顶层评论。 */
     echo '<a class="c-reply" href="', themeEsc($base . '?replyTo=' . $coid . '#' . $respondId),
-        '" rel="nofollow" onclick="return TypechoComment.reply(',
+        '" rel="nofollow" data-reply-target="', themeEsc($theId),
+        '" data-reply-to="', $coid,
+        '" data-reply-author="', themeEsc($author),
+        '" onclick="return TypechoComment.reply(',
         /** JS 字符串用 JSON 编码后再做 HTML 转义, 不能用 themeEsc 直接拼进单引号 */
         themeEsc((string) json_encode((string) $theId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)),
         ', ', $coid, ', this)">', themeEsc(_t('回复')), '</a>';

@@ -812,6 +812,208 @@ assertTrue(
     'slug dedupe failed: expected e2e_regression_post-1, got ' . $duplicateSlug
 );
 
+// ---------------------------------------------------------------- 置顶不改变每页条数
+
+step('sticky 置顶不改变每页条数');
+/**
+ * 置顶文章以前是「额外」压进列表最前面: 每页 5 篇 + 2 篇置顶 = 首页 7 篇,
+ * 而且分页 offset 没有跟着挪, 后面的文章会重复或被跳过 (第 2 页直接 404)。
+ * 现在置顶文章占掉当前页的名额, 首页仍然是 pageSize 篇, 第 2 页从置顶占位之后接着取。
+ */
+[$originalPageSize, $stickyCidList] = explode('|', trim(sitePhp($php, $siteDir, <<<'SITE_PHP'
+$cids = [];
+$base = time() - 300;
+for ($i = 1; $i <= 6; $i++) {
+    $cids[] = (int) $db->query($db->insert('table.contents')->rows([
+        'title' => 'Sticky Test ' . $i,
+        'slug' => 'sticky-test-' . $i,
+        'created' => $base + $i,
+        'text' => 'sticky test body ' . $i,
+        'type' => 'post',
+        'status' => 'publish',
+    ]));
+}
+$originalPageSize = (string) $db->fetchObject($db->select('value')->from('table.options')->where('name = ?', 'pageSize'))->value;
+$db->query($db->update('table.options')->rows(['value' => '5'])->where('name = ?', 'pageSize'));
+echo $originalPageSize . '|' . implode(',', $cids);
+SITE_PHP)));
+$stickyCids = explode(',', $stickyCidList);
+assertTrue(6 === count($stickyCids), 'sticky test posts were not created');
+
+$pluginsPage = assertResponse($site->get('/admin/plugins.php'), [200], 'GET plugins.php for Sticky');
+assertResponse(
+    $site->get(endpointUrl($pluginsPage, 'action/plugins-edit?activate=Sticky', 'plugins.php')),
+    [302],
+    'GET activate Sticky'
+);
+/**
+ * 插件配置要在**激活之后**写: 激活时会用表单默认值重新保存 plugin:Sticky。
+ * 置顶配置里最早的两篇, 它们必须跳到最前面, 不能靠原有的时间排序。
+ */
+sitePhp($php, $siteDir, str_replace(
+    'CIDS',
+    $stickyCids[0] . ',' . $stickyCids[1],
+    <<<'SITE_PHP'
+$config = json_encode([
+    'sticky_cids' => 'CIDS',
+    'sticky_html' => '<span style="color:red">[置顶]</span>',
+    'sticky_cat' => '0',
+], JSON_UNESCAPED_UNICODE);
+$row = $db->fetchRow($db->select()->from('table.options')->where('name = ?', 'plugin:Sticky'));
+if ($row) {
+    $db->query($db->update('table.options')->rows(['value' => $config])->where('name = ?', 'plugin:Sticky'));
+} else {
+    $db->query($db->insert('table.options')->rows(['name' => 'plugin:Sticky', 'user' => 0, 'value' => $config]));
+}
+SITE_PHP
+));
+
+/** 列出首页/第 2 页的主栏文章块 (default 主题每篇都是 article.post[itemscope]) */
+$articlesOf = static function (string $html): array {
+    return preg_match_all('/<article class="post" itemscope.*?<\/article>/s', $html, $found) ? $found[0] : [];
+};
+$totalPosts = (int) trim(sitePhp($php, $siteDir, "echo (int) \$db->fetchObject(\$db->select(['COUNT(*)' => 'num'])->from('table.contents')->where('table.contents.type = ?', 'post')->where('table.contents.status = ?', 'publish'))->num;"));
+assertTrue($totalPosts > 6, 'expected more than 6 published posts, got ' . $totalPosts);
+
+$home = assertResponse($site->get('/'), [200], 'GET / with Sticky enabled');
+$homeArticles = $articlesOf($home);
+assertTrue(
+    5 === count($homeArticles),
+    'sticky changed the posts per page: expected 5, got ' . count($homeArticles)
+);
+$leadTitles = implode(' / ', array_map(static function (string $article): string {
+    return trim((string) preg_replace('/\s+/u', ' ', strip_tags($article)));
+}, array_slice($homeArticles, 0, 2)));
+$debugState = trim(sitePhp($php, $siteDir, "echo (string) \$db->fetchObject(\$db->select('value')->from('table.options')->where('name = ?', 'plugins'))->value . ' || ' . (string) \$db->fetchObject(\$db->select('value')->from('table.options')->where('name = ?', 'plugin:Sticky'))->value;"));
+assertTrue(
+    str_contains($homeArticles[0], 'Sticky Test 1') && str_contains($homeArticles[1], 'Sticky Test 2'),
+    'sticky posts should lead the front page in configured order, got: ' . $leadTitles
+    . ' -- plugins=' . $debugState
+);
+assertTrue(
+    str_contains($homeArticles[0], '[置顶]'),
+    'sticky title suffix is missing on the front page'
+);
+
+$secondPage = assertResponse($site->get('/index.php/page/2/'), [200], 'GET /page/2/ with Sticky enabled');
+$secondArticles = $articlesOf($secondPage);
+assertTrue(
+    $totalPosts - 5 === count($secondArticles),
+    'page 2 should hold the remaining ' . ($totalPosts - 5) . ' posts, got ' . count($secondArticles)
+);
+$allTitles = implode('|', array_merge($homeArticles, $secondArticles));
+foreach (['Sticky Test 3', 'Sticky Test 4', 'Sticky Test 5', 'Sticky Test 6', 'E2E 回归文章'] as $title) {
+    assertTrue(str_contains($allTitles, $title), 'post lost while paging: ' . $title);
+}
+
+/** 还原: 停用插件、删掉测试文章、恢复每页条数 */
+$pluginsPage = assertResponse($site->get('/admin/plugins.php'), [200], 'GET plugins.php to deactivate Sticky');
+assertResponse(
+    $site->get(endpointUrl($pluginsPage, 'action/plugins-edit?deactivate=Sticky', 'plugins.php')),
+    [302],
+    'GET deactivate Sticky'
+);
+sitePhp(
+    $php,
+    $siteDir,
+    "\$db->query(\$db->delete('table.contents')->where('table.contents.cid IN ?', [" . implode(', ', array_map('intval', $stickyCids)) . "]));"
+    . "\$db->query(\$db->update('table.options')->rows(['value' => " . var_export($originalPageSize, true) . "])->where('name = ?', 'pageSize'));"
+);
+assertTrue(5 !== count($articlesOf(assertResponse($site->get('/'), [200], 'GET / after deactivating Sticky'))), 'Sticky cleanup did not take effect');
+
+// ---------------------------------------------------------------- 插件: ItWasBadXD 打字机标题
+
+step('ItWasBadXD 打字机标题');
+/**
+ * 插件把句库、光标和时间范围都写在页面头的脚本里。这里验证:
+ * 1. 多句话/时间范围/光标/播放时机都能配置并真的进了脚本;
+ * 2. 句子里的尖括号和引号按 JS 字符串转义 (JSON_HEX_*), 不能原样落进 HTML;
+ * 3. 配置面板能正常渲染 Textarea (多句话) 和 Radio (播放时机)。
+ */
+$pluginsPage = assertResponse($site->get('/admin/plugins.php'), [200], 'GET plugins.php for ItWasBadXD');
+assertResponse(
+    $site->get(endpointUrl($pluginsPage, 'action/plugins-edit?activate=ItWasBadXD', 'plugins.php')),
+    [302],
+    'GET activate ItWasBadXD'
+);
+
+sitePhp($php, $siteDir, <<<'SITE_PHP'
+$config = json_encode([
+    'messages' => "第一句测试标题 <b>尖括号</b>\n\"引号\"与 '单引号' 🔥\n第三句 ✓",
+    'charMin' => '40',
+    'charMax' => '90',
+    'holdMin' => '300',
+    'holdMax' => '900',
+    'gapMin' => '100',
+    'gapMax' => '200',
+    'cursorTyping' => '█',
+    'cursorHold' => '',
+    'focusTitle' => '回来啦',
+    'focusDelay' => '500',
+    'playMode' => 'always',
+], JSON_UNESCAPED_UNICODE);
+$row = $db->fetchRow($db->select()->from('table.options')->where('name = ?', 'plugin:ItWasBadXD'));
+if ($row) {
+    $db->query($db->update('table.options')->rows(['value' => $config])->where('name = ?', 'plugin:ItWasBadXD'));
+} else {
+    $db->query($db->insert('table.options')->rows(['name' => 'plugin:ItWasBadXD', 'user' => 0, 'value' => $config]));
+}
+SITE_PHP);
+
+$badxdHome = assertResponse($site->get('/'), [200], 'GET / with ItWasBadXD enabled');
+assertTrue(str_contains($badxdHome, 'var config = {"messages":'), 'ItWasBadXD script is missing from the page head');
+foreach (
+    [
+        '"charMin":40' => 'charMin',
+        '"charMax":90' => 'charMax',
+        '"holdMin":300' => 'holdMin',
+        '"holdMax":900' => 'holdMax',
+        '"gapMin":100' => 'gapMin',
+        '"gapMax":200' => 'gapMax',
+        '"cursorTyping":"█"' => 'cursorTyping',
+        '"cursorHold":""' => 'empty cursorHold',
+        '"focusTitle":"回来啦"' => 'focusTitle',
+        '"focusDelay":500' => 'focusDelay',
+        '"playMode":"always"' => 'playMode',
+    ] as $needle => $label
+) {
+    assertTrue(str_contains($badxdHome, $needle), 'ItWasBadXD config lost ' . $label . ' (' . $needle . ')');
+}
+assertTrue(str_contains($badxdHome, '🔥'), 'emoji in the message list got escaped away');
+assertTrue(
+    str_contains($badxdHome, '\u003Cb\u003E'),
+    'angle brackets in a message must be escaped as \u003C / \u003E'
+);
+assertTrue(
+    str_contains($badxdHome, '\u0022引号\u0022') && str_contains($badxdHome, "\u0027单引号\u0027"),
+    'quotes in a message must be escaped so the script cannot be broken out of'
+);
+assertTrue(!str_contains($badxdHome, '<b>尖括号</b>'), 'raw HTML from the message list leaked into the page');
+
+$badxdConfigPage = assertResponse(
+    $site->get('/admin/options-plugin.php?config=ItWasBadXD'),
+    [200],
+    'GET options-plugin.php?config=ItWasBadXD'
+);
+foreach (
+    ['name="messages"' => 'messages textarea', '尖括号' => 'textarea default', 'name="playMode"' => 'playMode radio', '始终播放' => 'playMode label']
+    as $needle => $label
+) {
+    assertTrue(str_contains($badxdConfigPage, $needle), 'ItWasBadXD config page is missing the ' . $label);
+}
+
+$pluginsPage = assertResponse($site->get('/admin/plugins.php'), [200], 'GET plugins.php to deactivate ItWasBadXD');
+assertResponse(
+    $site->get(endpointUrl($pluginsPage, 'action/plugins-edit?deactivate=ItWasBadXD', 'plugins.php')),
+    [302],
+    'GET deactivate ItWasBadXD'
+);
+sitePhp($php, $siteDir, "\$db->query(\$db->delete('table.options')->where('name = ?', 'plugin:ItWasBadXD'));");
+assertTrue(
+    !str_contains(assertResponse($site->get('/'), [200], 'GET / after deactivating ItWasBadXD'), 'var config = {"messages":'),
+    'ItWasBadXD script is still printed after deactivation'
+);
+
 // ---------------------------------------------------------------- 切页时第二列的形态提示
 
 step('aside hint (第二列会不会变, default-2026)');

@@ -14,21 +14,8 @@ $footerText = themeFooterHtml();
 </div><!-- end #page-wrap -->
 
 <?php /* 页脚: 宽屏与页眉等高 (都是 h-14 的横条 + 1px 边框); 窄屏换成上下两行居中 (手机上挤成一团) */ ?>
-<?php /* 文章 / 页面在窄屏下没有侧边栏, 分类与归档就彻底没有入口了。
-     这里给一条只在 < 64rem 显示的胶囊带 (.browse-strip 在宽屏隐藏)。 */ ?>
-<?php if (themeIsSingle() && themeSkeletonSidebar()): ?>
-    <div class="mx-auto w-full <?php echo themeEsc(themePageWidthClass()); ?> px-4 sm:px-6 lg:px-8">
-        <nav class="browse-strip mt-10" aria-label="<?php echo themeEsc(_t('浏览')); ?>">
-            <?php $footCategories = \Widget\Metas\Category\Rows::alloc(); ?>
-            <?php while ($footCategories->next()): ?>
-                <a class="chip shrink-0" href="<?php echo themeEsc((string) $footCategories->permalink); ?>"><?php echo themeEsc((string) $footCategories->name); ?><span class="widget-count"><?php echo (int) $footCategories->count; ?></span></a>
-            <?php endwhile; ?>
-            <?php \Widget\Contents\Post\Date::alloc('type=month&format=Y-m&pageSize=3')
-                ->parse('<a class="chip shrink-0" href="{permalink}">{date}</a>'); ?>
-        </nav>
-    </div>
-<?php endif; ?>
-
+<?php /* 窄屏的分类 / 归档气泡带已经搬到正文上方 (themeBrowseStrip), 这里不再重复输出:
+     放在页脚时手机上要滑到分页之后才出现, 看起来像多出来的一列, 也和列表页对不上。 */ ?>
 <footer class="mt-4 border-t border-line text-sm text-ink-3">
     <div class="mx-auto flex min-h-14 w-full <?php echo themeEsc(themePageWidthClass()); ?> flex-col items-center gap-y-1 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:px-6 sm:py-2 lg:px-8">
         <p class="flex min-w-0 items-center gap-2">

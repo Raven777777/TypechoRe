@@ -118,9 +118,10 @@ $themePreload = themePreloadLinks();
             </button>
         </div>
 
-        <details class="relative lg:hidden" data-nav-collapse>
+        <?php /* data-collapse: 展开 / 收起由 app.js 加高度动画 (点菜单以外的地方或 Esc 也会自动收回) */ ?>
+        <details class="relative lg:hidden" data-nav-collapse data-collapse>
             <summary class="icon-btn cursor-pointer list-none [&::-webkit-details-marker]:hidden" aria-label="<?php echo themeEsc(_t('打开导航菜单')); ?>"><?php echo themeIcon('menu', 'size-5'); ?></summary>
-            <div class="card absolute right-0 z-50 mt-2 w-64 p-3">
+            <div class="card absolute right-0 z-50 mt-2 w-64 p-3" data-collapse-body>
                 <form class="mb-2" method="post" action="<?php $this->options->siteUrl(); ?>" role="search">
                     <label class="sr-only" for="mobile-search"><?php _e('搜索关键字'); ?></label>
                     <div class="relative">

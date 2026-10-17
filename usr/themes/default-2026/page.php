@@ -18,6 +18,8 @@ $pageAside = themeContentAsideKind($this);
 $this->need('header.php');
 ?>
 <main id="main" class="min-w-0 transition-fade">
+    <?php /* 窄屏没有侧边栏: 分类 / 归档入口放在正文上方, 和列表页位置一致 */ ?>
+    <?php themeBrowseStrip(_t('浏览分类'), true); ?>
     <article class="card overflow-hidden" itemscope itemtype="http://schema.org/BlogPosting">
         <header class="border-b border-line p-5 sm:p-7">
             <h1 class="page-title" itemprop="headline"><?php echo themeText(fn () => $this->title()); ?></h1>

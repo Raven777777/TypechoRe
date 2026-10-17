@@ -490,6 +490,278 @@ function enhanceCommentForm() {
   }
 }
 
+/* -----------------------------------------------------------------------------
+ * <details> 的展开 / 收起动画
+ *
+ * 原生 <details> 是瞬间展开的, 没有中间态。这里补一段动画, 让回复框和窄屏导航菜单
+ * 「有来有回」:
+ *
+ *  - 文档流里的折叠块 (回复框): 高度 + 内边距 + 透明度一起过渡, 卡片是「长出来 /
+ *    缩回去」的, 而不是先跳一下再擦掉;
+ *  - 绝对定位的面板 (窄屏导航菜单): 不动高度 (内容会被压扁), 改成从上方轻轻浮出
+ *    的 pop 动画;
+ *  - 展开比收起慢一点, 用先快后慢的曲线; 收起短促一些, 不拖沓;
+ *  - prefers-reduced-motion 时直接切换。
+ *
+ * 用法: <details data-collapse> 里放一个 [data-collapse-body] 包裹层。
+ *     点 summary 交给 setCollapseOpen(); 点别处 / 按 Esc 由下面的委托监听收起。
+ * -------------------------------------------------------------------------- */
+
+/** 展开时长: 稍长, 让卡片「长出来」的过程看得见 */
+const COLLAPSE_OPEN_DURATION = 260;
+/** 收起时长: 短一点, 收起不该比展开还拖 */
+const COLLAPSE_CLOSE_DURATION = 190;
+/** 展开曲线: 先快后慢 (expo-out), 末尾稳稳停住 */
+const COLLAPSE_OPEN_EASING = 'cubic-bezier(.19,1,.22,1)';
+/** 收起曲线: 均匀加速, 收得干脆 */
+const COLLAPSE_CLOSE_EASING = 'cubic-bezier(.4,0,.55,1)';
+/** 回复面板浮层的展开时长: 只做淡入 + 上浮, 不必拖 */
+const FLOAT_OPEN_DURATION = 200;
+/** 回复面板浮层的收起时长 */
+const FLOAT_CLOSE_DURATION = 150;
+/** 点了就算「打开」的触发器: 收起逻辑要先让开, 否则会白闪一下 */
+const COLLAPSE_TRIGGER_SELECTOR = 'summary, [onclick*="TypechoComment.reply"], .comment-reply a';
+/** 回复面板浮层的根节点 id (回复模式下面板搬进去, 覆盖页面而不挤动正文) */
+const RESPOND_LAYER_ID = 'respond-layer';
+
+function collapseBodyOf(details) {
+  return details.querySelector(':scope > [data-collapse-body]');
+}
+
+/** 取元素某个盒模型属性的像素值 (拿不到就算 0) */
+function pxValue(element, property) {
+  const value = Number.parseFloat(window.getComputedStyle(element)[property]);
+
+  return Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * 带动画地展开 / 收起一个折叠块
+ *
+ * @param {HTMLDetailsElement} details
+ * @param {boolean} shouldOpen
+ * @param {{instant?: boolean}} [options]
+ */
+function setCollapseOpen(details, shouldOpen, options) {
+  const body = collapseBodyOf(details);
+
+  if (!body) {
+    details.open = shouldOpen;
+    return;
+  }
+
+  /* 连点两次: 掐掉上一次没走完的动画, 从当前状态重新开始 */
+  body.getAnimations?.().forEach((animation) => animation.cancel());
+  details.getAnimations?.().forEach((animation) => animation.cancel());
+
+  const instant = !!options?.instant || prefersReducedMotion();
+
+  if (instant) {
+    body.style.removeProperty('overflow');
+    details.open = shouldOpen;
+
+    if (!shouldOpen) {
+      details.dispatchEvent(new CustomEvent('collapse:closed'));
+    }
+
+    return;
+  }
+
+  if (!shouldOpen && !details.open) {
+    return;
+  }
+
+  /* 绝对定位的面板 (窄屏导航菜单) 不能靠改高度展开: 内容会被压扁。
+     这类面板改成 pop: 整块从上方轻轻浮出 (只做位移 + 淡入, 不缩放)。 */
+  const pop = 'absolute' === window.getComputedStyle(body).position;
+
+  /* 回复浮层里的面板: 卡片是「弹出来」的, 不做高度动画 —— 从中间长出来又拖又吵。
+     只淡入 + 一点点上浮, 收起时原路退回。 */
+  const floating = details.classList.contains('respond-floating');
+
+  /* 展开要先打开 (才能量到真实尺寸), 收起要等动画走完再关 (关早了内容会先消失) */
+  if (shouldOpen) {
+    details.open = true;
+  }
+
+  const duration = shouldOpen ? COLLAPSE_OPEN_DURATION : COLLAPSE_CLOSE_DURATION;
+  const easing = shouldOpen ? COLLAPSE_OPEN_EASING : COLLAPSE_CLOSE_EASING;
+
+  let animation;
+  let paddingAnimation = null;
+
+  if (floating) {
+    const backdrop = details
+      .closest(`#${RESPOND_LAYER_ID}`)
+      ?.querySelector('[data-respond-backdrop]');
+
+    if (shouldOpen) {
+      /* 连点两次 (淡出还没走完又打开): 把遮罩的动画掐掉, 而不是让它停在 opacity: 0 */
+      backdrop?.getAnimations().forEach((running) => running.cancel());
+    } else {
+      /* 遮罩跟着卡片一起淡出: 等 collapse:closed 再整块 remove 的话,
+         背景模糊是「啪」地一下消失的 */
+      backdrop?.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: FLOAT_CLOSE_DURATION,
+        easing: 'ease-out',
+        fill: 'forwards',
+      });
+    }
+
+    animation = details.animate(
+      shouldOpen
+        ? [
+          { opacity: 0, transform: 'translateY(14px)' },
+          { opacity: 1, transform: 'none' },
+        ]
+        : [
+          { opacity: 1, transform: 'none' },
+          { opacity: 0, transform: 'translateY(10px)' },
+        ],
+      { duration: shouldOpen ? FLOAT_OPEN_DURATION : FLOAT_CLOSE_DURATION, easing: 'ease-out' }
+    );
+  } else if (pop) {
+    animation = body.animate(
+      shouldOpen
+        ? [
+          { opacity: 0, transform: 'translateY(-8px)' },
+          { opacity: 1, transform: 'none' },
+        ]
+        : [
+          { opacity: 1, transform: 'none' },
+          { opacity: 0, transform: 'translateY(-8px)' },
+        ],
+      { duration, easing }
+    );
+  } else {
+    const height = body.getBoundingClientRect().height;
+    /* 卡片的内边距在 details 上 (.respond[open]), 标题与表单之间的间距在 body 的
+       padding-top 上: 只缩高度的话这些内边距会在最后一帧「啪」地消失 (box-sizing 是
+       border-box, 高度到 0 也还留着内边距)。所以高度和内边距走同一条曲线。 */
+    const padTop = pxValue(details, 'paddingTop');
+    const padBottom = pxValue(details, 'paddingBottom');
+    const bodyPadTop = pxValue(body, 'paddingTop');
+
+    if (!height) {
+      details.open = shouldOpen;
+      return;
+    }
+
+    paddingAnimation = details.animate(
+      shouldOpen
+        ? [
+          { paddingTop: '0px', paddingBottom: '0px' },
+          { paddingTop: `${padTop}px`, paddingBottom: `${padBottom}px` },
+        ]
+        : [
+          { paddingTop: `${padTop}px`, paddingBottom: `${padBottom}px` },
+          { paddingTop: '0px', paddingBottom: '0px' },
+        ],
+      { duration, easing }
+    );
+
+    /* 只在动画期间裁切: 回复框里的表情面板是绝对定位的, 常驻 overflow: hidden
+       会把它连同工具条的弹出部分一起裁掉 */
+    body.style.overflow = 'hidden';
+    animation = body.animate(
+      shouldOpen
+        ? [
+          { height: '0px', paddingTop: '0px', opacity: 0 },
+          { height: `${height}px`, paddingTop: `${bodyPadTop}px`, opacity: 1 },
+        ]
+        : [
+          { height: `${height}px`, paddingTop: `${bodyPadTop}px`, opacity: 1 },
+          { height: '0px', paddingTop: '0px', opacity: 0 },
+        ],
+      { duration, easing }
+    );
+  }
+
+  const finish = () => {
+    body.style.removeProperty('overflow');
+    paddingAnimation?.cancel();
+  };
+
+  /* 收起完成的通知: 回复面板靠它把状态也复位 (parent 字段 / 占位节点 / 浮层) */
+  const announceClosed = () => details.dispatchEvent(new CustomEvent('collapse:closed'));
+
+  if (shouldOpen) {
+    animation.finished.then(finish).catch(finish);
+    return;
+  }
+
+  /* 收起要等动画走完才真正关掉, 关早了内容会先消失 */
+  animation.finished.then(() => {
+    finish();
+    details.open = false;
+    announceClosed();
+  }).catch(finish);
+}
+
+/** 除了 keep 以外, 把开着的折叠块都收起来 */
+function closeCollapses(keep) {
+  document.querySelectorAll('details[data-collapse][open]').forEach((details) => {
+    if (details !== keep) {
+      setCollapseOpen(details, false);
+    }
+  });
+}
+
+/* 点「写下你的想法」胶囊时也要把面板搬进浮层 (和回复走同一套弹窗);
+   由 enhanceCommentBox 在拿到 respond 后赋值, 没评论框时保持 null */
+let openRespondFromSummary = null;
+
+/* 点击 summary: 接管原生 toggle, 换成带动画的版本 (事件委托, 只需注册一次) */
+document.addEventListener('click', (event) => {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+
+  /* 标题行里的链接 / 控件 (「取消回复」等) 有自己的动作, 不要顺带折叠 */
+  if (event.target.closest('a, button, input, textarea, select, label')) {
+    return;
+  }
+
+  const summary = event.target.closest('summary');
+  const details = summary?.parentElement;
+
+  if (!details || 'DETAILS' !== details.tagName || !details.hasAttribute('data-collapse')) {
+    return;
+  }
+
+  event.preventDefault();
+  const willOpen = !details.open;
+
+  closeCollapses(details);
+
+  /* 主评论框和回复框用同一个浮层弹窗: 胶囊在列表上方, 展开时版面不会跟着跳 */
+  if (willOpen) {
+    openRespondFromSummary?.(details);
+  }
+
+  setCollapseOpen(details, willOpen);
+}, true);
+
+/* 点别处自动收起: 回复框开着的时候, 点空白处就该收回去 */
+document.addEventListener('pointerdown', (event) => {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+
+  if (event.target.closest(COLLAPSE_TRIGGER_SELECTOR) || event.target.closest('details[data-collapse][open]')) {
+    return;
+  }
+
+  closeCollapses(null);
+}, true);
+
+/* Esc 也能收起 (窄屏导航菜单开了以后尤其顺手) */
+document.addEventListener('keydown', (event) => {
+  if ('Escape' === event.key) {
+    closeCollapses(null);
+  }
+});
+
 /**
  * 评论框: 自适应高度 + Markdown 工具条 + 表情面板 + 回复/取消回复
  */
@@ -507,6 +779,62 @@ function enhanceCommentBox() {
   const respond = (form.dataset.respondId && document.getElementById(form.dataset.respondId))
     || comments.querySelector('.respond');
   const cancelLink = comments.querySelector('#cancel-comment-reply-link');
+
+  /* 上一条页面留下的浮层 (切页时面板还在浮层里) 直接丢掉: 新页面有自己的那一份 */
+  document.querySelectorAll(`#${RESPOND_LAYER_ID}`).forEach((layer) => {
+    if (!respond || !layer.contains(respond)) {
+      layer.remove();
+    }
+  });
+
+  /* 标题行文字: 回复某条评论时换成「回复 @昵称」, 取消时还原 */
+  const titleLabel = respond ? respond.querySelector('[data-respond-title]') : null;
+  const defaultTitle = titleLabel ? titleLabel.textContent : '';
+
+  const setRespondTitle = (author) => {
+    if (!titleLabel) {
+      return;
+    }
+
+    titleLabel.textContent = author ? `${form.dataset.replyText || '回复'} @${author}` : defaultTitle;
+  };
+
+  /* 回复面板的浮层
+   *
+   * 回复某条评论时面板整块搬进这里 (position: fixed): 覆盖在页面上, 后面的评论
+   * 不再被推下去, 长列表里也不会把面板挤到屏幕外面。浮层只在回复模式存在,
+   * 面板搬回原位就整块撤掉。 */
+  const layerFor = () => {
+    let layer = document.getElementById(RESPOND_LAYER_ID);
+
+    if (layer) {
+      return layer;
+    }
+
+    layer = document.createElement('div');
+    layer.id = RESPOND_LAYER_ID;
+    layer.className = 'respond-layer';
+    layer.setAttribute('role', 'dialog');
+    layer.setAttribute('aria-modal', 'true');
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'respond-layer-backdrop';
+    backdrop.setAttribute('data-respond-backdrop', '');
+    layer.appendChild(backdrop);
+
+    document.body.appendChild(layer);
+
+    return layer;
+  };
+
+  /* 面板搬走以后浮层就是空的: 整块撤掉, 别留一个盖住页面的空壳 */
+  const dropLayer = () => {
+    const layer = document.getElementById(RESPOND_LAYER_ID);
+
+    if (layer && !layer.querySelector('.respond')) {
+      layer.remove();
+    }
+  };
 
   /** 取 #respond-xxx 里的隐藏 parent 字段 (没有就按需创建) */
   const parentField = (create) => {
@@ -542,7 +870,12 @@ function enhanceCommentBox() {
 
     if (!holder.hasAttribute('data-respond-holder')) {
       holder.setAttribute('data-respond-holder', '');
-      holder.hidden = true;
+      holder.setAttribute('aria-hidden', 'true');
+      holder.removeAttribute('hidden');
+      /* 面板搬进浮层时原位不能空着: 留一颗同样的虚线胶囊,
+         否则看起来像「胶囊被点没了」, 版式也会跟着塔一下。 */
+      holder.className = 'respond-placeholder';
+      holder.textContent = defaultTitle;
     }
 
     return holder;
@@ -557,24 +890,88 @@ function enhanceCommentBox() {
   const resetRespond = () => {
     const parent = parentField(false);
     const holder = comments.querySelector('[data-respond-holder]');
+    const wasFloating = !!(respond && respond.classList.contains('respond-floating'));
 
     if (parent) {
       parent.remove();
     }
 
+    if (respond && 'open' in respond) {
+      if (wasFloating && respond.open) {
+        /* 直接点「取消回复」时面板还在浮层里: 先在浮层里淡出, 淡完再送回原位。
+           先搬回去再收起的话, 真的会在页脚原位「缩一下」。 */
+        setCollapseOpen(respond, false);
+        return;
+      }
+
+      /* 收起动画已经走完 (collapse:closed 那条路) 或压根没开: 直接归位, 不再动画 */
+      respond.open = false;
+    }
+
+    if (respond) {
+      /* 先摸掉浮层状态, 再收起 —— 收起时发的 collapse:closed 就不会绕回来 */
+      respond.classList.remove('respond-floating');
+    }
+
+    setRespondTitle('');
+
+    comments.querySelectorAll('.is-reply-target').forEach((element) => {
+      element.classList.remove('is-reply-target');
+    });
+
     if (holder && holder.parentNode) {
       holder.parentNode.insertBefore(respond, holder);
       holder.remove();
+    } else if (respond && respond.closest(`#${RESPOND_LAYER_ID}`)) {
+      /* 占位节点丢了也不能把面板留在浮层里: 放回回执前面 (胶囊就在列表与页码之间) */
+      const notice = comments.querySelector('#notice-box');
+
+      if (notice) {
+        comments.insertBefore(respond, notice);
+      } else {
+        comments.appendChild(respond);
+      }
     }
+
+    dropLayer();
 
     if (cancelLink) {
       cancelLink.style.display = 'none';
     }
 
-    if (respond && 'open' in respond) {
-      respond.open = false;
-    }
+    /* 这里不再调 setCollapseOpen: 已经在上面直接关掉了, 再走一次动画就成了「归位后再缩一下」 */
   };
+
+  /* 点「写下你的想法」胶囊: 和「回复」共用同一个浮层, 顺手先钉好占位节点,
+     收起时 resetRespond 才能准确把它送回去。 */
+  openRespondFromSummary = (details) => {
+    if (!respond || details !== respond) {
+      return false;
+    }
+
+    /* 已经在浮层里 (正在回复): 不重复搬, 交给 setCollapseOpen 收起 */
+    if (respond.classList.contains('respond-floating')) {
+      return true;
+    }
+
+    holderFor();
+    layerFor().appendChild(respond);
+    respond.classList.add('respond-floating');
+    setRespondTitle('');
+
+    return true;
+  };
+
+  /* 不管怎么合上的 (点别处 / 按 Esc / 点标题行), 都要把回复状态一并复位:
+     否则下一个写评论的人会被当成在回复上一条评论。 */
+  if (respond && !respond.dataset.boundClosed) {
+    respond.dataset.boundClosed = '1';
+    respond.addEventListener('collapse:closed', () => {
+      if (respond.classList.contains('respond-floating')) {
+        resetRespond();
+      }
+    });
+  }
 
   /* 表单内容与评论内容一般长, 按内容高度自适应; 太长时退回 auto */
   const autoGrow = () => {
@@ -707,28 +1104,43 @@ function enhanceCommentBox() {
         /* preventDefault 在前, 后面任何一步失败都不会变成整页跳转 */
         event.preventDefault();
 
-        const match = /reply\(\s*'([^']+)'\s*,\s*(\d+)/.exec(link.getAttribute('onclick') || '') || [];
-        const target = match[1] ? document.getElementById(match[1]) : null;
-        const coid = match[2] || '';
+        /* 优先用 data-reply-*: 内核对 theId 做的是 JSON 编码 (双引号), 从 onclick
+           里用单引号正则去抠会抠空, parent 就传成了空串 —— 回复变成新的顶层
+           评论。onclick 的正则只作为旧模板的兜底 (引号两种都认)。 */
+        const fallback = /reply\(\s*['"][^'"]*['"]\s*,\s*(\d+)/.exec(link.getAttribute('onclick') || '') || [];
+        const coid = link.dataset.replyTo || fallback[1] || '';
+        /* 回复中的那条评论加个标记: 面板浮在上面, 得看得出在回谁 */
+        const target = link.dataset.replyTarget
+          ? document.getElementById(link.dataset.replyTarget)
+          : null;
         const parent = parentField(true);
 
         if (parent) {
           parent.value = coid;
         }
 
+        /* 先钉好占位节点再搬走评论框, 这样「取消回复」一定能把它送回原位 */
+        holderFor();
+
+        comments.querySelectorAll('.is-reply-target').forEach((element) => {
+          element.classList.remove('is-reply-target');
+        });
+
         if (target) {
-          /* 先钉好占位节点再搬走评论框, 这样「取消回复」一定能把它送回原位 */
-          holderFor();
-          target.appendChild(respond);
-        } else {
-          /* 找不到评论节点时退回「搬到评论列表末尾」, 至少不丢回复动作 */
-          holderFor();
-          comments.appendChild(respond);
+          target.classList.add('is-reply-target');
         }
 
-        /* 回复框默认是收起的 <details>: 点「回复」时展开成卡片 */
-        if ('open' in respond) {
-          respond.open = true;
+        if (respond) {
+          /* 搬进浮层: 覆盖在页面上, 而不是插进那条评论里把后面的内容顶下去 */
+          layerFor().appendChild(respond);
+          respond.classList.add('respond-floating');
+          setRespondTitle(link.dataset.replyAuthor || '');
+        }
+
+        /* 回复框默认是收起的 <details>: 点「回复」时带动画展开成卡片。
+           已经在回复别的评论 (卡片开着) 时不重播 —— 那会白闪一下。 */
+        if ('open' in respond && !respond.open) {
+          setCollapseOpen(respond, true);
         }
 
         if (cancelLink) {
@@ -741,6 +1153,9 @@ function enhanceCommentBox() {
     });
 
     if (cancelLink) {
+      /* 核心的 cancelReply() 会把卡片直接搬回页脚原位 —— 淡出就变成「底部缩一下」。
+         这个按钮由下面的处理接管, 所以拆掉行内 onclick。 */
+      cancelLink.removeAttribute('onclick');
       bindOnce(cancelLink, 'Cancel', (event) => {
         event.preventDefault();
 
@@ -851,8 +1266,11 @@ function enhanceCommentBox() {
         comments.appendChild(fragment);
       }
 
-      /* 评论框搬回原位: 保留用户输入 / 焦点 / 回复状态 */
-      if (previousRespond) {
+      /* 评论框搬回原位: 保留用户输入 / 焦点 / 回复状态。
+         正在浮层里写的时候不要动它 —— 浮层会瞬间空掉, 面板也会被拽回文档流。 */
+      const respondIsFloating = !!(previousRespond && previousRespond.classList.contains('respond-floating'));
+
+      if (previousRespond && !respondIsFloating) {
         const after = comments.querySelector('.comment-list') || comments.querySelector('.page-navigator');
 
         if (after) {
@@ -864,15 +1282,20 @@ function enhanceCommentBox() {
         }
       }
 
-      if (previousHolder && previousHolder.parentNode === null && previousRespond) {
+      if (previousHolder && previousHolder.parentNode === null && previousRespond && !respondIsFloating) {
         previousRespond.after(previousHolder);
       }
 
       /* 重铺那一支会把 #notice-box 一起摘下来 (它是我们自己管的节点, 抓回来的那份被
          跳过), 放回回复框后面, 否则刚显示出来的提交回执会跟着消失。 */
       if (noticeBox && noticeBox.parentNode === null) {
+        const pager = comments.querySelector('.page-navigator');
+
         if (previousRespond && previousRespond.parentNode === comments) {
           previousRespond.after(noticeBox);
+        } else if (pager) {
+          /* 面板在浮层里: 回执就占用它原本的位置 —— 落在页码前面, 而不是被挤到页码后面 */
+          comments.insertBefore(noticeBox, pager);
         } else {
           comments.appendChild(noticeBox);
         }
@@ -901,89 +1324,89 @@ function enhanceCommentBox() {
   if (!form.dataset.boundSubmit) {
     form.dataset.boundSubmit = '1';
     form.addEventListener('submit', async (event) => {
-    /* 先拦下来: 后面无论成功失败都不会变成整页跳转 */
-    event.preventDefault();
+      /* 先拦下来: 后面无论成功失败都不会变成整页跳转 */
+      event.preventDefault();
 
-    clearNotice();
-    setBusy(true);
+      clearNotice();
+      setBusy(true);
 
-    try {
-      const response = await fetch(form.getAttribute('action') || window.location.href, {
-        method: 'POST',
-        body: new FormData(form),
-        credentials: 'same-origin',
-        redirect: 'follow',
-        headers: { 'X-Requested-With': 'fetch' }
-      });
+      try {
+        const response = await fetch(form.getAttribute('action') || window.location.href, {
+          method: 'POST',
+          body: new FormData(form),
+          credentials: 'same-origin',
+          redirect: 'follow',
+          headers: { 'X-Requested-With': 'fetch' }
+        });
 
-      if (!response.ok) {
-        showNotice(SUBMIT_FAILED, NOTICE_ERROR_CLASS);
-        return;
-      }
-
-      /* ---- 成败判定 ----
-         内核 (var/Widget/Feedback.php:260-267) 校验失败时写一条 notice cookie 然后
-         302 回原页; 成功时不写 notice, 直接跳到评论锚点。
-         以前这里只看 response.ok —— 而 goBack 也是 200, 于是邮箱格式错一次就被
-         当成成功, 接着 textarea.value = '' 把用户写好的整段评论清掉了。
-
-         注意不能读 __typecho_remember_text / __typecho_unapproved_comment:
-         这两个是 HttpOnly (var/Typecho/Cookie.php:46), document.cookie 看不见。
-         __typecho_notice 是内核显式传 false 写的, 才是前端能拿到的那一个。 */
-      const failed = /(?:^|;\s*)[^;=]*__typecho_notice=/.test(document.cookie);
-
-      /* enhanceNotice() 会读走并清掉 notice cookie —— 判定要先做 */
-      enhanceNotice();
-
-      if (failed) {
-        /* 服务端已经给出具体原因 (邮箱不合法 / 含特殊字符 ...), 没有才兜一句 */
-        if (!noticeBox || noticeBox.hidden || !noticeBox.textContent.trim()) {
+        if (!response.ok) {
           showNotice(SUBMIT_FAILED, NOTICE_ERROR_CLASS);
+          return;
         }
 
-        /* 正文与表单值原样留着: 用户只需改错的那一项 */
-        textarea.focus();
-        return;
+        /* ---- 成败判定 ----
+           内核 (var/Widget/Feedback.php:260-267) 校验失败时写一条 notice cookie 然后
+           302 回原页; 成功时不写 notice, 直接跳到评论锚点。
+           以前这里只看 response.ok —— 而 goBack 也是 200, 于是邮箱格式错一次就被
+           当成成功, 接着 textarea.value = '' 把用户写好的整段评论清掉了。
+
+           注意不能读 __typecho_remember_text / __typecho_unapproved_comment:
+           这两个是 HttpOnly (var/Typecho/Cookie.php:46), document.cookie 看不见。
+           __typecho_notice 是内核显式传 false 写的, 才是前端能拿到的那一个。 */
+        const failed = /(?:^|;\s*)[^;=]*__typecho_notice=/.test(document.cookie);
+
+        /* enhanceNotice() 会读走并清掉 notice cookie —— 判定要先做 */
+        enhanceNotice();
+
+        if (failed) {
+          /* 服务端已经给出具体原因 (邮箱不合法 / 含特殊字符 ...), 没有才兜一句 */
+          if (!noticeBox || noticeBox.hidden || !noticeBox.textContent.trim()) {
+            showNotice(SUBMIT_FAILED, NOTICE_ERROR_CLASS);
+          }
+
+          /* 正文与表单值原样留着: 用户只需改错的那一项 */
+          textarea.focus();
+          return;
+        }
+
+        textarea.value = '';
+        autoGrow();
+        await refreshComments(window.location.href, '');
+
+        /* 审核中的评论会以「您的评论正等待审核!」的 <em> 显示 (内核
+           var/Widget/Comments/Archive.php:373), 拿最新一条 (id 最大) 判断: 页面上
+           可能本来就有其他待审评论, 只看 class 会不会分。 */
+        const bodies = Array.from(comments.querySelectorAll('.comment-body[id]'));
+        const newestBody = bodies.reduce((latest, node) => {
+          const id = Number((node.id.match(/\d+$/) || [0])[0]);
+          const latestId = latest ? Number((latest.id.match(/\d+$/) || [0])[0]) : -1;
+          return id > latestId ? node : latest;
+        }, null);
+        const waiting = !!newestBody?.querySelector('.comment-awaiting-moderation');
+
+        if (!noticeBox || noticeBox.hidden) {
+          showNotice(
+            waiting
+              ? (form.getAttribute('data-waiting-text') || '评论已提交, 通过审核后显示。')
+              : (form.getAttribute('data-posted-text') || '评论已发布。'),
+            NOTICE_INFO_CLASS
+          );
+        }
+
+        if (!waiting && newestBody) {
+          /* 滚到最后一条评论: 刚发出去的那条就在末尾或它的父评论下面 */
+          newestBody.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' });
+        }
+
+        /* 提交完成后收起回复框 (它只在「回复 / 添加新回复」时出现);
+           回执写在回复框外面的 #notice-box 里, 收起后依然看得见。 */
+        resetRespond();
+        autoGrow();
+      } catch (error) {
+        showNotice(SUBMIT_FAILED, NOTICE_ERROR_CLASS);
+      } finally {
+        setBusy(false);
       }
-
-      textarea.value = '';
-      autoGrow();
-      await refreshComments(window.location.href, '');
-
-      /* 审核中的评论会以「您的评论正等待审核!」的 <em> 显示 (内核
-         var/Widget/Comments/Archive.php:373), 拿最新一条 (id 最大) 判断: 页面上
-         可能本来就有其他待审评论, 只看 class 会不会分。 */
-      const bodies = Array.from(comments.querySelectorAll('.comment-body[id]'));
-      const newestBody = bodies.reduce((latest, node) => {
-        const id = Number((node.id.match(/\d+$/) || [0])[0]);
-        const latestId = latest ? Number((latest.id.match(/\d+$/) || [0])[0]) : -1;
-        return id > latestId ? node : latest;
-      }, null);
-      const waiting = !!newestBody?.querySelector('.comment-awaiting-moderation');
-
-      if (!noticeBox || noticeBox.hidden) {
-        showNotice(
-          waiting
-            ? (form.getAttribute('data-waiting-text') || '评论已提交, 通过审核后显示。')
-            : (form.getAttribute('data-posted-text') || '评论已发布。'),
-          NOTICE_INFO_CLASS
-        );
-      }
-
-      if (!waiting && newestBody) {
-        /* 滚到最后一条评论: 刚发出去的那条就在末尾或它的父评论下面 */
-        newestBody.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' });
-      }
-
-      /* 提交完成后收起回复框 (它只在「回复 / 添加新回复」时出现);
-         回执写在回复框外面的 #notice-box 里, 收起后依然看得见。 */
-      resetRespond();
-      autoGrow();
-    } catch (error) {
-      showNotice(SUBMIT_FAILED, NOTICE_ERROR_CLASS);
-    } finally {
-      setBusy(false);
-    }
     });
   }
 }
@@ -1022,6 +1445,9 @@ function enhanceCommentAuthors() {
 
 /** 每次页面内容替换后需要重新执行的增强 */
 function enhancePage() {
+  /* 切页时把上一条页面留下的回复浮层清掉: 面板是 body 的子节点, 不会被 swup 换掉 */
+  document.querySelectorAll(`#${RESPOND_LAYER_ID}`).forEach((layer) => layer.remove());
+
   /* 先分词再装饰: 语言徽标与复制按钮都按 <code> 的类名 / textContent 取, 顺序不影响结果,
      但先高亮可以让复制按钮一出现就对应最终 DOM。 */
   highlightCodeBlocks();
@@ -1034,12 +1460,13 @@ function enhancePage() {
   enhanceCommentBox();
 }
 
-/* 移动端导航: 点击链接后收起 (事件委托, 只需注册一次) */
+/* 移动端导航: 点击里面的链接后带动画收起 (事件委托, 只需注册一次) */
 document.addEventListener('click', (event) => {
-  const link = event.target.closest('a');
+  const link = event.target instanceof Element ? event.target.closest('a') : null;
   const details = link && link.closest('details[data-nav-collapse]');
+
   if (details) {
-    details.open = false;
+    setCollapseOpen(details, false);
   }
 });
 
