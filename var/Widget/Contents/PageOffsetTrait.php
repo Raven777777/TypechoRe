@@ -33,8 +33,13 @@ trait PageOffsetTrait
         int $authorId = 0,
         int $pageSize = 20
     ): int {
+        /** 列名会拼进 SQL, 只能取白名单内的值(否则调用方传入用户输入就成了注入点) */
+        if (!in_array($column, ['cid', 'created', 'uid', 'mid'], true)) {
+            $column = 'cid';
+        }
+
         $select = $this->db->select(['COUNT(table.contents.cid)' => 'num'])->from('table.contents')
-            ->where("table.contents.{$column} > {$offset}")
+            ->where("table.contents.{$column} > " . (int) $offset)
             ->where(
                 "table.contents.type = ? OR (table.contents.type = ? AND table.contents.parent = ?)",
                 $type,

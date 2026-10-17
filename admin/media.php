@@ -74,7 +74,7 @@ include 'file-upload-js.php';
                 $('.typecho-attachment-photo').attr('src', attachment.url + '?' + Math.random());
             }
 
-            $('#file-list li').text('<?php _e('文件 %s 已经替换'); ?>'.replace('%s', attachment.title))
+            $('#file-list li').text(<?php echo _je('文件 %s 已经替换'); ?>.replace('%s', attachment.title))
                 .effect('highlight', 1000, function () {
                     $(this).remove();
                 });

@@ -160,6 +160,9 @@ class SQLite implements Adapter
     #[\Override]
     public function quoteValue($string): string
     {
+        /** SQLite 的 C 接口在 \0 处截断字符串, 先剥掉 NUL, 避免「abc\0x」被当成「abc」参与比较 */
+        $string = str_replace("\0", '', (string) $string);
+
         return '\'' . str_replace('\'', '\'\'', $string) . '\'';
     }
 

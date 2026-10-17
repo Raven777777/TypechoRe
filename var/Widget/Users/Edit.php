@@ -241,10 +241,17 @@ class Edit extends Users implements ActionInterface
             unset($user['password']);
         } else {
             $user['password'] = Common::hashPassword($user['password']);
+            // 改密码时作废旧 authCode, 让该用户其它已登录会话失效
+            $user['authCode'] = '';
         }
 
         /** 更新数据 */
         $this->update($user, $this->db->sql()->where('uid = ?', $this->request->get('uid')));
+
+        /** 改的是自己的密码时重新签发本机凭证, 避免自己也被踢下线 */
+        if (isset($user['password']) && (int) $this->request->get('uid') === (int) $this->user->uid) {
+            $this->user->simpleLogin((int) $this->user->uid, false, 0);
+        }
 
         /** 设置高亮 */
         Notice::alloc()->highlight('user-' . $this->request->get('uid'));
@@ -286,6 +293,13 @@ class Edit extends Users implements ActionInterface
             }
 
             if ($this->delete($this->db->sql()->where('uid = ?', $user))) {
+                /** 同步删除该用户的 Passkey: 否则账号删了, 凭证依旧可以登录 */
+                try {
+                    $this->db->query($this->db->delete('table.passkeys')->where('uid = ?', $user));
+                } catch (\Typecho\Db\Exception $e) {
+                    /** 表可能尚未创建 (站点从未使用过 Passkey), 忽略即可 */
+                }
+
                 $deleteCount++;
             }
         }

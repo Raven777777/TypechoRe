@@ -96,7 +96,7 @@ $(document).ready(function () {
     }
 
     button.on('click', function () {
-        button.prop('disabled', true).text('<?php _e('请在设备上确认'); ?>');
+        button.prop('disabled', true).text(<?php echo _je('请在设备上确认'); ?>);
         fetch(passkeyUrl + '?do=get-options', {credentials: 'same-origin'})
             .then(function (response) { return response.json(); })
             .then(function (data) {
@@ -122,7 +122,7 @@ $(document).ready(function () {
             })
             .catch(function (error) {
                 alert(error.message || 'Passkey 登录失败');
-                button.prop('disabled', false).text('<?php _e('使用 Passkey 登录'); ?>');
+                button.prop('disabled', false).text(<?php echo _je('使用 Passkey 登录'); ?>);
             });
     });
 });

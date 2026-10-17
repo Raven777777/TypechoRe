@@ -377,7 +377,13 @@ class Query
             $this->sqlPreBuild['order'] .= ', ';
         }
 
-        $this->sqlPreBuild['order'] .= $this->filterColumn($orderBy) . (empty($sort) ? null : ' ' . $sort);
+        /** 方向只允许 ASC / DESC, 避免把外部传入的字符串直接拼进 SQL */
+        $sort = strtoupper(trim($sort));
+        if (Db::SORT_ASC !== $sort && Db::SORT_DESC !== $sort) {
+            $sort = '';
+        }
+
+        $this->sqlPreBuild['order'] .= $this->filterColumn($orderBy) . ('' === $sort ? '' : ' ' . $sort);
         return $this;
     }
 

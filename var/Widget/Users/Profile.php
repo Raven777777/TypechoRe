@@ -308,11 +308,14 @@ class Profile extends Users implements ActionInterface
 
         $password = Common::hashPassword((string)$this->request->password);
 
-        /** 更新数据 */
+        /** 更新数据 (同时作废旧 authCode, 让其它已登录会话失效) */
         $this->update(
-            ['password' => $password],
+            ['password' => $password, 'authCode' => ''],
             $this->db->sql()->where('uid = ?', $this->user->uid)
         );
+
+        /** 重新签发本机凭证, 避免自己也被踢下线 */
+        $this->user->simpleLogin((int) $this->user->uid, false, 0);
 
         /** 设置高亮 */
         Notice::alloc()->highlight('user-' . $this->user->uid);

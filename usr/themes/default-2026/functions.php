@@ -650,12 +650,19 @@ function themeFooterHtml(): string
         return '';
     }
 
-    $html = preg_replace('#<(script|style|iframe|object|embed)\b[^>]*>.*?</\1\s*>#is', '', $html) ?? '';
-    $html = preg_replace('#<(script|style|iframe|object|embed)\b[^>]*/?>#is', '', $html) ?? '';
-    $html = preg_replace('#\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#is', '', $html) ?? '';
-    $html = preg_replace('#(href|src)\s*=\s*("|\')\s*javascript:[^"\']*\2#is', '$1="#"', $html) ?? '';
-
-    return $html;
+    /**
+     * 白名单式过滤: 正则「删事件属性 / javascript:」的写法总能被 `<svg/onload=>`
+     * 或未加引号的 href 绕过, 这里改成标签+属性白名单, 链接协议由
+     * Common::stripTags() 内部统一校验 (只放行 http/https/mailto/相对地址)。
+     */
+    return \Typecho\Common::stripTags(
+        $html,
+        '<a href="" title="" rel="" target="">'
+        . '<b></b><strong></strong><i></i><em></em><u></u><s></s><del></del><ins></ins>'
+        . '<code></code><pre></pre><br><p></p><span></span><small></small><sub></sub><sup></sup>'
+        . '<ul></ul><ol></ol><li></li><blockquote></blockquote><mark></mark>'
+        . '<img src="" alt="" title="" width="" height="">'
+    );
 }
 
 /**
@@ -1726,8 +1733,10 @@ function threadedComments(\Widget\Comments\Archive $comments, \Typecho\Config $o
 
     /* 回复链接跟在时间后面, 靠 ml-auto 推到行尾 —— 独占一行的话每条评论白白高出 30px */
     echo '<a class="c-reply" href="', themeEsc($base . '?replyTo=' . $coid . '#' . $respondId),
-        '" rel="nofollow" onclick="return TypechoComment.reply(\'', themeEsc($theId), '\', ', $coid,
-        ', this)">', themeEsc(_t('回复')), '</a>';
+        '" rel="nofollow" onclick="return TypechoComment.reply(',
+        /** JS 字符串用 JSON 编码后再做 HTML 转义, 不能用 themeEsc 直接拼进单引号 */
+        themeEsc((string) json_encode((string) $theId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)),
+        ', ', $coid, ', this)">', themeEsc(_t('回复')), '</a>';
 
     echo '</header>';
 
@@ -1773,8 +1782,10 @@ function themeCommentResolveDeferred(string $html): string
 {
     $store = $GLOBALS['themeThreadDefer'] ?? [];
     $guard = 0;
+    /** 层数上限跟实际待展开的块数挂钩, 不再用固定 10 层 (深层嵌套会留下字面占位符) */
+    $max = count($store) + 2;
 
-    while ([] !== $store && $guard++ < 10 && preg_match('/\x02DEFER\d+\x02/', $html, $match)) {
+    while ([] !== $store && $guard++ < $max && preg_match('/\x02DEFER\d+\x02/', $html, $match)) {
         $html = str_replace($match[0], (string) ($store[$match[0]] ?? ''), $html);
     }
 

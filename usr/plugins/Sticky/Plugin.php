@@ -77,7 +77,7 @@ class Plugin implements PluginInterface
             null,
             "<span style='color:red'>[置顶]</span>",
             '置顶标题的 html',
-            '这里的代码会自动插入置顶文章的标题后'
+            '纯文本部分会追加到置顶文章标题后, 原始 HTML 保存在 sticky_html 字段供主题使用'
         );
         $stickyHtml->input->setAttribute('rows', '7')->setAttribute('cols', '80');
         $form->addInput($stickyHtml);
@@ -124,19 +124,43 @@ class Plugin implements PluginInterface
         $db = Db::get();
         $page = (int) $archive->request->get('page', 1);
 
-        foreach ($stickyCids as $cid) {
-            $stickyPost = $cid ? $db->fetchRow($archive->select()->where('cid = ?', $cid)) : null;
+        /** 一次取回所有置顶文章, 不再按 cid 逐条查询 (N+1) */
+        $rows = $db->fetchAll($db->select()->from('table.contents')
+            ->where('table.contents.cid IN ?', $stickyCids)
+            ->where('table.contents.type = ?', 'post')
+            ->where('table.contents.status = ?', 'publish'));
 
-            if ($stickyPost) {
-                if (1 == $page) {
-                    // 首页 page.1 才会有置顶文章
-                    $stickyPost['title'] .= (string) $config->sticky_html;
-                    $archive->push($stickyPost);
+        $byCid = [];
+
+        foreach ($rows as $row) {
+            $byCid[(int) $row['cid']] = $row;
+        }
+
+        $stickyHtml = (string) $config->sticky_html;
+        /** 标题会被主题转义并写进 RSS, 所以只拼纯文本, 原始 HTML 单独提供给主题 */
+        $titleSuffix = trim((string) preg_replace('/\s+/u', ' ', strip_tags($stickyHtml)));
+
+        /** 按配置里的顺序输出置顶文章 */
+        foreach ($stickyCids as $cid) {
+            if (!isset($byCid[$cid])) {
+                continue;
+            }
+
+            $stickyPost = $byCid[$cid];
+
+            if (1 == $page) {
+                // 首页 page.1 才会有置顶文章
+                if ('' !== $titleSuffix) {
+                    $stickyPost['title'] .= ' ' . $titleSuffix;
                 }
 
-                // 使文章不重复
-                $select->where('table.contents.cid != ?', $cid);
+                $stickyPost['sticky'] = 1;
+                $stickyPost['sticky_html'] = $stickyHtml;
+                $archive->push($stickyPost);
             }
+
+            // 使文章不重复
+            $select->where('table.contents.cid != ?', $cid);
         }
     }
 
@@ -171,7 +195,7 @@ class Plugin implements PluginInterface
      * 解析配置里的 cid 列表
      *
      * @param \Typecho\Config $config
-     * @return array<int, string>
+     * @return int[]
      */
     private static function cids(\Typecho\Config $config): array
     {
@@ -181,6 +205,18 @@ class Plugin implements PluginInterface
             return [];
         }
 
-        return array_values(array_filter(explode(',', strtr($raw, ' ', ',')), static fn($cid) => '' !== trim($cid)));
+        /** 逗号/空白/全角逗号都当分隔符, 非数字项直接丢弃 */
+        $parts = preg_split('/[\s,，]+/u', $raw) ?: [];
+        $cids = [];
+
+        foreach ($parts as $part) {
+            $cid = (int) trim($part);
+
+            if ($cid > 0 && !in_array($cid, $cids, true)) {
+                $cids[] = $cid;
+            }
+        }
+
+        return $cids;
     }
 }

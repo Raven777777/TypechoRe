@@ -1202,7 +1202,8 @@ EOF;
         if ($this->options->commentsAntiSpam && $this->is('single')) {
             if ('' != $allows['antiSpam']) {
                 if (1 == $allows['antiSpam']) {
-                    $shuffled = Common::shuffleScriptVar($this->security->getToken($this->request->getRequestUrl()));
+                    // 这个 token 会被 JS 注入评论表单, 必须绑定到评论提交端点 (而不是当前页面)
+                    $shuffled = Common::shuffleScriptVar($this->security->getToken($this->commentUrl));
                     $header .= <<<EOF
 <script type="text/javascript">
 (function () {

@@ -23,6 +23,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 class Passkey extends BaseOptions implements ActionInterface
 {
     private const SESSION_KEY = '__typecho_passkey';
+    private const THROTTLE_KEY = '__typecho_passkey_fail';
     private static bool $tableReady = false;
 
     #[\Override]
@@ -65,8 +66,12 @@ class Passkey extends BaseOptions implements ActionInterface
                 default:
                     throw new WidgetException(_t('Passkey 请求不存在'), 404);
             }
+        } catch (WidgetException $e) {
+            $this->json(['success' => false, 'message' => $e->getMessage()]);
         } catch (\Throwable $e) {
-            $this->response->throwJson(['success' => false, 'message' => $e->getMessage()]);
+            /** SQL / WebAuthn 库 / 文件系统的内部错误不回显给未认证调用方 */
+            error_log('Passkey action error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => _t('Passkey 操作失败, 请稍后重试')]);
         }
     }
 
@@ -74,13 +79,26 @@ class Passkey extends BaseOptions implements ActionInterface
     {
         $user = $this->user;
         $rp = $this->webAuthn();
+
+        /** 已注册的凭证从注册选项中排除, 避免同一把钥匙被重复注册 */
+        $exclude = [];
+        $registered = $this->db->fetchAll($this->db->select('credential_id')
+            ->from('table.passkeys')->where('uid = ?', (int) $user->uid));
+        foreach ($registered as $item) {
+            if (!empty($item['credential_id'])) {
+                $exclude[] = $this->decode((string) $item['credential_id']);
+            }
+        }
+
         $args = $rp->getCreateArgs(
             (string) $user->uid,
             (string) $user->name,
             (string) ($user->screenName ?: $user->name),
             300,
             'required',
-            'required'
+            'required',
+            null,
+            $exclude
         );
 
         $_SESSION[self::SESSION_KEY] = [
@@ -143,6 +161,32 @@ class Passkey extends BaseOptions implements ActionInterface
     private function processGet(): void
     {
         $state = $this->getState('get');
+        $this->ensureTable();
+        $this->assertNotThrottled();
+
+        try {
+            $this->verifyAssertion($state);
+        } catch (WidgetException $e) {
+            if (429 === $e->getCode()) {
+                throw $e;
+            }
+            $this->recordFailure();
+            /** 统一错误信息: 不区分「凭证不存在」与「签名无效」, 避免被用来枚举有效凭证 */
+            throw new WidgetException(_t('Passkey 验证失败'), 401);
+        } catch (\Throwable $e) {
+            $this->recordFailure();
+            throw new WidgetException(_t('Passkey 验证失败'), 401);
+        }
+    }
+
+    /**
+     * 校验断言签名
+     *
+     * @param array $state getState() 返回的会话状态
+     * @throws WidgetException
+     */
+    private function verifyAssertion(array $state): void
+    {
         $data = $this->input();
         $credentialId = $this->decode($data['id'] ?? '');
         $encodedId = $this->encode($credentialId);
@@ -150,12 +194,17 @@ class Passkey extends BaseOptions implements ActionInterface
             ->where('credential_id = ?', $encodedId)->limit(1));
 
         if (!$row) {
-            throw new WidgetException(_t('Passkey 不存在'), 401);
+            throw new WidgetException(_t('Passkey 验证失败'), 401);
         }
 
+        /**
+         * userHandle 是浏览器回传的, 必须与凭证所属的 uid 一致;
+         * 否则拿别人的凭证也能登录到对方账号。
+         */
         $userHandle = $this->decode($data['userHandle'] ?? '');
+
         if ('' === $userHandle || !hash_equals((string) $row['uid'], $userHandle)) {
-            throw new WidgetException(_t('Passkey 用户标识无效'), 401);
+            throw new WidgetException(_t('Passkey 验证失败'), 401);
         }
 
         $rp = $this->webAuthn();
@@ -175,12 +224,51 @@ class Passkey extends BaseOptions implements ActionInterface
         ])->where('id = ?', $row['id']));
 
         unset($_SESSION[self::SESSION_KEY]);
+        $this->resetThrottle();
 
         // 与密码登录行为对齐: 勾选「下次自动登录」时写入持久化 Cookie (30 天),
         // 否则 expire=0 使用会话 Cookie, 重启浏览器后需重新登录
         $expire = !empty($data['remember']) ? 30 * 24 * 3600 : 0;
         $this->user->simpleLogin((int) $row['uid'], false, $expire);
         $this->json(['success' => true, 'redirect' => $this->options->adminUrl]);
+    }
+
+    /**
+     * 失败次数过多时拒绝请求 (session 内计数, 15 分钟窗口)
+     *
+     * @throws WidgetException
+     */
+    private function assertNotThrottled(): void
+    {
+        $fail = $_SESSION[self::THROTTLE_KEY] ?? null;
+
+        if (
+            is_array($fail) && (int) ($fail['count'] ?? 0) >= 10
+            && time() - (int) ($fail['since'] ?? 0) < 900
+        ) {
+            throw new WidgetException(_t('尝试次数过多, 请稍后再试'), 429);
+        }
+    }
+
+    private function recordFailure(): void
+    {
+        $now = time();
+        $fail = $_SESSION[self::THROTTLE_KEY] ?? null;
+
+        if (!is_array($fail) || $now - (int) ($fail['since'] ?? 0) >= 900) {
+            $fail = ['count' => 0, 'since' => $now];
+        }
+
+        $fail['count'] = (int) ($fail['count'] ?? 0) + 1;
+        $_SESSION[self::THROTTLE_KEY] = $fail;
+
+        /** 与密码登录一致, 每次失败至少拖慢 1 秒 */
+        sleep(1);
+    }
+
+    private function resetThrottle(): void
+    {
+        unset($_SESSION[self::THROTTLE_KEY]);
     }
 
     private function listPasskeys(): void

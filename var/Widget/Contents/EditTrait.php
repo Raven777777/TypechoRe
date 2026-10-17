@@ -545,12 +545,20 @@ trait EditTrait
     {
         $attachments = $this->request->getArray('attachment');
         if (!empty($attachments)) {
-            foreach ($attachments as $key => $attachment) {
+            foreach (array_values($attachments) as $key => $attachment) {
+                // 附件 id 必须来自服务端校验过的整数, 并且只能关联当前用户自己的附件,
+                // 否则贡献者可以把别人的附件挂到自己的文章下 (越权读取/挪用)
+                $attachment = (int) $attachment;
+
+                if ($attachment <= 0) {
+                    continue;
+                }
+
                 $this->db->query($this->db->update('table.contents')->rows([
                     'parent' => $cid,
                     'status' => 'publish',
                     'order'  => $key + 1
-                ])->where('cid = ? AND type = ?', $attachment, 'attachment'));
+                ])->where('cid = ? AND type = ? AND authorId = ?', $attachment, 'attachment', $this->user->uid));
             }
         }
     }

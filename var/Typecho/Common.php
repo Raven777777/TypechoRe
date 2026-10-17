@@ -61,6 +61,48 @@ namespace {
     }
 
     /**
+     * I18n function for inline JS: 返回带引号的 JSON 字符串
+     *
+     * 直接把译文塞进 '...' 单引号里, 一旦译文包含引号/反斜杠就会破坏脚本
+     * (甚至变成 XSS). 这里统一 JSON 编码 + HTML 十六进制转义, 可安全嵌入
+     * <script> 内的 JS 字符串或 HTML 属性。
+     *
+     * @param string $string 需要翻译的文字
+     * @param mixed ...$args 参数
+     * @return string 形如 "..." 的 JSON 字符串字面量
+     */
+    function _je(string $string, ...$args): string
+    {
+        $translated = empty($args) ? I18n::translate($string) : vsprintf(I18n::translate($string), $args);
+
+        return (string) json_encode(
+            $translated,
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE
+        );
+    }
+
+    /**
+     * I18n function for text embedded in a single-quoted JS string
+     *
+     * _je() 自带引号, 不能塞进已有的 '...' 里; 这里只做转义, 返回可直接嵌入
+     * 单引号字符串的内容 (引号/反斜杠/换行/</ 均被处理)。
+     *
+     * @param string $string 需要翻译的文字
+     * @param mixed ...$args 参数
+     * @return string
+     */
+    function _js(string $string, ...$args): string
+    {
+        $translated = empty($args) ? I18n::translate($string) : vsprintf(I18n::translate($string), $args);
+
+        return str_replace(
+            ["\\", "'", "\r", "\n", '</'],
+            ['\\\\', "\\'", '', '', '<\\/'],
+            $translated
+        );
+    }
+
+    /**
      * 针对复数形式的翻译函数
      *
      * @param string $single 单数形式的翻译

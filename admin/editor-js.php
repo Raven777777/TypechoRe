@@ -51,49 +51,49 @@ $(document).ready(function () {
     const options = {}, isMarkdown = <?php echo json_encode(!$content->have() || $content->isMarkdown); ?>;
 
     options.strings = {
-        bold: '<?php _e('加粗'); ?> <strong> Ctrl+B',
-        boldexample: '<?php _e('加粗文字'); ?>',
+        bold: '<?php echo _js('加粗'); ?> <strong> Ctrl+B',
+        boldexample: <?php echo _je('加粗文字'); ?>,
             
-        italic: '<?php _e('斜体'); ?> <em> Ctrl+I',
-        italicexample: '<?php _e('斜体文字'); ?>',
+        italic: '<?php echo _js('斜体'); ?> <em> Ctrl+I',
+        italicexample: <?php echo _je('斜体文字'); ?>,
 
-        link: '<?php _e('链接'); ?> <a> Ctrl+L',
-        linkdescription: '<?php _e('请输入链接描述'); ?>',
+        link: '<?php echo _js('链接'); ?> <a> Ctrl+L',
+        linkdescription: <?php echo _je('请输入链接描述'); ?>,
 
-        quote:  '<?php _e('引用'); ?> <blockquote> Ctrl+Q',
-        quoteexample: '<?php _e('引用文字'); ?>',
+        quote:  '<?php echo _js('引用'); ?> <blockquote> Ctrl+Q',
+        quoteexample: <?php echo _je('引用文字'); ?>,
 
-        code: '<?php _e('代码'); ?> <pre><code> Ctrl+K',
-        codeexample: '<?php _e('请输入代码'); ?>',
+        code: '<?php echo _js('代码'); ?> <pre><code> Ctrl+K',
+        codeexample: <?php echo _je('请输入代码'); ?>,
 
-        image: '<?php _e('图片'); ?> <img> Ctrl+G',
-        imagedescription: '<?php _e('请输入图片描述'); ?>',
+        image: '<?php echo _js('图片'); ?> <img> Ctrl+G',
+        imagedescription: <?php echo _je('请输入图片描述'); ?>,
 
-        olist: '<?php _e('数字列表'); ?> <ol> Ctrl+O',
-        ulist: '<?php _e('普通列表'); ?> <ul> Ctrl+U',
-        litem: '<?php _e('列表项目'); ?>',
+        olist: '<?php echo _js('数字列表'); ?> <ol> Ctrl+O',
+        ulist: '<?php echo _js('普通列表'); ?> <ul> Ctrl+U',
+        litem: <?php echo _je('列表项目'); ?>,
 
-        heading: '<?php _e('标题'); ?> <h1>/<h2> Ctrl+H',
-        headingexample: '<?php _e('标题文字'); ?>',
+        heading: '<?php echo _js('标题'); ?> <h1>/<h2> Ctrl+H',
+        headingexample: <?php echo _je('标题文字'); ?>,
 
-        hr: '<?php _e('分割线'); ?> <hr> Ctrl+R',
-        more: '<?php _e('摘要分割线'); ?> <!--more--> Ctrl+M',
+        hr: '<?php echo _js('分割线'); ?> <hr> Ctrl+R',
+        more: '<?php echo _js('摘要分割线'); ?> <!--more--> Ctrl+M',
 
-        undo: '<?php _e('撤销'); ?> - Ctrl+Z',
-        redo: '<?php _e('重做'); ?> - Ctrl+Y',
-        redomac: '<?php _e('重做'); ?> - Ctrl+Shift+Z',
+        undo: '<?php echo _js('撤销'); ?> - Ctrl+Z',
+        redo: '<?php echo _js('重做'); ?> - Ctrl+Y',
+        redomac: '<?php echo _js('重做'); ?> - Ctrl+Shift+Z',
 
-        fullscreen: '<?php _e('全屏'); ?> - Ctrl+J',
-        exitFullscreen: '<?php _e('退出全屏'); ?> - Ctrl+E',
-        fullscreenUnsupport: '<?php _e('此浏览器不支持全屏操作'); ?>',
+        fullscreen: '<?php echo _js('全屏'); ?> - Ctrl+J',
+        exitFullscreen: '<?php echo _js('退出全屏'); ?> - Ctrl+E',
+        fullscreenUnsupport: <?php echo _je('此浏览器不支持全屏操作'); ?>,
 
-        imagedialog: '<p><b><?php _e('插入图片'); ?></b></p><p><?php _e('请在下方的输入框内输入要插入的远程图片地址'); ?></p><p><?php _e('您也可以使用附件功能插入上传的本地图片'); ?></p>',
-        linkdialog: '<p><b><?php _e('插入链接'); ?></b></p><p><?php _e('请在下方的输入框内输入要插入的链接地址'); ?></p>',
+        imagedialog: '<p><b><?php echo _js('插入图片'); ?></b></p><p><?php echo _js('请在下方的输入框内输入要插入的远程图片地址'); ?></p><p><?php echo _js('您也可以使用附件功能插入上传的本地图片'); ?></p>',
+        linkdialog: '<p><b><?php echo _js('插入链接'); ?></b></p><p><?php echo _js('请在下方的输入框内输入要插入的链接地址'); ?></p>',
 
-        ok: '<?php _e('确定'); ?>',
-        cancel: '<?php _e('取消'); ?>',
+        ok: <?php echo _je('确定'); ?>,
+        cancel: <?php echo _je('取消'); ?>,
 
-        help: '<?php _e('Markdown语法帮助'); ?>'
+        help: <?php echo _je('Markdown语法帮助'); ?>
     };
 
     const converter = new HyperDown(),
@@ -151,7 +151,7 @@ $(document).ready(function () {
 
     let th = textarea.height(), ph = preview.height();
     const uploadBtn = $('<button type="button" id="btn-fullscreen-upload" class="btn btn-link">'
-            + '<i class="i-upload"><?php _e('附件'); ?></i></button>')
+            + '<i class="i-upload"><?php echo _js('附件'); ?></i></button>')
             .prependTo('.submit .right')
             .click(function() {
                 $('a', $('.typecho-option-tabs li').not('.active')).trigger('click');
@@ -224,7 +224,7 @@ $(document).ready(function () {
         };
 
         // 编辑预览切换
-        const edittab = $('.editor').append('<div class="wmd-edittab"><a href="#wmd-editarea" class="active"><?php _e('撰写'); ?></a><a href="#wmd-preview"><?php _e('预览'); ?></a></div>'),
+        const edittab = $('.editor').append('<div class="wmd-edittab"><a href="#wmd-editarea" class="active"><?php echo _js('撰写'); ?></a><a href="#wmd-preview"><?php echo _js('预览'); ?></a></div>'),
             editarea = $(textarea.parent()).attr("id", "wmd-editarea");
 
         $(".wmd-edittab a").click(function() {
@@ -272,9 +272,9 @@ $(document).ready(function () {
     if (isMarkdown) {
         initMarkdown();
     } else {
-        const notice = $('<div class="message notice"><?php _e('这篇文章不是由Markdown语法创建的, 继续使用Markdown编辑它吗?'); ?> '
-            + '<button class="btn btn-xs primary yes"><?php _e('是'); ?></button> ' 
-            + '<button class="btn btn-xs no"><?php _e('否'); ?></button></div>')
+        const notice = $('<div class="message notice"><?php echo _js('这篇文章不是由Markdown语法创建的, 继续使用Markdown编辑它吗?'); ?> '
+            + '<button class="btn btn-xs primary yes"><?php echo _js('是'); ?></button> ' 
+            + '<button class="btn btn-xs no"><?php echo _js('否'); ?></button></div>')
             .hide().insertBefore(textarea).slideDown();
 
         $('.yes', notice).click(function () {

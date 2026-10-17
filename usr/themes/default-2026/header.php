@@ -28,12 +28,14 @@ $themePreload = themePreloadLinks();
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#ffffff" data-light="#ffffff" data-dark="#09090b">
-    <title><?php $this->archiveTitle([
+    <title><?php echo themeText(function () {
+        $this->archiveTitle([
             'category' => _t('分类 %s 下的文章'),
             'search'   => _t('包含关键字 %s 的文章'),
             'tag'      => _t('标签 %s 下的文章'),
             'author'   => _t('%s 发布的文章')
-        ], '', ' - '); ?><?php $this->options->title(); ?><?php if ($this->getCurrentPage() > 1): ?> - <?php echo _t('第 '), $this->getCurrentPage(), _t(' 页'); ?><?php endif; ?></title>
+        ], '', ' - ');
+    }); ?><?php $this->options->title(); ?><?php if ($this->getCurrentPage() > 1): ?> - <?php echo _t('第 '), $this->getCurrentPage(), _t(' 页'); ?><?php endif; ?></title>
 
     <!-- 无闪烁深色模式: 必须在样式表之前执行 -->
     <script>

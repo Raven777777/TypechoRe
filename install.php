@@ -603,6 +603,44 @@ function install_redirect(string $url)
 }
 
 /**
+ * 安装过程中的 CSRF token (基于 session)
+ *
+ * 安装步骤会写 config.inc.php / 建表 / 创建管理员, 这些 POST 必须绑定到本次
+ * 安装会话, 否则任意第三方页面都能在安装窗口期把站点指向攻击者数据库.
+ */
+function install_csrf_token(): string
+{
+    \Typecho\Common::startSession();
+
+    if (empty($_SESSION['__typecho_install_csrf']) || !is_string($_SESSION['__typecho_install_csrf'])) {
+        $_SESSION['__typecho_install_csrf'] = bin2hex(random_bytes(32));
+    }
+
+    return $_SESSION['__typecho_install_csrf'];
+}
+
+/**
+ * 输出隐藏的 CSRF 字段
+ */
+function install_csrf_field(): string
+{
+    return '<input type="hidden" name="_" value="'
+        . htmlspecialchars(install_csrf_token(), ENT_QUOTES, 'UTF-8') . '" />';
+}
+
+/**
+ * 校验安装步骤的 CSRF token
+ */
+function install_csrf_verify(): void
+{
+    $token = $_POST['_'] ?? null;
+
+    if (!is_string($token) || !hash_equals(install_csrf_token(), $token)) {
+        install_throw_json(['success' => 0, 'message' => _t('请求已过期, 请刷新页面后重试')]);
+    }
+}
+
+/**
  * add common js support
  */
 function install_js_support()
@@ -622,7 +660,13 @@ function install_js_support()
                     <?php _e('您的密码是'); ?>: <strong class="warning" id="success-password"></strong>
                 </p>
                 <ul>
-                    <li><a id="login-url" href=""><?php _e('点击这里访问您的控制面板'); ?></a></li>
+                    <li>
+                        <form id="login-form" method="post" action="">
+                            <input type="hidden" name="name" id="login-name" value="" />
+                            <input type="hidden" name="password" id="login-password" value="" />
+                            <button type="submit" class="btn primary"><?php _e('点击这里访问您的控制面板'); ?></button>
+                        </form>
+                    </li>
                     <li><a id="site-url" href=""><?php _e('点击这里查看您的 Blog'); ?></a></li>
                 </ul>
                 <p><?php _e('希望您能尽情享用 Typecho 带来的乐趣!'); ?></p>
@@ -687,10 +731,12 @@ function install_js_support()
                                 success.addClass('fresh');
 
                                 $('.typecho-page-main:first').addClass('hidden');
-                                $('#success-user').html(data.config[0]);
-                                $('#success-password').html(data.config[1]);
+                                $('#success-user').text(data.config[0]);
+                                $('#success-password').text(data.config[1]);
 
-                                $('#login-url').attr('href', data.config[2]);
+                                $('#login-form').attr('action', data.config[2]);
+                                $('#login-name').val(data.config[0]);
+                                $('#login-password').val(data.config[1]);
                                 $('#site-url').attr('href', data.config[3]);
                             } else {
                                 success.addClass('keep');
@@ -757,6 +803,7 @@ function install_step_1()
                     <p class="submit">
                         <button class="btn primary" type="submit"><?php _e('我准备好了, 开始下一步 &raquo;'); ?></button>
                         <input type="hidden" name="step" value="1">
+                        <?php echo install_csrf_field(); ?>
 
                         <?php if (count($langs) > 1) : ?>
                             <select style="float: right" onchange="location.href='?lang=' + this.value">
@@ -874,6 +921,7 @@ function install_step_2()
                     <li>
                         <button id="confirm" type="submit" class="btn primary"><?php _e('确认, 开始安装 &raquo;'); ?></button>
                         <input type="hidden" name="step" value="2">
+                        <?php echo install_csrf_field(); ?>
                     </li>
                 </ul>
             </form>
@@ -1272,6 +1320,7 @@ function install_step_3()
                     <li>
                         <button type="submit" class="btn primary"><?php _e('继续安装 &raquo;'); ?></button>
                         <input type="hidden" name="step" value="3">
+                        <?php echo install_csrf_field(); ?>
                     </li>
                 </ul>
             </form>
@@ -1424,17 +1473,16 @@ function install_step_3_perform()
     }
 
     $parts = parse_url($options->loginAction);
-    $parts['query'] = http_build_query([
-            'name'  => $config['userName'],
-            'password' => $config['userPassword'],
-            'referer' => $options->adminUrl
-        ]);
-    $loginUrl = \Typecho\Common::buildUrl($parts);
+    parse_str($parts['query'] ?? '', $loginParams);
+    $loginParams['referer'] = $options->adminUrl;
+    $parts['query'] = http_build_query($loginParams);
+    $loginAction = \Typecho\Common::buildUrl($parts);
 
     install_success(0, [
         $config['userName'],
         $config['userPassword'],
-        \Widget\Security::alloc()->getTokenUrl($loginUrl, $request->getReferer()),
+        // 密码不再进入 URL: 只用 POST 表单提交, URL 中只保留 referer 和 CSRF token
+        $loginAction,
         $config['userUrl']
     ]);
 }
@@ -1504,6 +1552,7 @@ function install_dispatch()
         $method = 'install_step_' . $action;
 
         if ($request->isPost()) {
+            install_csrf_verify();
             $method .= '_perform';
             $method();
             exit;

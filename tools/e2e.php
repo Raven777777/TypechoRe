@@ -395,6 +395,46 @@ function csrfToken(string $html): string
 }
 
 /**
+ * 从页面里取出指向某个端点的链接 (带该端点专属的 CSRF token)
+ *
+ * token 现在绑定到提交目标的路径, 用一个页面的 token 去调另一个端点会被拒绝,
+ * 所以测试必须像浏览器一样从渲染好的链接/表单里取。
+ */
+function endpointUrl(string $html, string $endpoint, string $label): string
+{
+    $quoted = preg_quote($endpoint, '#');
+
+    if (!preg_match('#"([^"]*' . $quoted . '[^"]*)"#', $html, $matches)) {
+        fail("{$label}: no link to {$endpoint} found in the page");
+    }
+
+    $url = html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+    /** 绝对地址转成路径, 便于同一个 client 请求 */
+    if (preg_match('#^https?://[^/]+(/.*)$#', $url, $absolute)) {
+        $url = $absolute[1];
+    }
+
+    if (!preg_match('/[?&]_=([0-9a-f]{64})/', $url, $tokenMatch)) {
+        fail("{$label}: the link to {$endpoint} carries no CSRF token: {$url}");
+    }
+
+    return $url;
+}
+
+/**
+ * 取链接里的 token, 用于自己拼请求地址的场景
+ */
+function tokenOf(string $url, string $label): string
+{
+    if (!preg_match('/[?&]_=([0-9a-f]{64})/', $url, $matches)) {
+        fail("{$label}: no CSRF token in {$url}");
+    }
+
+    return $matches[1];
+}
+
+/**
  * 在临时站点上执行 PHP 片段 (访问该站点的数据库)
  *
  * @param string $phpCode 片段, 已提供 $db 与 $options 变量
@@ -524,7 +564,17 @@ assertTrue($ready, 'the built-in server did not become ready');
 // ---------------------------------------------------------------- installer
 
 step('install wizard');
-$response = $site->post('/install.php?step=1', ['step' => '1']);
+/** 安装向导现在要求 CSRF token: 先 GET 拿 session + token, 再带上 `_` 字段提交 */
+$installPage = assertResponse($site->get('/install.php'), [200], 'install page');
+
+assertTrue(
+    (bool) preg_match('/name="_" value="([0-9a-f]{64})"/', $installPage, $tokenMatch),
+    'install page did not expose a CSRF token'
+);
+
+$installToken = $tokenMatch[1];
+
+$response = $site->post('/install.php?step=1', ['step' => '1', '_' => $installToken]);
 $body = assertResponse($response, [200], 'install step 1');
 $json = json_decode($body, true);
 assertTrue(is_array($json) && ($json['success'] ?? false) && 2 === ($json['message'] ?? null), 'install step 1 did not advance to step 2');
@@ -536,6 +586,7 @@ $response = $site->post('/install.php?step=2', [
     'dbNext' => 'none',
     'dbPrefix' => 'typecho_',
     'dbFile' => $dbFile,
+    '_' => $installToken,
 ]);
 $body = assertResponse($response, [200], 'install step 2');
 $json = json_decode($body, true);
@@ -551,6 +602,7 @@ $response = $site->post('/install.php?step=3', [
     'userName' => $adminUser,
     'userPassword' => $adminPassword,
     'userMail' => 'e2e@example.test',
+    '_' => $installToken,
 ]);
 $body = assertResponse($response, [200], 'install step 3');
 $json = json_decode($body, true);
@@ -648,15 +700,14 @@ foreach ($adminPages as $path => $statuses) {
     }
 }
 
-// keep one token for every protected action (token is not bound to the URL)
+// 每个受保护端点的 token 都绑定到自己的路径, 只能从渲染好的页面里取
 $writePage = assertResponse($site->get('/admin/write-post.php'), [200], 'GET write-post for token');
-$token = csrfToken($writePage);
 
 step('plugin activate / deactivate');
 $pluginsPage = assertResponse($site->get('/admin/plugins.php'), [200], 'GET plugins.php');
 assertTrue(str_contains($pluginsPage, 'HelloWorld'), 'HelloWorld plugin not listed as available');
 assertResponse(
-    $site->get('/index.php/action/plugins-edit?activate=HelloWorld&_=' . urlencode($token)),
+    $site->get(endpointUrl($pluginsPage, 'action/plugins-edit?activate=HelloWorld', 'plugins.php')),
     [302],
     'GET activate HelloWorld'
 );
@@ -670,8 +721,9 @@ $pluginConfigPage = assertResponse(
     'GET options-plugin.php?config=HelloWorld'
 );
 assertTrue(str_contains($pluginConfigPage, 'HelloWorld') || str_contains($pluginConfigPage, 'hello'), 'plugin config page is empty');
+$pluginsPage = assertResponse($site->get('/admin/plugins.php'), [200], 'GET plugins.php after activation');
 assertResponse(
-    $site->get('/index.php/action/plugins-edit?deactivate=HelloWorld&_=' . urlencode($token)),
+    $site->get(endpointUrl($pluginsPage, 'action/plugins-edit?deactivate=HelloWorld', 'plugins.php')),
     [302],
     'GET deactivate HelloWorld'
 );
@@ -717,6 +769,48 @@ assertTrue(str_contains($postBody, 'E2E 回归文章'), 'published post title mi
 
 $managePosts = assertResponse($site->get('/admin/manage-posts.php'), [200], 'GET manage-posts after publish');
 assertTrue(str_contains($managePosts, 'E2E 回归文章'), 'published post missing in the admin list');
+
+/** slug 含下划线时也要能正确去重 (旧实现用 addcslashes 转义 LIKE, SQLite 没有 ESCAPE 子句, 永远匹配不到) */
+$duplicatePost = $site->post($postAction, [
+    'do' => 'publish',
+    'title' => 'E2E 回归文章 (重名)',
+    'slug' => 'e2e_regression_post',
+    'text' => '<p>duplicate slug</p>',
+    'tags' => '',
+    'category' => [$categoryMatch[1]],
+    'visibility' => 'publish',
+    'allowComment' => '1',
+    'allowPing' => '0',
+    'allowFeed' => '1',
+    'markdown' => '0',
+    'trackback' => '',
+]);
+assertResponse($duplicatePost, [302], 'POST publish with underscore slug (1)');
+
+$duplicatePost = $site->post($postAction, [
+    'do' => 'publish',
+    'title' => 'E2E 回归文章 (重名 2)',
+    'slug' => 'e2e_regression_post',
+    'text' => '<p>duplicate slug again</p>',
+    'tags' => '',
+    'category' => [$categoryMatch[1]],
+    'visibility' => 'publish',
+    'allowComment' => '1',
+    'allowPing' => '0',
+    'allowFeed' => '1',
+    'markdown' => '0',
+    'trackback' => '',
+]);
+assertResponse($duplicatePost, [302], 'POST publish with underscore slug (2)');
+$duplicateSlug = trim(sitePhp(
+    $php,
+    $siteDir,
+    "echo \$db->fetchObject(\$db->select('slug')->from('table.contents')->where('table.contents.slug LIKE ?', 'e2e_regression_post%')->order('table.contents.cid', 'DESC')->limit(1))->slug;"
+));
+assertTrue(
+    'e2e_regression_post-1' === $duplicateSlug,
+    'slug dedupe failed: expected e2e_regression_post-1, got ' . $duplicateSlug
+);
 
 // ---------------------------------------------------------------- 切页时第二列的形态提示
 
@@ -892,8 +986,9 @@ $png = base64_decode(
 $pngFile = $workDir . '/e2e-upload.png';
 file_put_contents($pngFile, $png);
 
+$uploadTokenPage = assertResponse($site->get('/admin/write-post.php'), [200], 'GET write-post for upload token');
 $response = $site->postMultipart(
-    '/index.php/action/upload?_=' . urlencode($token),
+    '/index.php/action/upload?_=' . urlencode(tokenOf(endpointUrl($uploadTokenPage, 'action/upload', 'write-post.php'), 'write-post.php')),
     ['cid' => (string) $cid],
     ['file' => $pngFile],
     ['Referer' => "http://127.0.0.1:{$port}/admin/write-post.php"]
@@ -911,13 +1006,26 @@ $mediaPage = assertResponse($site->get('/admin/media.php?cid=' . $attachmentCid)
 assertTrue(str_contains($mediaPage, 'e2e-upload.png'), 'attachment editor does not show the uploaded file name');
 assertResponse($site->get('/admin/manage-medias.php'), [200], 'GET manage-medias after upload');
 
+/** token 绑定端点: 拿 upload 的 token 去打 passkey 接口必须被拒绝 (以前是一个 token 通用, 泄漏后可重放其它后台操作) */
+$uploadToken = tokenOf(endpointUrl($uploadTokenPage, 'action/upload', 'write-post.php'), 'write-post.php');
+$crossEndpoint = $site->get('/index.php/action/passkey?do=create-options&_=' . urlencode($uploadToken));
+assertTrue(
+    !str_contains($crossEndpoint['body'], '"success":true'),
+    'a CSRF token generated for /action/upload was accepted by /action/passkey'
+);
+
 // ---------------------------------------------------------------- passkey
 
 step('passkey registration and assertion');
 $profile = assertResponse($site->get('/admin/profile.php'), [200], 'GET profile (passkey section)');
 assertTrue(str_contains($profile, 'passkey-management'), 'passkey management section missing in profile');
+assertTrue(
+    (bool) preg_match('/var token = "([0-9a-f]{64})"/', $profile, $passkeyTokenMatch),
+    'profile page did not expose the passkey CSRF token'
+);
+$passkeyToken = $passkeyTokenMatch[1];
 $passkeyJson = assertResponse(
-    $site->get('/index.php/action/passkey?do=create-options&_=' . urlencode($token)),
+    $site->get('/index.php/action/passkey?do=create-options&_=' . urlencode($passkeyToken)),
     [200],
     'GET passkey create-options'
 );
@@ -947,7 +1055,7 @@ $createPayload = json_encode([
 ], JSON_THROW_ON_ERROR);
 $createResultBody = assertResponse(
     $site->postRaw(
-        '/index.php/action/passkey?do=process-create&_=' . urlencode($token),
+        '/index.php/action/passkey?do=process-create&_=' . urlencode($passkeyToken),
         $createPayload,
         ['Content-Type' => 'application/json']
     ),
@@ -1042,8 +1150,6 @@ $loginResult = json_decode($loginResultBody, true);
 assertTrue(is_array($loginResult) && ($loginResult['success'] ?? false) === true, 'valid passkey assertion failed: ' . $loginResultBody);
 $passkeyDashboard = assertResponse($passkeyLoginSite->get('/admin/'), [200], 'GET admin after passkey login');
 $site = $passkeyLoginSite;
-$token = csrfToken($passkeyDashboard);
-
 // ---------------------------------------------------------------- xmlrpc
 
 step('xmlrpc');
@@ -1055,6 +1161,19 @@ $xmlrpcBody = '<?xml version="1.0"?>'
 $response = $site->postRaw('/index.php/action/xmlrpc', $xmlrpcBody, ['Content-Type' => 'text/xml']);
 $body = assertResponse($response, [200], 'xmlrpc system.listMethods');
 assertTrue(str_contains($body, 'system.listMethods'), 'xmlrpc response does not list system.listMethods: ' . substr($body, 0, 300));
+
+/** 密码错误必须被拒绝 (并且计入失败限流) */
+$badLogin = '<?xml version="1.0"?>'
+    . '<methodCall><methodName>wp.getUsersBlogs</methodName><params>'
+    . '<param><value><string>' . htmlspecialchars($adminUser, ENT_XML1) . '</string></value></param>'
+    . '<param><value><string>definitely-not-the-password</string></value></param>'
+    . '</params></methodCall>';
+$response = $site->postRaw('/index.php/action/xmlrpc', $badLogin, ['Content-Type' => 'text/xml']);
+$body = assertResponse($response, [200], 'xmlrpc with a wrong password');
+assertTrue(
+    str_contains($body, '<fault>') && str_contains($body, '<int>403</int>'),
+    'xmlrpc accepted a wrong password: ' . substr($body, 0, 300)
+);
 
 // ---------------------------------------------------------------- 1.3.2 upgrade path
 
@@ -1092,8 +1211,14 @@ assertTrue(
     'upgrade v1_3_2 did not create the passkeys table'
 );
 
+$passkeyProfileAfterUpgrade = assertResponse($site->get('/admin/profile.php'), [200], 'GET profile after upgrade');
+assertTrue(
+    (bool) preg_match('/var token = "([0-9a-f]{64})"/', $passkeyProfileAfterUpgrade, $afterUpgradeToken),
+    'profile page did not expose the passkey CSRF token after the upgrade'
+);
+
 $passkeyJson = assertResponse(
-    $site->get('/index.php/action/passkey?do=create-options&_=' . urlencode($token)),
+    $site->get('/index.php/action/passkey?do=create-options&_=' . urlencode($afterUpgradeToken[1])),
     [200],
     'passkey create-options after upgrade'
 );
@@ -1102,7 +1227,8 @@ assertTrue(str_contains($passkeyJson, 'challenge'), 'passkey create-options fail
 // ---------------------------------------------------------------- logout
 
 step('logout');
-$logout = assertResponse($site->get('/index.php/action/logout?_=' . urlencode($token)), [200, 302], 'GET logout');
+$logoutPage = assertResponse($site->get('/admin/'), [200], 'GET admin for the logout link');
+$logout = assertResponse($site->get(endpointUrl($logoutPage, 'action/logout', 'admin dashboard')), [200, 302], 'GET logout');
 assertResponse($site->get('/admin/'), [302], 'GET /admin/ after logout');
 
 // ---------------------------------------------------------------- server log

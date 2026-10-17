@@ -15,26 +15,26 @@
 $(document).ready(function() {
     // 日期时间控件
     $('#date').mask('9999-99-99 99:99').datetimepicker({
-        currentText     :   '<?php _e('现在'); ?>',
-        prevText        :   '<?php _e('上一月'); ?>',
-        nextText        :   '<?php _e('下一月'); ?>',
-        monthNames      :   ['<?php _e('一月'); ?>', '<?php _e('二月'); ?>', '<?php _e('三月'); ?>', '<?php _e('四月'); ?>',
-            '<?php _e('五月'); ?>', '<?php _e('六月'); ?>', '<?php _e('七月'); ?>', '<?php _e('八月'); ?>',
-            '<?php _e('九月'); ?>', '<?php _e('十月'); ?>', '<?php _e('十一月'); ?>', '<?php _e('十二月'); ?>'],
-        dayNames        :   ['<?php _e('星期日'); ?>', '<?php _e('星期一'); ?>', '<?php _e('星期二'); ?>',
-            '<?php _e('星期三'); ?>', '<?php _e('星期四'); ?>', '<?php _e('星期五'); ?>', '<?php _e('星期六'); ?>'],
-        dayNamesShort   :   ['<?php _e('周日'); ?>', '<?php _e('周一'); ?>', '<?php _e('周二'); ?>', '<?php _e('周三'); ?>',
-            '<?php _e('周四'); ?>', '<?php _e('周五'); ?>', '<?php _e('周六'); ?>'],
-        dayNamesMin     :   ['<?php _e('日'); ?>', '<?php _e('一'); ?>', '<?php _e('二'); ?>', '<?php _e('三'); ?>',
-            '<?php _e('四'); ?>', '<?php _e('五'); ?>', '<?php _e('六'); ?>'],
-        closeText       :   '<?php _e('完成'); ?>',
-        timeOnlyTitle   :   '<?php _e('选择时间'); ?>',
-        timeText        :   '<?php _e('时间'); ?>',
-        hourText        :   '<?php _e('时'); ?>',
-        amNames         :   ['<?php _e('上午'); ?>', 'A'],
-        pmNames         :   ['<?php _e('下午'); ?>', 'P'],
-        minuteText      :   '<?php _e('分'); ?>',
-        secondText      :   '<?php _e('秒'); ?>',
+        currentText     :   <?php echo _je('现在'); ?>,
+        prevText        :   <?php echo _je('上一月'); ?>,
+        nextText        :   <?php echo _je('下一月'); ?>,
+        monthNames      :   [<?php echo _je('一月'); ?>, <?php echo _je('二月'); ?>, <?php echo _je('三月'); ?>, <?php echo _je('四月'); ?>,
+            <?php echo _je('五月'); ?>, <?php echo _je('六月'); ?>, <?php echo _je('七月'); ?>, <?php echo _je('八月'); ?>,
+            <?php echo _je('九月'); ?>, <?php echo _je('十月'); ?>, <?php echo _je('十一月'); ?>, <?php echo _je('十二月'); ?>],
+        dayNames        :   [<?php echo _je('星期日'); ?>, <?php echo _je('星期一'); ?>, <?php echo _je('星期二'); ?>,
+            <?php echo _je('星期三'); ?>, <?php echo _je('星期四'); ?>, <?php echo _je('星期五'); ?>, <?php echo _je('星期六'); ?>],
+        dayNamesShort   :   [<?php echo _je('周日'); ?>, <?php echo _je('周一'); ?>, <?php echo _je('周二'); ?>, <?php echo _je('周三'); ?>,
+            <?php echo _je('周四'); ?>, <?php echo _je('周五'); ?>, <?php echo _je('周六'); ?>],
+        dayNamesMin     :   [<?php echo _je('日'); ?>, <?php echo _je('一'); ?>, <?php echo _je('二'); ?>, <?php echo _je('三'); ?>,
+            <?php echo _je('四'); ?>, <?php echo _je('五'); ?>, <?php echo _je('六'); ?>],
+        closeText       :   <?php echo _je('完成'); ?>,
+        timeOnlyTitle   :   <?php echo _je('选择时间'); ?>,
+        timeText        :   <?php echo _je('时间'); ?>,
+        hourText        :   <?php echo _je('时'); ?>,
+        amNames         :   [<?php echo _je('上午'); ?>, 'A'],
+        pmNames         :   [<?php echo _je('下午'); ?>, 'P'],
+        minuteText      :   <?php echo _je('分'); ?>,
+        secondText      :   <?php echo _je('秒'); ?>,
 
         dateFormat      :   'yy-mm-dd',
         timezone        :   <?php $options->timezone(); ?> / 60,
@@ -55,7 +55,7 @@ $(document).ready(function() {
         const hidden = $('#tags'),
             search = $('#tag-search'),
             cloud = $('.tag-picker-cloud', picker),
-            emptyText = '<?php _e('没有匹配的标签, 回车创建'); ?>';
+            emptyText = <?php echo _je('没有匹配的标签, 回车创建'); ?>;
 
         const sanitize = function (v) {
             // 逗号是隐藏字段的分隔符, 名称内不允许出现; 同时剥离 HTML 特殊字符
@@ -272,7 +272,7 @@ $(document).ready(function() {
     // 自动检测离开页
     $(window).bind('beforeunload', function () {
         if (changed && !form.hasClass('submitting')) {
-            return '<?php _e('内容已经改变尚未保存, 您确认要离开此页面吗?'); ?>';
+            return <?php echo _je('内容已经改变尚未保存, 您确认要离开此页面吗?'); ?>;
         }
     });
 
@@ -288,13 +288,13 @@ $(document).ready(function() {
             cid = o.cid;
             draftId = o.draftId;
             idInput.val(cid);
-            autoSave.text('<?php _e('已保存'); ?>' + ' (' + o.time + ')').effect('highlight', 1000);
+            autoSave.text(<?php echo _je('已保存'); ?> + ' (' + o.time + ')').effect('highlight', 1000);
 
             cb && cb();
         };
 
         changed = false;
-        autoSave.text('<?php _e('正在保存'); ?>');
+        autoSave.text(<?php echo _je('正在保存'); ?>);
 
         const data = new FormData(form.get(0));
         data.append('do', 'save');
@@ -308,7 +308,7 @@ $(document).ready(function() {
             data: data,
             success: callback,
             error: function () {
-                autoSave.text('<?php _e('保存失败, 请重试'); ?>');
+                autoSave.text(<?php echo _je('保存失败, 请重试'); ?>);
             },
             complete: function () {
                 form.trigger('submitted');
@@ -323,7 +323,7 @@ $(document).ready(function() {
 
     form.on('datachange', function () {
         changed = true;
-        autoSave.text('<?php _e('尚未保存'); ?>' + (lastSaveTime ? ' (<?php _e('上次保存时间'); ?>: ' + lastSaveTime + ')' : ''));
+        autoSave.text(<?php echo _je('尚未保存'); ?> + (lastSaveTime ? ' (<?php echo _js('上次保存时间'); ?>: ' + lastSaveTime + ')' : ''));
 
         if (saveTimer) {
             clearTimeout(saveTimer);
@@ -398,7 +398,7 @@ $(document).ready(function() {
 
     btnPreview.click(function () {
         if (changed) {
-            if (confirm('<?php _e('修改后的内容需要保存后才能预览, 是否保存?'); ?>')) {
+            if (confirm(<?php echo _je('修改后的内容需要保存后才能预览, 是否保存?'); ?>)) {
                 Typecho.savePost(function () {
                     previewData(draftId);
                 });
@@ -434,7 +434,7 @@ $(document).ready(function() {
     
     // 草稿删除确认
     $('.edit-draft-notice a').click(function () {
-        if (confirm('<?php _e('您确认要删除这份草稿吗?'); ?>')) {
+        if (confirm(<?php echo _je('您确认要删除这份草稿吗?'); ?>)) {
             window.location.href = $(this).attr('href');
         }
 

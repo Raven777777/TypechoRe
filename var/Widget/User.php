@@ -139,6 +139,13 @@ class User extends Users
             return;
         }
 
+        // 主动登出时作废服务端凭证: 只清 cookie 的话, 被窃取的 authCode 仍然有效
+        if (!empty($this->currentUser['uid'])) {
+            $this->db->query($this->db->update('table.users')
+                ->rows(['authCode' => ''])
+                ->where('uid = ?', (int) $this->currentUser['uid']));
+        }
+
         Cookie::delete('__typecho_uid');
         Cookie::delete('__typecho_authCode');
     }

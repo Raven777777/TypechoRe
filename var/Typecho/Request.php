@@ -642,12 +642,41 @@ class Request
      */
     public function isSecure(): bool
     {
-        return (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && !strcasecmp('https', $_SERVER['HTTP_X_FORWARDED_PROTO']))
-            || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && !strcasecmp('quic', $_SERVER['HTTP_X_FORWARDED_PROTO']))
+        /** 只有直连方是反代(本机/内网)时才相信 X-Forwarded-*, 否则任何人都能伪造 https */
+        $forwardedSecure = $this->isForwardedTrusted() && (
+            (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])
+                && in_array(strtolower((string) $_SERVER['HTTP_X_FORWARDED_PROTO']), ['https', 'quic'], true))
             || (!empty($_SERVER['HTTP_X_FORWARDED_PORT']) && 443 == $_SERVER['HTTP_X_FORWARDED_PORT'])
-            || (!empty($_SERVER['HTTPS']) && 'off' != strtolower($_SERVER['HTTPS']))
+        );
+
+        return $forwardedSecure
+            || (!empty($_SERVER['HTTPS']) && 'off' != strtolower((string) $_SERVER['HTTPS']))
             || (!empty($_SERVER['SERVER_PORT']) && 443 == $_SERVER['SERVER_PORT'])
             || (defined('__TYPECHO_SECURE__') && __TYPECHO_SECURE__);
+    }
+
+    /**
+     * 直连方是否值得信任 (本机 / 内网地址, 或显式定义了 __TYPECHO_TRUST_PROXY__)
+     *
+     * @return bool
+     */
+    private function isForwardedTrusted(): bool
+    {
+        if (defined('__TYPECHO_TRUST_PROXY__') && __TYPECHO_TRUST_PROXY__) {
+            return true;
+        }
+
+        $remote = (string) $this->getServer('REMOTE_ADDR');
+
+        if ('' === $remote || !filter_var($remote, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+
+        return !filter_var(
+            $remote,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+        );
     }
 
     /**

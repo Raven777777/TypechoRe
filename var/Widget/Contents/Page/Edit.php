@@ -260,12 +260,13 @@ class Edit extends Contents implements ActionInterface
 
         foreach ($pages as $page) {
             /** 删除草稿 */
-            $draft = $this->db->fetchRow($this->db->select('cid')
+            $draft = $this->db->fetchRow($this->db->select('cid', 'authorId')
                 ->from('table.contents')
                 ->where('table.contents.parent = ? AND table.contents.type = ?', $page, 'revision')
                 ->limit(1));
 
-            if ($draft) {
+            // 草稿需要校验归属, 避免贡献者/低权限用户删除他人草稿
+            if ($draft && ($this->user->pass('editor', true) || $draft['authorId'] == $this->user->uid)) {
                 $this->deleteContent($draft['cid'], false);
                 $this->deleteFields($draft['cid']);
                 $deleteCount++;

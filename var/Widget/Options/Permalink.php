@@ -252,13 +252,16 @@ RewriteRule . {$basePath}index.php [L]
         /** 增加个性化路径 */
         $customPatternValue = null;
         if ($this->request->is('__typecho_form_item_postPattern')) {
-            $customPatternValue = $this->request->get('__typecho_form_item_postPattern');
+            /** 来自请求的值会回显到 value 属性里, 必须转成字符串并在输出时转义 */
+            $rawPattern = $this->request->get('__typecho_form_item_postPattern');
+            $customPatternValue = is_scalar($rawPattern) ? (string) $rawPattern : '';
             Cookie::delete('__typecho_form_item_postPattern');
         } elseif (!isset($patterns[$postPatternValue])) {
             $customPatternValue = $this->decodeRule($postPatternValue);
         }
         $patterns['custom'] = _t('个性化定义') .
-            ' <input type="text" class="w-50 text-s mono" name="customPattern" value="' . $customPatternValue . '" />';
+            ' <input type="text" class="w-50 text-s mono" name="customPattern" value="'
+            . htmlspecialchars((string) $customPatternValue, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '" />';
 
         $postPattern = new Form\Element\Radio(
             'postPattern',

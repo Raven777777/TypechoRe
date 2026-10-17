@@ -214,9 +214,12 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
 
         /** 判断是否在数据库中已经存在 (一次性取回候选集合, 避免逐条 COUNT 查询) */
         $taken = [];
+        // 不能对 % 和 _ 做 addcslashes: 没有 ESCAPE 子句时反斜杠会被当成普通字符
+        // (SQLite 默认如此), 带 _ 的缩略名会匹配不到, 去重直接失效.
+        // 这里直接让 _ / % 当通配符用: 最多多取几行, 后面的精确 hash 比对会过滤掉.
         $candidates = $this->db->fetchAll(
             $this->db->select('slug')->from('table.contents')
-                ->where('slug = ? OR slug LIKE ?', $result, addcslashes($slug, '%_\\') . '-%')
+                ->where('slug = ? OR slug LIKE ?', $result, $result . '-%')
                 ->where('cid <> ?', $cid)
         );
 

@@ -5,6 +5,48 @@
 
 ## 未发布
 
+### 安全修复 (代码审计后的一轮加固)
+
+- CSRF token 现在绑定提交目标的路径 (`var/Widget/Security.php`): `getToken()` 用
+  `hash('sha256', token . '&csrf&' . 规范化路径)` 生成, `protect()` 用请求路径比对。
+  以前 `$suffix` 形同虚设, 全站共用一个 token, 泄漏后可以拿去重放任意后台操作;
+  绑定路径而不绑定 Referer, 是因为 CSP/隐私策略会把 Referer 剥掉
+- `install.php`: 三个步骤的 POST 都要校验 CSRF token, 安装成功的「登录地址」不再把
+  明文管理员密码塞进 URL 的查询串 (改成自动提交的 POST 表单)
+- 主题标题的存储型 XSS: `usr/themes/default-2026/header.php` 用 `themeText()` 输出
+  `archiveTitle()`, `usr/themes/default/header.php` 用 `htmlspecialchars()` 包了一层
+  (标签名/分类名可以带 HTML)
+- 文章/页面的草稿删除与附件绑定加属主校验 (`EditTrait::attach()` 只允许绑定自己的附件,
+  `deletePostDraft()`/`deletePageDraft()` 需要 `editor` 权限或是作者本人),
+  `markPost()` 不允许投稿者把自己的待审核文章改成公开
+- 退出登录会作废 `authCode`(改密码同样), 改密后为用户重发 cookie; 删除用户时连带删除其
+  Passkey 凭证
+- `Widget\Passkey`: 未认证调用方不再看到 SQL/WebAuthn 库的异常原文, 凭证不存在与签名失败
+  统一报「Passkey 验证失败」; 失败 10 次/15 分钟触发 429 并 `sleep(1)`; 注册时排除已注册的
+  凭证; 断言里的 `userHandle` 仍与凭证属主 uid 比对 (这一条是真实校验, 不是冗余)
+- `Widget\Upload::checkFileType()` 增加危险后缀黑名单 (`php`/`phtml`/`phar`/`html`/`js`/
+  `svg`/`xml` 等), 即使站点把 `svg`、`html` 写进允许列表也会被拒绝
+- XML-RPC: 除 `pingback.ping` 与 `system.*` 以外的方法, 只要没解析出 `userName`/`password`
+  就直接 403 (以前方法签名里没有这两个参数就完全跳过登录校验), 密码错误计入限流
+- `Widget\Options\Permalink` 的自定义 pattern 输入框对回显值做 `htmlspecialchars()`
+  (反射型 XSS); `Typecho\Db\Query::order()` 只接受 `ASC`/`DESC`;
+  `Typecho\Db\Adapter\SQLite::quoteValue()` 去掉字符串里的 NUL (SQLite 会截断);
+  `Widget\Contents\PageOffsetTrait` 的列名走白名单
+- `Typecho\Request::isSecure()` 只在直连地址是内网/保留地址时才信任 `X-Forwarded-*`
+  (可用 `__TYPECHO_TRUST_PROXY__` 显式放开); `Typecho\Http\Client` 补上协议白名单兜底
+  (旧 PHP 没有 `CURLOPT_PROTOCOLS_STR` 时) 并拒绝没有主机名的地址
+- `themeFooterHtml()` 改用 `Typecho\Common::stripTags()` 的标签/属性白名单 (原来的正则
+  `preg_replace` 能被 `<svg/onload=>`、不带引号的 `href` 绕过), 页脚评论回复链接的
+  `onclick` 参数改成 `json_encode(... JSON_HEX_*)` + `themeEsc()`
+- `Widget\Ajax::editorResize` 补上 `protect()`; `Widget\Action\Sitemap` 把两次 metas
+  COUNT 合并成一条 `GROUP BY`, 并回 `Cache-Control: public, max-age=3600`
+- `usr/plugins/Sticky`: 置顶文章一次查询取回 (原来按 cid 逐条查, N+1), 标题里只拼纯文本
+  (HTML 单独放在 `sticky_html` 字段), cid 列表解析改成 `preg_split` + 整数过滤
+- 后台 JS 里的界面文案改用新的 `_je()`/`_js()` (`var/Typecho/Common.php`), 不再把翻译
+  文本塞进单引号 JS 字符串里 (文案带 `'` 会截断脚本)
+- 回归测试: `tools/e2e.php` 按新约定从页面里取各端点专属 token, 并新增三条断言 ——
+  含下划线的 slug 去重、跨端点重放 token 被拒、XML-RPC 错误密码被拒
+
 ### 仓库与文档整理
 
 - 新增 [`tools/README.md`](tools/README.md): 逐个说明构建/打包/质量检查脚本的用途、常用命令与调用关系,

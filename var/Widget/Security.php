@@ -64,7 +64,9 @@ class Security extends Base
      */
     public function protect()
     {
-        if ($this->enabled && !hash_equals($this->getToken(null), (string)$this->request->get('_'))) {
+        $provided = $this->request->get('_');
+
+        if ($this->enabled && (!is_string($provided) || !hash_equals($this->getToken($this->currentPath()), $provided))) {
             $this->response->goBack();
         }
     }
@@ -72,16 +74,65 @@ class Security extends Base
     /**
      * 获取token
      *
-     * token 仅由服务端可知的 secret / authCode / uid 派生,
-     * 不再绑定 Referer, 使用恒定时间比较, 避免在 Referer 缺失
-     * (CSP strict-origin 等) 场景下防护失效
+     * token 由服务端可知的 secret / authCode / uid 派生, 并绑定到提交目标路径,
+     * 因此一个泄漏的 token 只对生成它的那个端点有效 (例如后台页面 URL 出现在
+     * Referer 或访问日志里时, 无法拿去重放其它后台操作).
      *
-     * @param string|null $suffix 后缀 (保留参数以兼容原签名, 现已不参与计算)
+     * 绑定的是路径而不是 Referer: Referer 可能被 CSP / 隐私策略剥离, 那会让
+     * 整个后台无法提交; 路径在请求行里, 不受客户端策略影响.
+     *
+     * @param string|null $suffix 绑定的地址 (只取其中的路径部分), null 表示当前请求路径
      * @return string
      */
     public function getToken(?string $suffix): string
     {
-        return hash('sha256', $this->token . '&csrf');
+        return hash('sha256', $this->token . '&csrf&' . $this->normalizeTokenPath($suffix ?? $this->currentPath()));
+    }
+
+    /**
+     * 当前请求的路径 (不含查询串), 用于 token 校验
+     */
+    private function currentPath(): string
+    {
+        return $this->normalizeTokenPath($this->request->getRequestUri() ?? '/');
+    }
+
+    /**
+     * 把地址规整成「相对站点根目录、去掉入口脚本」的路径
+     *
+     * 生成侧 (getTokenUrl 收到的 action 地址) 与校验侧 (REQUEST_URI) 必须
+     * 得到完全相同的结果, 否则合法表单会被拒绝. 处理三种差异:
+     * - 绝对地址 / 带查询串的地址 -> 只取 path
+     * - 子目录安装 -> 去掉 rootUrl 的路径前缀
+     * - 无 rewrite 时的 /index.php/... -> 去掉入口脚本
+     */
+    private function normalizeTokenPath(?string $path): string
+    {
+        if (null === $path || '' === $path) {
+            return '/';
+        }
+
+        $parts = parse_url($path);
+        $path = is_array($parts) && isset($parts['path']) ? $parts['path'] : '';
+
+        if ('' === $path) {
+            return '/';
+        }
+
+        $rootPath = (string) parse_url((string) $this->options->rootUrl, PHP_URL_PATH);
+        $rootPath = rtrim($rootPath, '/');
+
+        if ('' !== $rootPath) {
+            if (0 === strpos($path, $rootPath . '/')) {
+                $path = substr($path, strlen($rootPath));
+            } elseif ($path === $rootPath) {
+                $path = '/';
+            }
+        }
+
+        $path = preg_replace('#^/index\.php(?=/|$)#i', '', $path) ?? $path;
+
+        return '/' . ltrim($path, '/');
     }
 
     /**
@@ -111,7 +162,8 @@ class Security extends Base
             parse_str($parts['query'], $params);
         }
 
-        $params['_'] = $this->getToken($url ?: $this->request->getRequestUrl());
+        // 默认绑定到提交目标自身; $url 用于少数需要显式指定绑定地址的场景
+        $params['_'] = $this->getToken($url ?? (string) $path);
         $parts['query'] = http_build_query($params);
 
         return Common::buildUrl($parts);

@@ -332,6 +332,10 @@ class Client
         if (defined('CURLOPT_PROTOCOLS_STR')) {
             curl_setopt($ch, CURLOPT_PROTOCOLS_STR, 'http,https');
             curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS_STR, 'http,https');
+        } else {
+            /** 老版本 curl 没有 *_STR 常量, 用位掩码版本, 不能因为常量缺失就不限制 */
+            curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+            curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
         }
 
         /** PHP 8.5 持久化共享句柄: 跨请求复用连接, 替代原先的 CURLOPT_FRESH_CONNECT 强制新连接 */
@@ -382,8 +386,14 @@ class Client
         });
 
         /** 防止 SSRF/DNS rebinding: 一次性解析并绑定到校验通过的 IP */
-        if ($this->safeHostCheck && !empty($params['host'])) {
-            $port = $params['port'] ?? ('https' == strtolower($params['scheme'] ?? '') ? 443 : 80);
+        if ($this->safeHostCheck) {
+            if (empty($params['host']) || empty($params['scheme'])) {
+                /** 没有 host/scheme 的地址(如 file:)不能放过, 否则直接绕过 SSRF 校验 */
+                unset($ch);
+                throw new Exception('Unsafe or unresolvable host', 500);
+            }
+
+            $port = $params['port'] ?? ('https' == strtolower($params['scheme']) ? 443 : 80);
             $ip = Common::resolveSafeHost($params['host']);
 
             if (null === $ip) {

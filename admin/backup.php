@@ -106,7 +106,7 @@ include 'form-js.php';
     });
 
     $('#backup-secondary form').submit(function (e) {
-        if (!confirm('<?php _e('恢复操作将清除所有现有数据, 是否继续?'); ?>')) {
+        if (!confirm(<?php echo _je('恢复操作将清除所有现有数据, 是否继续?'); ?>)) {
             return false;
         }
     });

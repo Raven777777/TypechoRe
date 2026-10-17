@@ -160,6 +160,12 @@ class Edit extends Contents implements ActionInterface
             $this->response->goBack();
         }
 
+        // 贡献者不能自行发布 / 设为私密, 与 checkStatus() 保存时的规则保持一致,
+        // 否则可以绕过审核直接发布自己的待审文章
+        if (!$this->user->pass('editor', true) && !in_array($status, ['waiting', 'hidden'], true)) {
+            $status = 'waiting';
+        }
+
         $posts = $this->request->filter('int')->getArray('cid');
         $markCount = 0;
 
@@ -314,12 +320,13 @@ class Edit extends Contents implements ActionInterface
 
         foreach ($posts as $post) {
             /** 删除草稿 */
-            $draft = $this->db->fetchRow($this->db->select('cid')
+            $draft = $this->db->fetchRow($this->db->select('cid', 'authorId')
                 ->from('table.contents')
                 ->where('table.contents.parent = ? AND table.contents.type = ?', $post, 'revision')
                 ->limit(1));
 
-            if ($draft) {
+            // 草稿也需要校验归属: 否则贡献者可以刪除别人文章的草稿
+            if ($draft && ($this->user->pass('editor', true) || $draft['authorId'] == $this->user->uid)) {
                 $this->deleteContent($draft['cid']);
                 $this->deleteFields($draft['cid']);
                 $deleteCount++;

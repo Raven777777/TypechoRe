@@ -213,23 +213,76 @@ class XmlRpc extends Contents implements ActionInterface, Hook
         foreach ($reflectionMethod->getParameters() as $key => $parameter) {
             $name = $parameter->getName();
             if ($name == 'userName' || $name == 'password') {
-                $auth[$name] = $parameters[$key];
+                $auth[$name] = $parameters[$key] ?? null;
                 $valid--;
             }
         }
 
-        if ($valid == 0) {
-            if ($this->user->login($auth['userName'], $auth['password'], true)) {
-                /** 验证权限 */
-                if ($this->user->pass($accesses[$methodName] ?? 'contributor', true)) {
-                    $this->user->execute();
-                } else {
-                    throw new Exception(_t('权限不足'), 403);
-                }
-            } else {
-                throw new Exception(_t('无法登录, 密码错误'), 403);
+        if ($valid != 0) {
+            /**
+             * 除 pingback 外, 所有方法都必须带凭据。
+             * 以前只在签名里出现 userName/password 时才校验, 方法签名一旦漏了凭据
+             * 就会被当作游客直接执行; 现在默认拒绝(fail closed)。
+             */
+            if (!in_array(strtolower($methodName), [
+                'pingback.ping',
+                'system.listmethods',
+                'system.methodhelp',
+                'system.methodsignature',
+                'system.getcapabilities',
+                'system.multicall',
+            ], true)) {
+                throw new Exception(_t('需要登录'), 403);
             }
+
+            return;
         }
+
+        $this->assertNotThrottled();
+
+        if ($this->user->login((string) $auth['userName'], (string) $auth['password'], true)) {
+            /** 验证权限 */
+            if ($this->user->pass($accesses[$methodName] ?? 'contributor', true)) {
+                $this->user->execute();
+            } else {
+                throw new Exception(_t('权限不足'), 403);
+            }
+        } else {
+            $this->recordFailure();
+            throw new Exception(_t('无法登录, 密码错误'), 403);
+        }
+    }
+
+    /**
+     * 连续登录失败过多时拒绝 (session 计数, 15 分钟窗口)
+     *
+     * @throws Exception
+     */
+    private function assertNotThrottled(): void
+    {
+        $fail = $_SESSION['__typecho_xmlrpc_fail'] ?? null;
+
+        if (
+            is_array($fail) && (int) ($fail['count'] ?? 0) >= 10
+            && time() - (int) ($fail['since'] ?? 0) < 900
+        ) {
+            throw new Exception(_t('尝试次数过多, 请稍后再试'), 429);
+        }
+    }
+
+    private function recordFailure(): void
+    {
+        $now = time();
+        $fail = $_SESSION['__typecho_xmlrpc_fail'] ?? null;
+
+        if (!is_array($fail) || $now - (int) ($fail['since'] ?? 0) >= 900) {
+            $fail = ['count' => 0, 'since' => $now];
+        }
+
+        $fail['count'] = (int) ($fail['count'] ?? 0) + 1;
+        $_SESSION['__typecho_xmlrpc_fail'] = $fail;
+
+        sleep(1);
     }
 
     /**
@@ -1754,6 +1807,11 @@ class XmlRpc extends Contents implements ActionInterface, Hook
     {
         if (0 == $this->options->allowXmlRpc) {
             throw new Exception(_t('请求的地址不存在'), 404);
+        }
+
+        /** 失败计数放在 session 里, 需要先开启才能限流 */
+        if (!isset($_SESSION['__typecho_xmlrpc_fail'])) {
+            Common::startSession();
         }
 
         if (isset($this->request->rsd)) {

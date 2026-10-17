@@ -137,6 +137,8 @@ class Sitemap extends Contents implements ActionInterface
         // ob_start 回调统一发送, 提前冲刷会让 header() 失效, 并且在
         // PHP 8.5 的请求关闭阶段产生额外输出, 破坏 XML 文档结构
         $this->response->setContentType('application/xml');
+        /** 爬虫会反复抓取, 让缓存层/代理记住一小时, 避免每次都跑一遍 COUNT 扫描 */
+        $this->response->setHeader('Cache-Control', 'public, max-age=3600');
 
         if ($this->isSitemapIndex) {
             $this->renderIndex();
@@ -153,10 +155,21 @@ class Sitemap extends Contents implements ActionInterface
     {
         $contentCount = $this->size($this->publicContentQuery(['table.contents.cid']));
 
-        $metas = Metas::allocWithAlias('sitemap-count');
-        $categoryCount = $metas->size($this->metaQuery('category'));
-        $tagCount = $metas->size($this->metaQuery('tag'));
-        Metas::destroy('sitemap-count');
+        /** 分类/标签计数合并成一条 GROUP BY 查询, 原来要两次全表 COUNT 扫描 */
+        $rows = $this->db->fetchAll($this->db->select(['table.metas.type' => 'type', 'COUNT(*)' => 'num'])
+            ->from('table.metas')
+            ->where('table.metas.type = ? OR table.metas.type = ?', 'category', 'tag')
+            ->where('table.metas.count > ?', 0)
+            ->group('table.metas.type'));
+
+        $byType = [];
+
+        foreach ($rows as $row) {
+            $byType[(string) $row['type']] = (int) $row['num'];
+        }
+
+        $categoryCount = $byType['category'] ?? 0;
+        $tagCount = $byType['tag'] ?? 0;
 
         return [
             'content'  => $contentCount,
