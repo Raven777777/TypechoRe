@@ -75,8 +75,8 @@ if (!$hasBlock) {
                 <ul class="widget-list">
                     <?php while ($categoryRows->next()): ?>
                         <li class="category-level-<?php echo (int) $categoryRows->levels; ?>">
-                            <a href="<?php $categoryRows->permalink(); ?>"<?php if ($this->is('category', $categoryRows->slug)): ?> aria-current="page"<?php endif; ?>>
-                                <span class="truncate"><?php echo themeText(fn () => $categoryRows->name()); ?></span>
+                            <a href="<?php echo themeEsc((string) $categoryRows->permalink); ?>"<?php if ($this->is('category', $categoryRows->slug)): ?> aria-current="page"<?php endif; ?>>
+                                <span class="truncate"><?php echo themeEsc((string) $categoryRows->name); ?></span>
                                 <span class="widget-count"><?php echo (int) $categoryRows->count; ?></span>
                             </a>
                         </li>

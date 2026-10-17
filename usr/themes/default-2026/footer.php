@@ -21,7 +21,7 @@ $footerText = themeFooterHtml();
         <nav class="browse-strip mt-10" aria-label="<?php echo themeEsc(_t('浏览')); ?>">
             <?php $footCategories = \Widget\Metas\Category\Rows::alloc(); ?>
             <?php while ($footCategories->next()): ?>
-                <a class="chip shrink-0" href="<?php $footCategories->permalink(); ?>"><?php echo themeText(fn () => $footCategories->name()); ?><span class="widget-count"><?php echo (int) $footCategories->count; ?></span></a>
+                <a class="chip shrink-0" href="<?php echo themeEsc((string) $footCategories->permalink); ?>"><?php echo themeEsc((string) $footCategories->name); ?><span class="widget-count"><?php echo (int) $footCategories->count; ?></span></a>
             <?php endwhile; ?>
             <?php \Widget\Contents\Post\Date::alloc('type=month&format=Y-m&pageSize=3')
                 ->parse('<a class="chip shrink-0" href="{permalink}">{date}</a>'); ?>

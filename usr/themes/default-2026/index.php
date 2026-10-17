@@ -37,7 +37,7 @@ $this->need('header.php');
         <nav class="browse-strip mb-5" aria-label="<?php echo themeEsc(_t('浏览分类')); ?>">
             <?php \Widget\Metas\Category\Rows::alloc()->to($stripCategories); ?>
             <?php while ($stripCategories->next()): ?>
-                <a class="chip shrink-0" href="<?php $stripCategories->permalink(); ?>"><?php echo themeText(fn () => $stripCategories->name()); ?><span class="widget-count"><?php echo (int) $stripCategories->count; ?></span></a>
+                <a class="chip shrink-0" href="<?php echo themeEsc((string) $stripCategories->permalink); ?>"><?php echo themeEsc((string) $stripCategories->name); ?><span class="widget-count"><?php echo (int) $stripCategories->count; ?></span></a>
             <?php endwhile; ?>
         </nav>
     <?php endif; ?>
