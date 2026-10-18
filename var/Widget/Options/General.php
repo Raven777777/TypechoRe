@@ -64,17 +64,6 @@ class General extends Options implements ActionInterface
     }
 
     /**
-     * 过滤掉可执行的后缀名
-     *
-     * @param string $ext
-     * @return boolean
-     */
-    public function removeShell(string $ext): bool
-    {
-        return !preg_match("/^(php|php4|php5|sh|asp|jsp|rb|py|pl|dll|exe|bat)$/i", $ext);
-    }
-
-    /**
      * 执行更新动作
      *
      * @throws Exception
@@ -116,10 +105,8 @@ class General extends Options implements ActionInterface
 
         $attachmentTypesOther = $this->request->filter('trim', 'strtolower')->get('attachmentTypesOther');
         if ($this->isEnableByCheckbox($settings['attachmentTypes'], '@other@') && !empty($attachmentTypesOther)) {
-            $types = implode(
-                ',',
-                array_filter(array_map('trim', explode(',', $attachmentTypesOther)), [$this, 'removeShell'])
-            );
+            /** 不再额外过滤"可执行"后缀, 想放开什么由站长自己决定 */
+            $types = implode(',', array_filter(array_map('trim', explode(',', $attachmentTypesOther))));
 
             if (!empty($types)) {
                 $attachmentTypes[] = $types;
@@ -274,9 +261,12 @@ class General extends Options implements ActionInterface
         }
 
         $attachmentTypesOptions = [
-            '@image@' => _t('图片文件') . ' <code>(gif jpg jpeg png tiff bmp webp avif)</code>',
-            '@media@' => _t('多媒体文件') . ' <code>(mp3 mp4 mov wmv wma rmvb rm avi flv ogg oga ogv)</code>',
-            '@doc@'   => _t('常用档案文件') . ' <code>(txt doc docx xls xlsx ppt pptx zip rar pdf)</code>',
+            '@image@' => _t('图片文件')
+                . ' <code>(gif jpg jpeg png webp avif bmp tif tiff heic heif jxl)</code>',
+            '@media@' => _t('多媒体文件')
+                . ' <code>(mp3 mp4 m4a m4v mov webm mkv ogv ogg oga opus flac wav aac avi)</code>',
+            '@doc@'   => _t('常用档案文件')
+                . ' <code>(txt md pdf doc docx xls xlsx ppt pptx csv odt ods odp epub zip 7z rar tar gz xz)</code>',
             '@other@' => _t(
                 '其他格式 %s',
                 ' <input type="text" class="w-50 text-s mono" name="attachmentTypesOther" value="'
@@ -290,6 +280,8 @@ class General extends Options implements ActionInterface
             $attachmentTypesOptionsValue,
             _t('允许上传的文件类型'),
             _t('用逗号 "," 将后缀名隔开, 例如: %s', '<code>cpp, h, mak</code>')
+            . '<br />'
+            . _t('注意: 允许上传 svg/svgz、html/htm、js、xml、php 等可能存在安全风险。')
         );
         $form->addInput($attachmentTypes->multiMode());
 

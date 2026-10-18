@@ -425,34 +425,17 @@ class Upload extends Contents implements ActionInterface
     }
 
     /**
-     * 检查文件名
+     * 检查文件类型是否被允许
      *
-     * @access private
+     * 这里不做硬编码拦截: 后台「允许上传的文件类型」是唯一判定依据,
+     * 包括 svg/php 这类有风险的后缀 —— 要不要放行由站长自己决定。
+     *
      * @param string $ext 扩展名
      * @return boolean
      */
-    /**
-     * 无论后台设置如何都禁止上传的扩展名
-     *
-     * 这些后缀能被 Web 服务器当作脚本/标记执行 (或直接渲染成页面),
-     * 上传目录一旦可访问就等于存储型 XSS, 甚至 RCE。
-     */
-    private const FORBIDDEN_EXTENSIONS = [
-        'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'pht', 'phar', 'inc',
-        'html', 'htm', 'xhtml', 'shtml', 'hta', 'htaccess',
-        'js', 'mjs', 'cjs', 'svg', 'svgz', 'xml', 'xsl', 'xslt',
-    ];
-
     public static function checkFileType(string $ext): bool
     {
-        $ext = strtolower($ext);
-
-        /** 危险后缀优先拒绝, 即使站长把它们加进了允许列表 */
-        if (in_array($ext, self::FORBIDDEN_EXTENSIONS, true)) {
-            return false;
-        }
-
         $options = Options::alloc();
-        return in_array($ext, $options->allowedAttachmentTypes);
+        return in_array(strtolower($ext), $options->allowedAttachmentTypes, true);
     }
 }

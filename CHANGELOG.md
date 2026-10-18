@@ -5,6 +5,22 @@
 
 ## 未发布
 
+### 后台: 上传文件类型只由站点设置决定
+
+- 移除 `Widget\Upload::checkFileType()` 里写死的危险后缀黑名单 (`php`/`phtml`/`phar`/
+  `html`/`js`/`svg`/`xml` 等): 后台「允许上传的文件类型」是唯一判定依据, 站长写进去的
+  后缀就能传。原黑名单优先于后台设置, 导致把 `svg` 加进允许列表也传不上去, 而设置页
+  对此没有任何说明
+- 设置页在该项下面加了一行提示: 「注意: 允许上传 svg/svgz、html/htm、js、xml、php
+  等可能存在安全风险。」
+- `Widget\Options\General` 不再用 `removeShell()` 过滤自定义后缀 (以前 `php`/`sh`/`asp`
+  写了也存不进去, 与「设置说了算」自相矛盾)
+- 预设类型清单更新 (只动本仓库的默认值, 不影响已有数据): 图片加 `avif`/`tif`/`heic`/
+  `heif`/`jxl`; 多媒体补 `m4a`/`m4v`/`webm`/`mkv`/`opus`/`flac`/`wav`/`aac`, 去掉
+  `wmv`/`wma`/`rmvb`/`rm`/`flv`; 常用档案补 `7z`/`md`/`csv`/`odt`/`ods`/`odp`/`epub`/
+  `tar`/`gz`/`xz`。设置页标签与实际展开清单之前不一致 (`avif` 只在标签里有), 这次一并对齐
+- 附件渲染的 `isImage` 补上 `tif` (与 `tiff` 同义)
+
 ### 主题: Default 2026 回复面板浮层 / 折叠动画 / 窄屏导航与分类带
 
 - 回复面板改成**浮层** (`#respond-layer`, `position: fixed` + 半透明遮罩): 窄屏是从底部
@@ -101,8 +117,6 @@
 - `Widget\Passkey`: 未认证调用方不再看到 SQL/WebAuthn 库的异常原文, 凭证不存在与签名失败
   统一报「Passkey 验证失败」; 失败 10 次/15 分钟触发 429 并 `sleep(1)`; 注册时排除已注册的
   凭证; 断言里的 `userHandle` 仍与凭证属主 uid 比对 (这一条是真实校验, 不是冗余)
-- `Widget\Upload::checkFileType()` 增加危险后缀黑名单 (`php`/`phtml`/`phar`/`html`/`js`/
-  `svg`/`xml` 等), 即使站点把 `svg`、`html` 写进允许列表也会被拒绝
 - XML-RPC: 除 `pingback.ping` 与 `system.*` 以外的方法, 只要没解析出 `userName`/`password`
   就直接 403 (以前方法签名里没有这两个参数就完全跳过登录校验), 密码错误计入限流
 - `Widget\Options\Permalink` 的自定义 pattern 输入框对回显值做 `htmlspecialchars()`

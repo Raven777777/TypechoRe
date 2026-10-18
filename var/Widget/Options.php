@@ -801,8 +801,9 @@ class Options extends Base
             $attachmentTypes = str_replace(
                 ['@image@', '@media@', '@doc@'],
                 [
-                    'gif,jpg,jpeg,png,tiff,bmp,webp', 'mp3,mp4,mov,wmv,wma,rmvb,rm,avi,flv,ogg,oga,ogv',
-                    'txt,doc,docx,xls,xlsx,ppt,pptx,zip,rar,pdf'
+                    'gif,jpg,jpeg,png,webp,avif,bmp,tif,tiff,heic,heif,jxl',
+                    'mp3,mp4,m4a,m4v,mov,webm,mkv,ogv,ogg,oga,opus,flac,wav,aac,avi',
+                    'txt,md,pdf,doc,docx,xls,xlsx,ppt,pptx,csv,odt,ods,odp,epub,zip,7z,rar,tar,gz,xz'
                 ],
                 $this->attachmentTypes
             );
