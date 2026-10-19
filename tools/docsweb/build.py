@@ -4,13 +4,19 @@
 posts/**.md -> dist/**.html（目录结构原样保留）
 分类 = 文件夹；代码高亮由 static/hl.js 完成。
 HTML 内容不变不重写；static/ 里的 css/js 变化时才复制。
+
+时间前缀：2026-11-01-xxx.md
 """
 from __future__ import annotations
 
 import hashlib
 import html
+import os
 import posixpath
 import re
+import shutil
+import sys
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -26,14 +32,22 @@ SITE = {
     "title": "Hello_World",
     "heading": "Hello_World",
     "lang": "zh-CN",
-    "url": "https://love4z.cn/2233/tprd/",  # 改成你的域名，sitemap / robots / 404 用它
+    "url": "https://love4z.cn/2233/tprd/",
 }
-PAGE_SIZE = 20   # 首页每页文章数；0 = 不分页
-ARCHIVE = "month"  # "year" / "month" / None
-USE_MTIME_DATE = True  # 文件名没有 YYYY-MM-DD- 前缀时，用文件修改日期补上
+PAGE_SIZE = 20
+ARCHIVE = "month"
+USE_MTIME_DATE = True
 BASE = SITE["url"].rstrip("/")
 
 ASSETS = {"css": "style.css", "js": "hl.js"}
+
+# 并发上限：不要把整机 CPU / IO 打满，否则系统明显"卡"
+MAX_PARSE_WORKERS = min(os.cpu_count() or 4, 8)
+MAX_IO_WORKERS = min(os.cpu_count() or 4, 16)
+# 进程池任务块大小：大幅降低 IPC 调度开销
+CHUNKSIZE = 8
+# 少于这么多篇时直接串行，进程池启动成本反而更高
+SERIAL_THRESHOLD = 32
 
 
 # ── 微型 Markdown ──────────────────────────────────────
@@ -44,7 +58,6 @@ def esc(s: str) -> str:
 
 
 def inline(s: str) -> str:
-    # 行内代码先抽出来，避免里面的 * _ 被当成强调
     codes: list[str] = []
 
     def stash(m: re.Match) -> str:
@@ -97,19 +110,17 @@ def md(src: str) -> str:
             i += 1
             continue
 
-        # 围栏代码块
-        fence = re.match(r"^```(\S*)\s*$", line)
+        fence = re.match(r"^```\s*(\S*)\s*$", line)
         if fence:
             buf = []
             i += 1
             while i < len(lines) and not re.match(r"^```\s*$", lines[i]):
                 buf.append(lines[i])
                 i += 1
-            i += 1  # 跳过结束围栏
+            i += 1
             out.append(f"<pre>{esc(chr(10).join(buf))}</pre>")
             continue
 
-        # 标题
         h = re.match(r"^(#{1,4})\s+(.*)$", line)
         if h:
             n = len(h.group(1))
@@ -117,13 +128,11 @@ def md(src: str) -> str:
             i += 1
             continue
 
-        # 分隔线
         if re.match(r"^\s*(?:-{3,}|\*{3,})\s*$", line):
             out.append("<hr>")
             i += 1
             continue
 
-        # 引用
         if re.match(r"^>\s?", line):
             buf = []
             while i < len(lines) and re.match(r"^>\s?", lines[i]):
@@ -132,7 +141,6 @@ def md(src: str) -> str:
             out.append(f"<blockquote>{md(chr(10).join(buf))}</blockquote>")
             continue
 
-        # 列表（单层）
         li = re.match(r"^\s*(?:[-*+]|\d+\.)\s+(.*)$", line)
         if li:
             ordered = bool(re.match(r"^\s*\d+\.", line))
@@ -144,10 +152,9 @@ def md(src: str) -> str:
             out.append(f"<{tag}>{''.join(items)}</{tag}>")
             continue
 
-        # 表格
         if "|" in line and i + 1 < len(lines) and TABLE_SEP.match(lines[i + 1]):
             head = table_cells(line)
-            i += 2  # 跳过表头和分隔行
+            i += 2
             rows = []
             while i < len(lines) and lines[i].strip() and "|" in lines[i]:
                 rows.append(table_cells(lines[i]))
@@ -159,8 +166,8 @@ def md(src: str) -> str:
             out.append(f"<table><tr>{th}</tr>{body}</table>")
             continue
 
-        # 段落（到空行或下一个块为止）
-        buf = []
+        buf = [lines[i]]
+        i += 1
         while i < len(lines) and lines[i].strip() and not BLOCK_START.match(lines[i]):
             buf.append(lines[i])
             i += 1
@@ -183,7 +190,6 @@ class Post:
 
 
 def url_path(p: str) -> str:
-    # 逐段编码，文件夹/slug 里的空格、中文、# 都不会弄坏链接
     return "/".join(quote(seg, safe="") for seg in p.split("/"))
 
 
@@ -214,31 +220,25 @@ def home(items: list[Post], cats: list[str], page_no: int = 1, total: int = 1) -
     out = "index.html" if page_no == 1 else f"page/{page_no}.html"
     root = "../" * out.count("/")
 
-    nav = ""
-    if page_no == 1 and cats:
-        links = " · ".join(
-            f'<a href="category/{url_path(c)}/index.html">{esc(c)}</a>' for c in cats
-        )
-        nav = f"<p>分类：{links}</p>"
-
-    pager = ""
+    bits: list[str] = []
     if total > 1:
-        bits = [f"第 {page_no} / {total} 页"]
+        bits.append(f"Page {page_no} / {total}")
         if page_no > 1:
             prev = "../index.html" if page_no == 2 else f"{page_no - 1}.html"
-            bits.append(f'<a href="{prev}">上一页</a>')
+            bits.append(f'<a href="{prev}">Up</a>')
         if page_no < total:
             nxt = f"page/{page_no + 1}.html" if page_no == 1 else f"{page_no + 1}.html"
-            bits.append(f'<a href="{nxt}">下一页</a>')
-        pager = f"<nav>{' · '.join(bits)}</nav>"
+            bits.append(f'<a href="{nxt}">Down</a>')
+    if cats:
+        bits.append(f'<a href="{root}category/index.html">Category</a>')
+    pager = f"<nav>{' · '.join(bits)}</nav>" if bits else ""
 
-    title = SITE["title"] if page_no == 1 else f"第 {page_no} 页 · {SITE['title']}"
+    title = SITE["title"] if page_no == 1 else f"Page {page_no} · {SITE['title']}"
     return page(
         title,
         out,
         f"""<body>
 <h1>{esc(SITE['heading'])}</h1>
-{nav}
 {post_list(items, root, True)}
 {pager}""",
     )
@@ -255,9 +255,9 @@ def post_page(p: Post, newer: Post | None = None, older: Post | None = None) -> 
 
     pager = []
     if newer:
-        pager.append(f'<a href="{root}{url_path(newer.out)}">较新</a>')
+        pager.append(f'<a href="{root}{url_path(newer.out)}">Last</a>')
     if older:
-        pager.append(f'<a href="{root}{url_path(older.out)}">较旧</a>')
+        pager.append(f'<a href="{root}{url_path(older.out)}">Old</a>')
     pager_html = f"<nav>{' · '.join(pager)}</nav>" if pager else ""
 
     return page(
@@ -281,6 +281,19 @@ def cat_page(cat: str, items: list[Post]) -> str:
 {post_list(items, root)}""",
     )
 
+def categories_index(cats: list[str], cat_items: dict[str, list[Post]]) -> str:
+    rows = [
+        f'<a href="{url_path(c)}/index.html">{esc(c)}</a> ({len(cat_items[c])})'
+        for c in cats
+    ]
+    body = f"<p>{'<br>'.join(rows)}</p>" if rows else "<p>暂无分类</p>"
+    return page(
+        f"Category · {SITE['title']}",
+        "category/index.html",
+        f"""<body>
+<h1><a href="../index.html">home</a>/category</h1>
+{body}""",
+    )
 
 def archive_index(periods: list[tuple[str, list[Post]]]) -> str:
     rows = [
@@ -308,16 +321,15 @@ def archive_page(period: str, items: list[Post]) -> str:
 
 
 def not_found(css: str) -> str:
-    # 404 会被服务器在任意路径下返回，所以自带样式、用绝对地址回首页
     return f"""<!doctype html>
 <html lang="{SITE['lang']}">
 <meta charset="utf-8">
 <title>404 · {esc(SITE['title'])}</title>
 <style>{css}</style>
 <body>
-<p><a href="{BASE}/">首页</a></p>
+<p><a href="{BASE}/">Home</a></p>
 <h1>404</h1>
-<p>页面不存在。</p>
+<p>NotFoud</p>
 </body>
 </html>"""
 
@@ -327,6 +339,8 @@ def sitemap(posts: list[Post], cats: list[str], periods: list[tuple[str, list[Po
     for p in posts:
         last = f"<lastmod>{p.date}</lastmod>" if p.date else ""
         rows.append(f"<url><loc>{esc(BASE + '/' + url_path(p.out))}</loc>{last}</url>")
+    if cats:
+        rows.append(f"<url><loc>{esc(BASE)}/category/index.html</loc></url>")
     for c in cats:
         loc = BASE + "/category/" + url_path(c) + "/index.html"
         rows.append(f"<url><loc>{esc(loc)}</loc></url>")
@@ -336,7 +350,7 @@ def sitemap(posts: list[Post], cats: list[str], periods: list[tuple[str, list[Po
             rows.append(f"<url><loc>{esc(BASE + '/archive/' + period + '.html')}</loc></url>")
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'  # 修掉误写的 Markdown 链接
         + "\n".join(rows)
         + "\n</urlset>\n"
     )
@@ -361,7 +375,7 @@ def atom(posts: list[Post]) -> str:
         )
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
-        f'<feed xmlns="http://www.w3.org/2005/Atom" xml:base="{esc(BASE)}/">\n'
+        f'<feed xmlns="http://www.w3.org/2005/Atom" xml:base="{esc(BASE)}/">\n'  # 修掉误写的 Markdown 链接
         f"<title>{esc(SITE['title'])}</title>\n"
         f'<link rel="self" href="{esc(BASE)}/feed.xml"/>\n'
         f'<link rel="alternate" href="{esc(BASE)}/"/>\n'
@@ -373,106 +387,218 @@ def atom(posts: list[Post]) -> str:
     )
 
 
+# ── 进度条（节流版）────────────────────────────────────
+
+
+def print_progress(current: int, total: int, prefix: str = "Progress") -> None:
+    if total <= 0:
+        return
+    bar_length = 30
+    percent = min(max(current / total, 0.0), 1.0)
+    filled = int(round(bar_length * percent))
+    bar = "=" * filled + ("->" if filled < bar_length else "")
+    bar = bar[:bar_length].ljust(bar_length, " ")
+    sys.stdout.write(f"\r{prefix} |{bar}| {current}/{total} ({int(percent * 100)}%)")
+    sys.stdout.flush()
+    if current >= total:
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+
+
+class Progress:
+    """最多刷新 ~40 次，大幅减少终端写入开销（Windows 终端 \r 很慢）。"""
+    __slots__ = ("total", "prefix", "step", "last")
+
+    def __init__(self, total: int, prefix: str) -> None:
+        self.total = total
+        self.prefix = prefix
+        self.step = max(1, total // 40) if total else 1
+        self.last = 0
+
+    def update(self, current: int) -> None:
+        if current >= self.total or current - self.last >= self.step:
+            self.last = current
+            print_progress(current, self.total, self.prefix)
+
+
+# ── 解析 Worker ────────────────────────────────────────
+
+
+def _parse_post_worker(args: tuple[Path, Path]) -> Post:
+    path, posts_root = args
+    rel = path.relative_to(posts_root).as_posix()
+    raw = path.read_text(encoding="utf-8-sig")
+    parent = rel.rpartition("/")[0]
+    base = rel.rsplit("/", 1)[-1][:-3]
+    meta = re.match(r"^(\d{4}-\d{2}-\d{2})-(.+)$", base)
+    date = meta.group(1) if meta else ""
+    if not date and USE_MTIME_DATE:
+        date = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d")
+    lines = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+    first = next((n for n, line in enumerate(lines) if line.strip()), -1)
+    title = meta.group(2) if meta else base
+    if first >= 0:
+        h1 = re.match(r"^#\s+(.+)$", lines[first])
+        if h1:
+            title = h1.group(1).strip()
+            del lines[first]
+
+    return Post(
+        out=rel[:-3] + ".html",
+        base=base,
+        cat=parent,
+        date=date,
+        title=title,
+        body=md("\n".join(lines)),
+    )
+
+
+def _parse_post_task(args: tuple[Path, Path]) -> tuple[Path, Post | None, Exception | None]:
+    path, posts_root = args
+    try:
+        return path, _parse_post_worker(args), None
+    except Exception as exc:  # 单个失败不影响整体
+        return path, None, exc
+
+
+def _write_output(item: tuple[str, str | bytes]) -> tuple[str, Exception | None]:
+    rel, content = item
+    try:
+        write(DIST / rel, content)
+        return rel, None
+    except Exception as exc:
+        return rel, exc
+
+
 # ── 构建 ───────────────────────────────────────────────
 
 
 def write(path: Path, content: str | bytes) -> None:
     data = content.encode("utf-8") if isinstance(content, str) else content
-    if path.exists() and path.read_bytes() == data:
-        return
+    if path.exists():
+        # 先比大小，大小相同再读全文比较，大文件可省一次读
+        if path.stat().st_size == len(data) and path.read_bytes() == data:
+            return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
+
+
+def _copy_if_changed(src: Path, dest: Path) -> None:
+    """按 size + mtime 判断，避免每次构建都把大文件读进内存。"""
+    try:
+        ss = src.stat()
+        if dest.exists():
+            ds = dest.stat()
+            if ds.st_size == ss.st_size and ds.st_mtime_ns >= ss.st_mtime_ns:
+                return
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+    except OSError:
+        pass
+
+
+def _copy_tasks(tasks: list[tuple[Path, Path]]) -> None:
+    if not tasks:
+        return
+    with ThreadPoolExecutor(max_workers=MAX_IO_WORKERS) as executor:
+        list(executor.map(lambda a: _copy_if_changed(*a), tasks))
 
 
 def copy_static() -> None:
     if not STATIC.exists():
         return
-    for src in STATIC.rglob("*"):
-        if src.is_file():
-            write(DIST / src.relative_to(STATIC), src.read_bytes())
+    _copy_tasks([
+        (src, DIST / src.relative_to(STATIC))
+        for src in STATIC.rglob("*")
+        if src.is_file()
+    ])
 
 
 def copy_post_assets() -> None:
-    # 文章里引用的图片、脚本等原件，按 posts/ 的目录结构复制过去
     if not POSTS.exists():
         return
-    for src in POSTS.rglob("*"):
-        if src.is_file() and src.suffix.lower() not in (".md", ".html"):
-            write(DIST / src.relative_to(POSTS), src.read_bytes())
+    _copy_tasks([
+        (src, DIST / src.relative_to(POSTS))
+        for src in POSTS.rglob("*")
+        if src.is_file() and src.suffix.lower() not in (".md", ".html")
+    ])
 
 
 def build() -> None:
     files = sorted(POSTS.rglob("*.md")) if POSTS.exists() else []
     posts: list[Post] = []
 
-    for path in files:
-        rel = path.relative_to(POSTS).as_posix()
-        raw = path.read_text(encoding="utf-8-sig")
-        parent = rel.rpartition("/")[0]
-        base = rel.rsplit("/", 1)[-1][:-3]
-        meta = re.match(r"^(\d{4}-\d{2}-\d{2})-(.+)$", base)
-        date = meta.group(1) if meta else ""
-        if not date and USE_MTIME_DATE:
-            date = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d")
-        lines = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    # ── 解析：小批量串行，大批量用进程池 + chunksize ──
+    if files:
+        tasks = [(path, POSTS) for path in files]
+        progress = Progress(len(files), "Parsing")
+        if len(tasks) < SERIAL_THRESHOLD:
+            for i, task in enumerate(tasks, 1):
+                path, post, err = _parse_post_task(task)
+                if err:
+                    print(f"\n[Error parsing {path}] {err}", flush=True)
+                else:
+                    posts.append(post)
+                progress.update(i)
+        else:
+            with ProcessPoolExecutor(max_workers=MAX_PARSE_WORKERS) as executor:
+                for i, (path, post, err) in enumerate(
+                    executor.map(_parse_post_task, tasks, chunksize=CHUNKSIZE), 1
+                ):
+                    if err:
+                        print(f"\n[Error parsing {path}] {err}", flush=True)
+                    else:
+                        posts.append(post)
+                    progress.update(i)
 
-        # 首个非空行若是 # 标题，就作为页面标题并从正文移除
-        first = next((n for n, line in enumerate(lines) if line.strip()), -1)
-        title = meta.group(2) if meta else base
-        if first >= 0:
-            h1 = re.match(r"^#\s+(.+)$", lines[first])
-            if h1:
-                title = h1.group(1).strip()
-                del lines[first]
-
-        posts.append(
-            Post(
-                out=rel[:-3] + ".html",
-                base=base,
-                cat=parent,
-                date=date,
-                title=title,
-                body=md("\n".join(lines)),
-            )
-        )
-
-    # 旧站绝对链接 /guide/foo 解析成本站的相对 .html 链接
+    # 旧站绝对链接 /guide/foo 解析成本站相对 .html
     targets = {p.out[:-5]: p.out for p in posts}
     for p in posts:
         base = p.out.rpartition("/")[0] or "."
+
         def repl(m: re.Match) -> str:
             path, sep, frag = m.group(1).partition("#")
             target = targets.get(path.strip("/"))
             if not target:
                 return m.group(0)
             return f'href="{posixpath.relpath(target, base)}{sep}{frag}"'
+
         p.body = re.sub(r'href="(/[^"]+)"', repl, p.body)
 
-    # 日期倒序，无日期的排最后（稳定排序保留同日期内的文件名倒序）
-    posts.sort(key=lambda p: p.base, reverse=True)
-    posts.sort(key=lambda p: p.date, reverse=True)
+    # 一次 tuple 排序 = 原来的两次稳定排序，无日期排最后
+    posts.sort(key=lambda p: (p.date, p.base), reverse=True)
+
     cats = sorted({p.cat for p in posts if p.cat})
+    # 分类 → 文章 一次遍历建好（含子分类归属），避免 O(n×m)
+    cat_items: dict[str, list[Post]] = {c: [] for c in cats}
+    for p in posts:
+        if not p.cat:
+            continue
+        parts = p.cat.split("/")
+        for i in range(1, len(parts) + 1):
+            bucket = cat_items.get("/".join(parts[:i]))
+            if bucket is not None:
+                bucket.append(p)
 
     DIST.mkdir(parents=True, exist_ok=True)
+
+    print("Copying assets...")
     copy_static()
     copy_post_assets()
 
-    # 内容哈希做缓存版本号：文件还是固定的，只有内容变了 HTML 才换 URL
-    css = (STATIC / "style.css").read_text(encoding="utf-8")
-    js = (STATIC / "hl.js").read_bytes()
-    ASSETS["css"] = f"style.css?v={hashlib.sha256(css.encode()).hexdigest()[:8]}"
-    ASSETS["js"] = f"hl.js?v={hashlib.sha256(js).hexdigest()[:8]}"
-
-    written: set[str] = set()
-
-    def emit(rel: str, content: str) -> None:
-        write(DIST / rel, content)
-        written.add(rel)
+    css_path = STATIC / "style.css"
+    js_path = STATIC / "hl.js"
+    css = css_path.read_text(encoding="utf-8") if css_path.exists() else ""
+    js = js_path.read_bytes() if js_path.exists() else b""
+    if css:
+        ASSETS["css"] = f"style.css?v={hashlib.sha256(css.encode()).hexdigest()[:8]}"
+    if js:
+        ASSETS["js"] = f"hl.js?v={hashlib.sha256(js).hexdigest()[:8]}"
 
     if ARCHIVE not in (None, False, "year", "month"):
         raise SystemExit('ARCHIVE must be "year", "month" or None')
 
-    # 时间归档：没有带日期（YYYY-MM-DD-）的文章时自动隐藏
     periods: list[tuple[str, list[Post]]] = []
     if ARCHIVE:
         width = 4 if ARCHIVE == "year" else 7
@@ -481,36 +607,51 @@ def build() -> None:
             if p.date:
                 buckets.setdefault(p.date[:width], []).append(p)
         periods = sorted(buckets.items(), reverse=True)
-    # 首页分页
+
     if PAGE_SIZE and PAGE_SIZE > 0:
         pages = [posts[i : i + PAGE_SIZE] for i in range(0, len(posts), PAGE_SIZE)] or [[]]
     else:
         pages = [posts]
-    total = len(pages)
+    total_pages = len(pages)
+
+    outputs: list[tuple[str, str | bytes]] = []
     for n, items in enumerate(pages, 1):
-        emit("index.html" if n == 1 else f"page/{n}.html", home(items, cats, n, total))
+        rel = "index.html" if n == 1 else f"page/{n}.html"
+        outputs.append((rel, home(items, cats, n, total_pages)))
 
     if periods:
-        emit("archive/index.html", archive_index(periods))
+        outputs.append(("archive/index.html", archive_index(periods)))
         for period, items in periods:
-            emit(f"archive/{period}.html", archive_page(period, items))
+            outputs.append((f"archive/{period}.html", archive_page(period, items)))
 
     for n, p in enumerate(posts):
         newer = posts[n - 1] if n else None
         older = posts[n + 1] if n + 1 < len(posts) else None
-        emit(p.out, post_page(p, newer, older))
-    for c in cats:
-        items = [p for p in posts if p.cat == c or p.cat.startswith(c + "/")]
-        emit(f"category/{c}/index.html", cat_page(c, items))
-    emit("404.html", not_found(css))
-    write(DIST / "feed.xml", atom(posts))
-    write(DIST / "sitemap.xml", sitemap(posts, cats, periods))
-    write(DIST / "robots.txt", robots())
+        outputs.append((p.out, post_page(p, newer, older)))
 
-    # 删掉已不存在的文章页面，再清掉空目录
+    if cats:
+        outputs.append(("category/index.html", categories_index(cats, cat_items)))
+    for c in cats:
+        outputs.append((f"category/{c}/index.html", cat_page(c, cat_items[c])))
+
+    outputs.append(("404.html", not_found(css)))
+    outputs.append(("feed.xml", atom(posts)))
+    outputs.append(("sitemap.xml", sitemap(posts, cats, periods)))
+    outputs.append(("robots.txt", robots()))
+
+    # ── 写入：executor.map 保持顺序，进度条节流 ──
+    written: set[str] = set()
+    progress = Progress(len(outputs), "Writing")
+    with ThreadPoolExecutor(max_workers=MAX_IO_WORKERS) as executor:
+        for i, (rel, err) in enumerate(executor.map(_write_output, outputs), 1):
+            if err:
+                print(f"\n[Error writing {rel}] {err}", flush=True)
+            else:
+                written.add(rel)
+            progress.update(i)
+
     for stale in DIST.rglob("*.html"):
-        rel = stale.relative_to(DIST).as_posix()
-        if rel not in written:
+        if stale.relative_to(DIST).as_posix() not in written:
             stale.unlink()
     for folder in sorted(
         (p for p in DIST.rglob("*") if p.is_dir()), key=lambda p: len(p.parts), reverse=True
