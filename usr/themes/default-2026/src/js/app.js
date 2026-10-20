@@ -1,23 +1,65 @@
 /**
  * TypechoRe · Default 2026 主题前端入口
  *
- * - Alpine.js  : 深色模式切换、阅读进度、返回顶部等声明式轻交互
  * - Swup       : 无刷新切页 (优先使用原生 View Transitions API)
  * - lite-hl    : 代码块语法高亮 (启发式分词, 不需要按语言注册语法)
- * - 渐进增强   : 代码块复制、目录高亮、移动端导航收起
+ * - 渐进增强   : 主题切换、阅读进度、返回顶部、代码块复制、目录高亮、导航收起
  *
  * 全部脚本都以「无 JavaScript 也能正常阅读」为前提编写:
  * 移动端导航使用原生 <details>, 评论表单是普通 POST, 文章内容为服务端渲染。
+ * 轻交互一律用原生 DOM 实现, 因此不引入任何声明式框架 —— 三个小组件不值得
+ * 让每个访客多下载几十 KB 的运行时。
  */
 
-import Alpine from 'alpinejs';
 import { highlight } from 'lite-hl';
-import Swup from 'swup';
-import SwupHeadPlugin from '@swup/head-plugin';
-import SwupPreloadPlugin from '@swup/preload-plugin';
-import SwupProgressPlugin from '@swup/progress-plugin';
-import SwupScrollPlugin from '@swup/scroll-plugin';
 import { hydrateThumbs } from './thumb-placeholder.js';
+
+/* swup 与它的四个插件走动态 import, 不进首屏包。
+   理由: 它们只服务于「点链接之后」那一段, 首屏渲染一行都用不到, 却占了
+   整包一半以上的体积。拆出去之后首屏不再为切页动画付费 —— 页面照常先渲染、
+   先能读, 无刷新导航在空闲时悄悄接上。在这之前的点击走原生跳转, 功能不丢。
+
+   下面这几个是模块级变量而不是 import 绑定: loadPageTransitions() 在运行时
+   填进去, buildSwupPlugins() 读的仍是这些标识符, 因此测试用 new Function
+   注入同名替身时依旧能命中。 */
+let Swup = null;
+let SwupHeadPlugin = null;
+let SwupPreloadPlugin = null;
+let SwupProgressPlugin = null;
+let SwupScrollPlugin = null;
+
+/**
+ * 拉起无刷新导航所需的模块 (一次并发取齐, 结果缓存住不会重复下载)。
+ *
+ * @returns {Promise<boolean>} 取到了就返回 true; 离线或 CDN 挂了返回 false,
+ *   此时调用方应当安静地退回「原生跳转 + 阅读增强」。
+ */
+async function loadPageTransitions() {
+  if (Swup) {
+    return true;
+  }
+
+  try {
+    const [swup, head, preload, progress, scroll] = await Promise.all([
+      import('swup'),
+      import('@swup/head-plugin'),
+      import('@swup/preload-plugin'),
+      import('@swup/progress-plugin'),
+      import('@swup/scroll-plugin')
+    ]);
+
+    Swup = swup.default;
+    SwupHeadPlugin = head.default;
+    SwupPreloadPlugin = preload.default;
+    SwupProgressPlugin = progress.default;
+    SwupScrollPlugin = scroll.default;
+
+    return true;
+  } catch (error) {
+    /* 拿不到就当这个能力不存在: 站点本来就是无 JS 也能读的 */
+    return false;
+  }
+}
 
 const THEME_KEY = 'typecho-theme-mode';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -87,82 +129,97 @@ if (typeof darkMedia.addEventListener === 'function') {
   darkMedia.addListener(onSystemThemeChange);
 }
 
-Alpine.data('themeToggle', () => ({
-  mode: 'auto',
+/* -----------------------------------------------------------------------------
+ * 主题切换
+ *
+ * 按钮在 #site-nav 里, 而 #site-nav 是 Swup 的替换容器 —— 每次切页都会换成新节点。
+ * 所以监听挂在 document 上 (事件委托), 不在按钮自己身上, 换多少遍都不用重绑。
+ * 图标状态本来就由 html[data-theme-mode] 驱动 (见 main.css), 无需 JS 参与。
+ * -------------------------------------------------------------------------- */
 
-  init() {
-    this.mode = storedThemeMode();
-    applyThemeMode(this.mode);
-  },
+const THEME_NAMES = { auto: '跟随系统', light: '浅色', dark: '深色' };
 
-  get nextMode() {
-    return this.mode === 'auto' ? 'light' : this.mode === 'light' ? 'dark' : 'auto';
-  },
+/** auto → light → dark → auto */
+function nextThemeMode(mode) {
+  return 'auto' === mode ? 'light' : 'light' === mode ? 'dark' : 'auto';
+}
 
-  get label() {
-    const names = { auto: '跟随系统', light: '浅色', dark: '深色' };
-    return `当前外观: ${names[this.mode]}，点击切换到${names[this.nextMode]}`;
-  },
+/** 把当前模式写成按钮的 title / aria-label (两个属性共用同一句话) */
+function syncThemeToggle() {
+  const mode = document.documentElement.dataset.themeMode || 'auto';
+  const text = `当前外观: ${THEME_NAMES[mode] || THEME_NAMES.auto}，点击切换到${THEME_NAMES[nextThemeMode(mode)]}`;
 
-  cycle() {
-    this.mode = this.nextMode;
-    storeThemeMode(this.mode);
-    applyThemeMode(this.mode);
+  document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+    button.title = text;
+    button.setAttribute('aria-label', text);
+  });
+}
+
+document.addEventListener('click', (event) => {
+  if (!(event.target instanceof Element) || !event.target.closest('[data-theme-toggle]')) {
+    return;
   }
-}));
+
+  const mode = nextThemeMode(storedThemeMode());
+
+  storeThemeMode(mode);
+  applyThemeMode(mode);
+  syncThemeToggle();
+});
 
 /* -----------------------------------------------------------------------------
  * 阅读进度与返回顶部
+ *
+ * 两者都只跟滚动位置有关, 合到一条 rAF 总线上: 每帧只读一次 scrollHeight / scrollY,
+ * 不必让两个独立监听各触发一次强制布局。滚动事件的绑定只做一次, 页面切换后
+ * 只是重新算一遍当前值。
  * -------------------------------------------------------------------------- */
 
-Alpine.data('readingProgress', () => ({
-  progress: 0,
-  onScroll: null,
+/** 返回顶部按钮的阈值区间 (随可滚动高度自适应: 短页面滚到底也能出现) */
+const BACK_TO_TOP_MIN = 240;
+const BACK_TO_TOP_MAX = 600;
 
-  init() {
-    this.onScroll = () => {
-      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
-      this.progress = scrollable > 0 ? Math.min(1, window.scrollY / scrollable) : 0;
-    };
+let scrollFrame = 0;
 
-    this.onScroll();
-    window.addEventListener('scroll', this.onScroll, { passive: true });
-    window.addEventListener('resize', this.onScroll);
-  },
+function syncScrollUi() {
+  scrollFrame = 0;
 
-  destroy() {
-    window.removeEventListener('scroll', this.onScroll);
-    window.removeEventListener('resize', this.onScroll);
+  const doc = document.documentElement;
+  const scrollable = doc.scrollHeight - window.innerHeight;
+  const offset = window.scrollY;
+
+  const bar = document.querySelector('.reading-progress > span');
+
+  if (bar) {
+    const progress = scrollable > 0 ? Math.min(1, offset / scrollable) : 0;
+    bar.style.width = `${(progress * 100).toFixed(2)}%`;
   }
-}));
 
-Alpine.data('backToTop', () => ({
-  visible: false,
-  onScroll: null,
+  const button = document.querySelector('.back-to-top');
 
-  init() {
-    this.onScroll = () => {
-      /* 阈值随页面可滚动高度自适应: 短页面滚到底也能出现 */
-      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
-      const threshold = Math.min(600, Math.max(240, scrollable * 0.5));
-
-      this.visible = window.scrollY > threshold;
-    };
-
-    this.onScroll();
-    window.addEventListener('scroll', this.onScroll, { passive: true });
-    window.addEventListener('resize', this.onScroll);
-  },
-
-  destroy() {
-    window.removeEventListener('scroll', this.onScroll);
-    window.removeEventListener('resize', this.onScroll);
-  },
-
-  toTop() {
-    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  if (button) {
+    const threshold = Math.min(BACK_TO_TOP_MAX, Math.max(BACK_TO_TOP_MIN, scrollable * 0.5));
+    button.toggleAttribute('data-visible', offset > threshold);
   }
-}));
+}
+
+function queueScrollUi() {
+  if (!scrollFrame) {
+    scrollFrame = window.requestAnimationFrame(syncScrollUi);
+  }
+}
+
+window.addEventListener('scroll', queueScrollUi, { passive: true });
+window.addEventListener('resize', queueScrollUi);
+
+/* 返回顶部: 与主题切换同理, 用委托而不是直接绑在按钮上 */
+document.addEventListener('click', (event) => {
+  if (!(event.target instanceof Element) || !event.target.closest('.back-to-top')) {
+    return;
+  }
+
+  window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+});
 
 /* -----------------------------------------------------------------------------
  * 增强脚本 (需要在每次页面切换后重新初始化)
@@ -1450,6 +1507,13 @@ function enhancePage() {
      放在最前面是因为它决定首屏观感, 且不依赖任何后续增强。 */
   hydrateThumbs();
 
+  /* 主题按钮随 #site-nav 一起被替换: 新节点上只有服务端写死的 aria-label,
+     这里补回动态文案 (图标由 CSS 驱动, 不需要动)。 */
+  syncThemeToggle();
+
+  /* 新页面的高度与旧的完全不同, 进度条与返回顶部要立刻按新高度重算 */
+  queueScrollUi();
+
   /* 切页时把上一条页面留下的回复浮层清掉: 面板是 body 的子节点, 不会被 swup 换掉 */
   document.querySelectorAll(`#${RESPOND_LAYER_ID}`).forEach((layer) => layer.remove());
 
@@ -2076,7 +2140,8 @@ function markAsideSwapped() {
   document.documentElement.classList.add(ASIDE_SWAPPED_CLASS);
 }
 
-/** 同一个页面里的锚点跳转不会真正换页, 不必显示骨架也不需要入场动画 */function isSamePageHashVisit(visit) {
+/** 同一个页面里的锚点跳转不会真正换页, 不必显示骨架也不需要入场动画 */
+function isSamePageHashVisit(visit) {
   const to = visit?.to;
 
   if (!to || !to.hash || !to.url) {
@@ -2094,12 +2159,29 @@ function markAsideSwapped() {
   }
 }
 
-function boot() {
-  Alpine.start();
+async function boot() {
+  /* 内联脚本负责「首帧不闪」, 这里补一次同步: 页面可能是从 bfcache 恢复的,
+     也可能在两者之间改了系统外观。 */
+  applyThemeMode(storedThemeMode());
+  syncThemeToggle();
+  syncScrollUi();
 
   if (prefersReducedData()) {
     /* 省流模式: 不做预取, 也不接管导航, 只保留阅读相关的增强 */
     enhancePage();
+    return;
+  }
+
+  /* 切页模块一边下载, 首屏增强一边做: 高亮 / 缩略图 / 目录这些决定首屏观感的事
+     不再排在 swup 之后等它下载完。之前它们是同步 import 的, 顺序无所谓;
+     拆成异步 chunk 后如果还等, 首屏就会白等一次网络往返。 */
+  const pendingTransitions = loadPageTransitions();
+  enhancePage();
+
+  const ready = await pendingTransitions;
+
+  if (!ready) {
+    /* 没拿到切页模块 (离线 / 资源不可用): 阅读增强已经做完, 导航退回原生跳转 */
     return;
   }
 
@@ -2115,7 +2197,7 @@ function boot() {
     plugins: buildSwupPlugins()
   });
 
-  /* 供模板内联脚本或 Alpine 组件 (x-on:swup:page:view.document) 使用 */
+  /* 供模板内联脚本使用 (事件名与 swup 一致: swup:page:view / swup:visit:start) */
   window.swup = swup;
 
   /* 视口变化、字体加载完成后重新判断代码块是否需要右侧渐隐 */
@@ -2199,7 +2281,8 @@ function boot() {
     cancelContentEnter();
   });
 
-  enhancePage();
+  /* 首屏的 enhancePage() 已经在等模块下载之前跑过了, 这里不重复。
+     切页后的增强由上面 page:view 钩子负责。 */
 }
 
 /* Head 插件会替换 <head>, 内联脚本可能被重复执行; 用全局标记保证只初始化一次 */

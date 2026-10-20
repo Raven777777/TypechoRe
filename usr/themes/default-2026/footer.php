@@ -48,15 +48,14 @@ $footerText = themeFooterHtml();
     </div>
 </footer>
 
-<div class="reading-progress" x-data="readingProgress" aria-hidden="true">
-    <span :style="'width:' + (progress * 100).toFixed(2) + '%'"></span>
+<div class="reading-progress" aria-hidden="true">
+    <span></span>
 </div>
 
-<div x-data="backToTop">
-    <button class="back-to-top no-print" type="button" x-show="visible" x-cloak x-transition.opacity @click="toTop()" aria-label="<?php echo themeEsc(_t('返回顶部')); ?>" title="<?php echo themeEsc(_t('返回顶部')); ?>">
-        <?php echo themeIcon('chevron-up', 'size-5'); ?>
-    </button>
-</div>
+<?php /* data-visible 由 app.js 按滚动位置切换; 没有 JS 时它始终保持隐藏 (点击也没有意义) */ ?>
+<button class="back-to-top no-print" type="button" aria-label="<?php echo themeEsc(_t('返回顶部')); ?>" title="<?php echo themeEsc(_t('返回顶部')); ?>">
+    <?php echo themeIcon('chevron-up', 'size-5'); ?>
+</button>
 
 <?php
 /**

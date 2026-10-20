@@ -86,11 +86,16 @@ npm run test:php     # 主题纯函数: 目录渲染/折叠 + 动效档位表 (�
 `..\..\..\php-8.5.10\php.exe tests/theme-functions.php`。
 
 技术栈: [Tailwind CSS v4](https://tailwindcss.com) + [@tailwindcss/typography](https://github.com/tailwindlabs/tailwindcss-typography)
-+ [Alpine.js](https://alpinejs.dev) + [Swup](https://swup.js.org) (head / preload / progress / scroll 插件)
++ [Swup](https://swup.js.org) (head / preload / progress / scroll 插件)
 + [lite-hl](https://github.com/docmd-io/lite-hl) (代码高亮, 见「开源组件与来源」)。
+轻交互 (主题切换 / 阅读进度 / 返回顶部 / 折叠) 一律用原生 DOM 实现, 不引声明式框架。
 
 构建产物文件名固定, PHP 侧通过 `themeAsset()` 追加 `?v=<filemtime>` 做缓存失效,
 因此部署时不需要读取 manifest, 也不会有额外文件 IO。
+
+**首屏只下载 `dist/style.css` 与 `dist/app.js`**: swup 及它的四个插件被拆进
+`dist/chunks/`, 在页面就绪后按需加载 (文件名带内容 hash)。首屏渲染用不到切页逻辑,
+不需要为它付费; 模块到位之前的点击走原生跳转, 功能不丢。
 
 > Tailwind 的内容探测以本目录 (`package.json`) 为项目根自动扫描, `node_modules/` 与
 > `dist/` 都在 `.gitignore` 中, 不会被当成内容源。Tailwind 4.3.x 的 `@source` 指令
@@ -393,8 +398,7 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
 | 组件 | 版本 | 许可 | 来源 | 用在哪 |
 | --- | --- | --- | --- | --- |
 | lite-hl | `^0.2.1` | MIT | <https://github.com/docmd-io/lite-hl> (docmd 生态, 作者 Ghazi / mgks.dev) | 代码块语法高亮, `src/js/app.js` 的 `highlightCodeBlocks()` |
-| Alpine.js | `^3.17.4` | MIT | <https://github.com/alpinejs/alpine> | 深色模式切换等声明式交互 |
-| Swup (+ head / preload / progress / scroll 插件) | `^4.10.0` | MIT | <https://github.com/swup/swup> | 无刷新切页 |
+| Swup (+ head / preload / progress / scroll 插件) | `^4.10.0` | MIT | <https://github.com/swup/swup> | 无刷新切页 (按需加载, 见 `loadPageTransitions()`) |
 | Tailwind CSS + @tailwindcss/typography | `^4.3.3` / `^0.5.20` | MIT | <https://tailwindcss.com> | 只在构建期生成 `dist/style.css` |
 
 ### lite-hl

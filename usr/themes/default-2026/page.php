@@ -37,7 +37,7 @@ $this->need('header.php');
             </details>
         <?php endif; ?>
 
-        <div class="prose prose-zinc prose-theme max-w-none p-5 sm:p-7 dark:prose-invert prose-headings:font-semibold prose-a:font-medium prose-img:my-5 prose-pre:my-5 prose-blockquote:my-5" itemprop="articleBody">
+        <div class="prose prose-theme max-w-none p-5 sm:p-7 prose-headings:font-semibold prose-a:font-medium prose-img:my-5 prose-pre:my-5 prose-blockquote:my-5" itemprop="articleBody">
             <?php echo $article['html']; ?>
         </div>
     </article>

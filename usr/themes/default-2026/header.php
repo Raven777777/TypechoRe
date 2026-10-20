@@ -114,10 +114,10 @@ $themePreload = themePreloadLinks();
             </div>
         </form>
 
-        <div class="ml-auto flex items-center gap-1 lg:ml-1" x-data="themeToggle">
-            <?php /* aria-label 只能是服务端渲染的固定值: 全交给 Alpine 的话, JS 一旦没跑起来
-                     这颗按钮就是无名按钮 (读屏只会念「按钮」) */ ?>
-            <button class="icon-btn" type="button" @click="cycle()" :title="label" aria-label="<?php echo themeEsc(_t('切换明暗主题')); ?>" :aria-label="label">
+        <div class="ml-auto flex items-center gap-1 lg:ml-1">
+            <?php /* aria-label 必须是服务端渲染的固定值: JS 一旦没跑起来, 这颗按钮就是
+                     无名按钮 (读屏只会念「按钮」)。JS 跑起来后由 app.js 换成动态文案。 */ ?>
+            <button class="icon-btn" type="button" data-theme-toggle title="<?php echo themeEsc(_t('切换明暗主题')); ?>" aria-label="<?php echo themeEsc(_t('切换明暗主题')); ?>">
                 <span class="theme-icon theme-icon-auto"><?php echo themeIcon('monitor', 'size-5'); ?></span>
                 <span class="theme-icon theme-icon-light"><?php echo themeIcon('sun', 'size-5'); ?></span>
                 <span class="theme-icon theme-icon-dark"><?php echo themeIcon('moon', 'size-5'); ?></span>

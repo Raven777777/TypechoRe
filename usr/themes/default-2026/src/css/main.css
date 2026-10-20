@@ -14,8 +14,7 @@
 @plugin "@tailwindcss/typography";
 
 /* 内容探测: Tailwind v4 以本目录 (package.json) 为项目根自动扫描模板与脚本;
-   node_modules/ 与 dist/ 都在 .gitignore 中, 不会被当成内容源。
-   注意: 不要在此处使用 @source, 4.3.x 中它与 Vite/CLI 的路径解析不一致。 */
+   node_modules/ 与 dist/ 都在 .gitignore 中, 不会被当成内容源。 */
 
 
 /* 深色模式: class 驱动 (html.dark), 由 header.php 的内联脚本无闪烁初始化 */
@@ -186,11 +185,6 @@
     outline: 2px solid var(--color-accent-ink);
     outline-offset: 2px;
     border-radius: 2px;
-  }
-
-  /* Alpine 未初始化前隐藏 (避免闪烁) */
-  [x-cloak] {
-    display: none !important;
   }
 
   /* Firefox 滚动条 */
@@ -619,10 +613,21 @@
     border-radius: inherit;
   }
 
-  /* ---------- 返回顶部 ---------- */
+  /* ---------- 返回顶部 ----------
+     显隐由 app.js 写在 data-visible 上。用 opacity + visibility 而不是 hidden
+     属性: display: none 切换没法过渡, 按钮会「啪」地出现/消失。
+     没有 JS 时没有 data-visible, 按钮保持不可见 —— 它本来也需要 JS 才能工作。 */
   .back-to-top {
-    @apply fixed right-5 bottom-5 z-40 inline-flex size-11 items-center justify-center rounded-full border border-line bg-surface-1/90 text-ink-2 shadow-card backdrop-blur transition duration-200 hover:text-accent-ink;
+    @apply fixed right-5 bottom-5 z-40 inline-flex size-11 items-center justify-center rounded-full border border-line bg-surface-1/90 text-ink-2 shadow-card backdrop-blur hover:text-accent-ink;
     bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, visibility 0.15s ease, color 0.2s ease;
+  }
+
+  .back-to-top[data-visible] {
+    opacity: 1;
+    visibility: visible;
   }
 
   /* ---------- 目录 (TOC) ---------- */
@@ -1201,6 +1206,18 @@ html.is-aside-kept #site-nav {
   --tw-prose-bold: var(--ink-1);
   --tw-prose-counters: var(--ink-3);
   --tw-prose-captions: var(--ink-3);
+
+  /* 下面 5 个是 typography 默认色板里剩下的成员 (导语 / 引用 / 行内代码 / kbd)。
+     一并接管后 .prose-theme 就成了唯一的取色来源, 于是模板上就不再需要
+     prose-zinc 和 dark:prose-invert 这两个修饰类 —— 它们只做「换个内置色板」
+     这一件事, 而这里的语义令牌本身就会随 .dark 换值。 */
+  --tw-prose-lead: var(--ink-2);
+  --tw-prose-quotes: var(--ink-1);
+  --tw-prose-code: var(--ink-1);
+  --tw-prose-kbd: var(--ink-1);
+  /* 原来是 ink-1 的 10% 半透明 (浅色 #18181b1a / 深色 #ffffff1a), 用 color-mix 复刻 */
+  --tw-prose-kbd-shadows: color-mix(in oklab, var(--ink-1) 10%, transparent);
+
   font-family: var(--font-sans);
   /* 和首页文章卡片的摘要同一个字号 (0.9375rem = 15px): 正文不再比列表文字大一号 */
   font-size: 0.9375rem;
@@ -1211,12 +1228,12 @@ html.is-aside-kept #site-nav {
   word-break: normal;
 }
 
+/* 深色下只有两处要单独调: 代码块底色要再压一档; 导语在深色里用 ink-2 (#c4c4cc)
+   会偏亮, 换成 ink-3 (#9d9da8) 才和原来 prose-invert 给的 #9f9fa9 对得上。
+   其余变量引用的是 --line / --ink-* 这类语义令牌, 它们在 .dark 里已经换过值。 */
 .dark .prose-theme {
-  --tw-prose-bullets: var(--line-strong);
-  --tw-prose-hr: var(--line);
-  --tw-prose-th-borders: var(--line-strong);
-  --tw-prose-td-borders: var(--line);
   --tw-prose-pre-bg: oklch(0.16 0.012 265);
+  --tw-prose-lead: var(--ink-3);
 }
 
 /* 段落呼吸: 略大于行距即可。1.3em 在同一屏里只有两段文字时会显得空, 收成 1.05em */

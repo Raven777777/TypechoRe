@@ -66,7 +66,7 @@ $this->need('header.php');
         <?php endif; ?>
 
         <?php /* max-w-none 会把 typography 的 65ch 抹平; 行宽现在由 .prose-theme 的 36em 接管 */ ?>
-        <div class="prose prose-zinc prose-theme max-w-none p-5 sm:p-7 dark:prose-invert prose-headings:font-semibold prose-a:font-medium prose-blockquote:font-normal prose-img:my-5 prose-pre:my-5 prose-blockquote:my-5" itemprop="articleBody">
+        <div class="prose prose-theme max-w-none p-5 sm:p-7 prose-headings:font-semibold prose-a:font-medium prose-blockquote:font-normal prose-img:my-5 prose-pre:my-5 prose-blockquote:my-5" itemprop="articleBody">
             <?php echo $article['html']; ?>
         </div>
 
