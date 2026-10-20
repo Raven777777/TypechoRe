@@ -148,6 +148,15 @@ function themeConfig(\Typecho\Widget\Helper\Form $form): void
     );
     $form->addInput($excerptLength);
 
+    $thumbPlaceholder = new \Typecho\Widget\Helper\Form\Element\Radio(
+        'thumbPlaceholder',
+        ['1' => _t('显示'), '0' => _t('不显示')],
+        '1',
+        _t('无图文章的占位缩略图'),
+        _t('文章没有自定义字段 thumbnail、正文也没有图片时, 由访客浏览器按文章 ID 即时生成一张几何图形占位图: 不占用服务器存储, 不写数据库, 同一篇文章永远是同一张图。关闭后这类文章保持无图形态')
+    );
+    $form->addInput($thumbPlaceholder);
+
     /* ------------------------------------------------------------ 侧边栏 */
     $sidebarBlock = new \Typecho\Widget\Helper\Form\Element\Checkbox(
         'sidebarBlock',
@@ -379,17 +388,18 @@ function themeEsc($value): string
 function themeDefaults(): array
 {
     return [
-        'accentColor'     => '#4f6bf5',
-        'colorScheme'     => 'auto',
-        'fontStyle'       => 'sans',
-        'layout'          => 'sidebar',
-        'animLevel'       => 'normal',
-        'showSkeleton'    => '1',
-        'showToc'         => '1',
-        'showReadingTime' => '1',
-        'excerptLength'   => '110',
-        'preloadLinks'    => '1',
-        'sidebarBlock'    => ['ShowRecentPosts', 'ShowRecentComments', 'ShowCategory', 'ShowArchive', 'ShowTagCloud', 'ShowOther'],
+        'accentColor'      => '#4f6bf5',
+        'colorScheme'      => 'auto',
+        'fontStyle'        => 'sans',
+        'layout'           => 'sidebar',
+        'animLevel'        => 'normal',
+        'showSkeleton'     => '1',
+        'showToc'          => '1',
+        'showReadingTime'  => '1',
+        'excerptLength'    => '110',
+        'thumbPlaceholder' => '1',
+        'preloadLinks'     => '1',
+        'sidebarBlock'     => ['ShowRecentPosts', 'ShowRecentComments', 'ShowCategory', 'ShowArchive', 'ShowTagCloud', 'ShowOther'],
     ];
 }
 
@@ -1217,6 +1227,22 @@ function themeFirstImageUrl(string $text): string
     }
 
     return '';
+}
+
+/**
+ * 无图文章是否显示浏览器端生成的占位缩略图
+ *
+ * 默认开启。老站点保存过的选项数组里没有这个键, themeOption() 会返回 null 并回落到
+ * 这里的 true —— 也就是说升级主题后不必再进后台保存一次, 开关就是开的。
+ *
+ * 占位图完全在前端生成 (src/js/thumb-placeholder.js): 服务器上不落文件, 数据库里
+ * 只有这个布尔开关, 文章的图片信息一个字节也不写。
+ *
+ * @return bool
+ */
+function themePlaceholderEnabled(): bool
+{
+    return themeOptionBool('thumbPlaceholder', true);
 }
 
 /**

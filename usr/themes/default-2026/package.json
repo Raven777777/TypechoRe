@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite build --watch --mode development",
     "build": "vite build",
-    "test": "node tests/skeleton-state.test.mjs && node tests/css-contract.test.mjs && node tests/comments-contract.test.mjs",
+    "test": "node tests/skeleton-state.test.mjs && node tests/css-contract.test.mjs && node tests/comments-contract.test.mjs && node tests/thumb-placeholder.test.mjs",
     "test:dom": "node tests/inline-scripts.test.mjs && node tests/aside-sync.test.mjs",
     "test:php": "php tests/theme-functions.php"
   },

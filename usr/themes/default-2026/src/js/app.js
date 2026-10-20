@@ -17,6 +17,7 @@ import SwupHeadPlugin from '@swup/head-plugin';
 import SwupPreloadPlugin from '@swup/preload-plugin';
 import SwupProgressPlugin from '@swup/progress-plugin';
 import SwupScrollPlugin from '@swup/scroll-plugin';
+import { hydrateThumbs } from './thumb-placeholder.js';
 
 const THEME_KEY = 'typecho-theme-mode';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -1445,6 +1446,10 @@ function enhanceCommentAuthors() {
 
 /** 每次页面内容替换后需要重新执行的增强 */
 function enhancePage() {
+  /* 占位缩略图先补上: 模板里只有 data-thumb-seed 的空 img, 这里按文章 id 算出 SVG。
+     放在最前面是因为它决定首屏观感, 且不依赖任何后续增强。 */
+  hydrateThumbs();
+
   /* 切页时把上一条页面留下的回复浮层清掉: 面板是 body 的子节点, 不会被 swup 换掉 */
   document.querySelectorAll(`#${RESPOND_LAYER_ID}`).forEach((layer) => layer.remove());
 
@@ -2146,6 +2151,12 @@ function boot() {
      等它结束会让骨架屏多停留几百毫秒。 */
   swup.hooks.on('content:replace', (visit) => {
     hideSkeleton();
+
+    /* 占位缩略图在这里补, 不等 page:view: swup 会先跑完 content:scroll (滚动插件的
+       平滑滚动) 才触发 page:view, 那段动画动辄两三百毫秒 —— 等它的话, 新列表会先露出
+       一排灰底媒体列。此处的 DOM 已经是换进来的新节点, 补图与后面的骨架收起同一帧。
+       enhancePage() 里还有一次调用, 靠 [data-thumb-ready] 去重。 */
+    hydrateThumbs();
 
     if (enterNextContent) {
       startContentEnter();

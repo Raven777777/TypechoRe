@@ -59,6 +59,12 @@ $themePreload = themePreloadLinks();
 
     <link rel="stylesheet" href="<?php echo themeAsset('dist/style.css'); ?>">
 
+    <?php if (themePlaceholderEnabled()): ?>
+        <?php /* 无图文章的占位缩略图由 dist/app.js 在浏览器里生成: JS 不可用时卡片上会剩下
+           一块空的灰底媒体列。这里整列藏掉, 回到主题原本的「无图卡通栏」形态。 */ ?>
+        <noscript><style>.card-media[data-thumb-placeholder]{display:none}</style></noscript>
+    <?php endif; ?>
+
     <!-- Typecho 头部信息 (description / canonical / RSS / 评论回复脚本等) -->
     <?php $this->header('generator=&template='); ?>
 
