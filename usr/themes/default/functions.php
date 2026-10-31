@@ -89,7 +89,10 @@ function postMeta(
 {
     $titleTag = $metaType == 'archive' ? 'h2' : 'h1';
     // Sticky 插件: 置顶标记 HTML 原样输出在标题右侧 (插件已不再往标题里追加纯文本)
-    $stickyBadge = $archive->sticky && '' !== trim((string) $archive->sticky_html)
+    // 插件未启用时这两个字段不存在 (行数据里的动态键, 用 isset 探测)
+    $stickyBadge = isset($archive->sticky, $archive->sticky_html)
+        && $archive->sticky
+        && '' !== trim((string) $archive->sticky_html)
         ? ' ' . $archive->sticky_html
         : '';
 ?>

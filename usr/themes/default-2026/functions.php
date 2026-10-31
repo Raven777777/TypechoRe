@@ -465,6 +465,11 @@ function themeTitle(callable $printer): string
  */
 function themeStickyBadge(\Widget\Base\Contents $content): string
 {
+    // 插件未启用时这两个字段不存在 (行数据里的动态键, 用 isset 探测)
+    if (!isset($content->sticky, $content->sticky_html)) {
+        return '';
+    }
+
     $html = trim((string) $content->sticky_html);
 
     return $content->sticky && '' !== $html ? ' ' . $html : '';
