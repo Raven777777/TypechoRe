@@ -586,6 +586,15 @@ $json = json_decode($body, true);
 assertTrue(is_array($json) && ($json['success'] ?? false) && 2 === ($json['message'] ?? null), 'install step 1 did not advance to step 2');
 
 $dbFile = $siteDir . '/usr/e2e.db';
+foreach (['site-', '123_'] as $invalidPrefix) {
+    $invalid = $site->post('/install.php?step=2', [
+        'step' => '2', 'dbAdapter' => 'Pdo_SQLite', 'dbNext' => 'none',
+        'dbPrefix' => $invalidPrefix, 'dbFile' => $dbFile, '_' => $installToken,
+    ]);
+    assertTrue(empty(json_decode($invalid['body'], true)['success']),
+        'installer accepted an invalid SQL table prefix');
+    assertTrue(!is_file($siteDir . '/config.inc.php'), 'invalid prefix created a broken configuration');
+}
 $response = $site->post('/install.php?step=2', [
     'step' => '2',
     'dbAdapter' => 'Pdo_SQLite',
@@ -636,13 +645,34 @@ step('admin login');
 $loginPage = assertResponse($site->get('/admin/login.php'), [200], 'GET /admin/login.php');
 assertTrue(str_contains($loginPage, 'name="name"'), 'login form missing');
 assertResponse($site->get('/admin/'), [302], 'GET /admin/ before login');
+$spoofedUsers = $site->get('/admin/manage-users.php', ['X-Rewrite-Url' => '/admin/login.php']);
+assertTrue($spoofedUsers['status'] === 302 && !str_contains($spoofedUsers['body'], 'e2e@example.test'),
+    'forged rewrite header exposed the admin user list');
 
 $loginAction = 'http://127.0.0.1:' . $port . '/admin/login.php';
 if (preg_match('/<form[^>]+action="([^"]+)"/', $loginPage, $matches)) {
     $loginAction = html_entity_decode($matches[1]);
 }
+$probe = new Site("http://127.0.0.1:{$port}", $verbose);
+$queryCredentials = $loginAction . (str_contains($loginAction, '?') ? '&' : '?')
+    . http_build_query(['name' => $adminUser, 'password' => $adminPassword]);
+$probe->post($queryCredentials, [], ['Referer' => "http://127.0.0.1:{$port}/admin/login.php"]);
+assertTrue($probe->get('/admin/profile.php')['status'] === 302, 'query-only credentials logged a user in');
+$probe->post($queryCredentials, ['name' => $adminUser, 'password' => 'wrong-password'],
+    ['Referer' => "http://127.0.0.1:{$port}/admin/login.php"]);
+assertTrue($probe->get('/admin/profile.php')['status'] === 302, 'query credentials overrode the POST body');
+foreach (['/<b>/evil.invalid/', "/\t\\evil.invalid/", "http://127.0.0.1:1/", '/%0%0ad/evil.invalid/'] as $badReferer) {
+    $redirectProbe = new Site("http://127.0.0.1:{$port}", $verbose);
+    $redirect = $redirectProbe->post($loginAction, [
+        'name' => $adminUser, 'password' => $adminPassword, 'referer' => $badReferer,
+    ], ['Referer' => "http://127.0.0.1:{$port}/admin/login.php"]);
+    $location = $redirect['headers']['location'] ?? '';
+    $destination = parse_url($location);
+    assertTrue(($destination['host'] ?? '') === '127.0.0.1' && (int) ($destination['port'] ?? 80) === $port,
+        'login accepted an unsafe normalized redirect: ' . json_encode([$badReferer, $location]));
+}
 $response = $site->post(
-    $loginAction,
+    $loginAction . (str_contains($loginAction, '?') ? '&' : '?') . 'name=wrong-query-name&password=wrong-query-password',
     ['name' => $adminUser, 'password' => $adminPassword, 'referer' => ''],
     ['Referer' => "http://127.0.0.1:{$port}/admin/login.php"]
 );
@@ -651,6 +681,11 @@ if ($verbose) {
     out('    login status: ' . $response['status'] . ' location: ' . ($response['headers']['location'] ?? ''));
 }
 assertResponse($response, [302], 'POST login');
+assertTrue(!preg_match('/^Set-Cookie:.*;\\s*domain=/mi', $response['rawHeaders']),
+    'login cookies were shared with child domains');
+assertTrue((bool) preg_match('/Set-Cookie: ([a-f0-9]{32})__typecho_uid=/', $response['rawHeaders'], $cookiePrefixMatch),
+    'login did not set a prefixed user cookie');
+$cookiePrefix = $cookiePrefixMatch[1];
 if (str_contains($response['headers']['location'] ?? '', 'login.php')) {
     $retry = $site->get('/admin/login.php');
     if (preg_match('/notice.*?<[^>]+>(.*?)<\/[a-z]/is', $retry['body'], $notice)) {
@@ -705,6 +740,17 @@ foreach ($adminPages as $path => $statuses) {
         assertTrue(str_contains($body, '目前有') || str_contains($body, '撰写新文章'), 'dashboard content missing');
     }
 }
+
+assertTrue(
+    sitePhp($php, $siteDir, <<<'SITE_PHP'
+$rules = file_get_contents(__TYPECHO_ROOT_DIR__ . '/.htaccess');
+$permalink = (new ReflectionClass(\Widget\Options\Permalink::class))->newInstanceWithoutConstructor();
+echo $permalink->checkRewrite('0')
+    && file_exists(__TYPECHO_ROOT_DIR__ . '/.htaccess')
+    && file_get_contents(__TYPECHO_ROOT_DIR__ . '/.htaccess') === $rules ? 'OK' : 'FAIL';
+SITE_PHP) === 'OK',
+    'disabling URL rewriting removed or changed Apache security rules'
+);
 
 // 每个受保护端点的 token 都绑定到自己的路径, 只能从渲染好的页面里取
 $writePage = assertResponse($site->get('/admin/write-post.php'), [200], 'GET write-post for token');
@@ -772,6 +818,23 @@ assertTrue($cid > 0, 'published post cid not found');
 
 $postBody = assertResponse($site->get("/index.php/archives/{$cid}/"), [200], 'GET published post');
 assertTrue(str_contains($postBody, 'E2E 回归文章'), 'published post title missing on the frontend');
+$privateCid = (int) sitePhp($php, $siteDir, <<<'SITE_PHP'
+echo $db->query($db->insert('table.contents')->rows([
+    'title' => 'Cache isolation regression', 'text' => 'PRIVATE-CACHE-REGRESSION-SECRET',
+    'type' => 'post', 'status' => 'publish', 'password' => 'cache-password',
+    'created' => time() - 1, 'modified' => time(), 'authorId' => 1, 'allowComment' => 1,
+]));
+SITE_PHP);
+$privateUrl = '/index.php/archives/' . $privateCid . '/';
+$privateViewer = new Site("http://127.0.0.1:{$port}", $verbose);
+$privateBody = assertResponse($privateViewer->get($privateUrl, [
+    'Cookie' => $cookiePrefix . 'protectPassword_' . $privateCid . '=cache-password',
+]), [200], 'view protected post with password cookie');
+assertTrue(str_contains($privateBody, 'PRIVATE-CACHE-REGRESSION-SECRET'), 'password viewer could not read protected content');
+$publicViewer = new Site("http://127.0.0.1:{$port}", $verbose);
+$publicBody = assertResponse($publicViewer->get($privateUrl), [403], 'view protected post without password cookie');
+assertTrue(!str_contains($publicBody, 'PRIVATE-CACHE-REGRESSION-SECRET'), 'private content leaked through public page cache');
+sitePhp($php, $siteDir, '$db->query($db->delete("table.contents")->where("cid = ?", ' . $privateCid . '));');
 
 $managePosts = assertResponse($site->get('/admin/manage-posts.php'), [200], 'GET manage-posts after publish');
 assertTrue(str_contains($managePosts, 'E2E 回归文章'), 'published post missing in the admin list');
@@ -1222,9 +1285,34 @@ assertTrue(
     'a CSRF token generated for /action/upload was accepted by /action/passkey'
 );
 
+// Attachment cleanup must not skip the second batch after deleting the first.
+$cleanupIds = sitePhp($php, $siteDir, <<<'SITE_PHP'
+$ids = [];
+for ($i = 0; $i < 201; $i++) {
+    $ids[] = $db->query($db->insert('table.contents')->rows([
+        'title' => 'cleanup-regression', 'slug' => 'cleanup-' . $i, 'type' => 'attachment', 'parent' => 0,
+        'created' => time(), 'modified' => time(), 'status' => 'publish', 'authorId' => 1,
+        'text' => json_encode(['name' => 'cleanup.txt', 'path' => '/usr/uploads/not-present-' . $i . '.txt',
+            'type' => 'txt', 'mime' => 'text/plain', 'size' => 1]),
+    ]));
+}
+echo implode(',', $ids);
+SITE_PHP);
+$mediaPage = assertResponse($site->get('/admin/manage-medias.php'), [200], 'GET media cleanup page');
+$clearUrl = str_replace('do=delete', 'do=clear',
+    endpointUrl($mediaPage, 'action/contents-attachment-edit', 'manage-medias.php'));
+assertResponse($site->post($clearUrl, ['do' => 'clear']), [302], 'clear unused attachments');
+assertTrue(sitePhp($php, $siteDir, "echo (int) \$db->fetchObject(\$db->select(['COUNT(*)' => 'num'])"
+    . "->from('table.contents')->where('cid IN ?', [" . $cleanupIds . "]))->num;") === '0',
+    'attachment cleanup skipped rows after deleting the first batch');
+
 // ---------------------------------------------------------------- passkey
 
 step('passkey registration and assertion');
+// Keep the cookie namespace stable while emulating TLS termination on the local HTTP test server.
+file_put_contents($siteDir . '/config.inc.php', "\ndefine('__TYPECHO_ROOT_URL__', "
+    . var_export("http://127.0.0.1:{$port}", true)
+    . " . (defined('__TYPECHO_ADMIN__') ? '/admin' : ''));\n", FILE_APPEND);
 $profile = assertResponse($site->get('/admin/profile.php'), [200], 'GET profile (passkey section)');
 assertTrue(str_contains($profile, 'passkey-management'), 'passkey management section missing in profile');
 assertTrue(
@@ -1249,7 +1337,7 @@ $createChallenge = \TypechoRe\Tests\WebAuthnTestFixture::base64UrlDecode($create
 $testPrivateKey = \TypechoRe\Tests\WebAuthnTestFixture::createP256PrivateKey();
 $testCredentialId = random_bytes(32);
 $testRpId = '127.0.0.1';
-$testOrigin = 'https://127.0.0.1';
+$testOrigin = "https://127.0.0.1:{$port}";
 $createClientData = \TypechoRe\Tests\WebAuthnTestFixture::clientData('webauthn.create', $createChallenge, $testOrigin);
 $testAttestation = \TypechoRe\Tests\WebAuthnTestFixture::attestationObject(
     $testPrivateKey,
@@ -1265,7 +1353,7 @@ $createResultBody = assertResponse(
     $site->postRaw(
         '/index.php/action/passkey?do=process-create&_=' . urlencode($passkeyToken),
         $createPayload,
-        ['Content-Type' => 'application/json']
+        ['Content-Type' => 'application/json', 'X-Forwarded-Proto' => 'https']
     ),
     [200],
     'POST passkey process-create'
@@ -1315,13 +1403,27 @@ $assertionPayload = [
     'signature' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($assertionSignature),
     'remember' => false,
 ];
+$wrongOriginData = \TypechoRe\Tests\WebAuthnTestFixture::clientData(
+    'webauthn.get', $assertionChallenge, 'https://127.0.0.1:1'
+);
+$wrongOriginAssertion = $assertionPayload;
+$wrongOriginAssertion['clientDataJSON'] = \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($wrongOriginData);
+$wrongOriginAssertion['signature'] = \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode(
+    \TypechoRe\Tests\WebAuthnTestFixture::signAssertion($testPrivateKey, $wrongOriginData, $assertionAuthenticatorData)
+);
+$wrongOriginResult = $passkeyLoginSite->postRaw(
+    '/index.php/action/passkey?do=process-get', json_encode($wrongOriginAssertion, JSON_THROW_ON_ERROR),
+    ['Content-Type' => 'application/json', 'X-Forwarded-Proto' => 'https']
+);
+assertTrue((json_decode($wrongOriginResult['body'], true)['success'] ?? true) === false,
+    'a valid passkey signature from another origin was accepted');
 $wrongHandleAssertion = $assertionPayload;
 $wrongHandleAssertion['userHandle'] = \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode((string) ($adminUid + 1));
 $wrongHandleResultBody = assertResponse(
     $passkeyLoginSite->postRaw(
         '/index.php/action/passkey?do=process-get',
         json_encode($wrongHandleAssertion, JSON_THROW_ON_ERROR),
-        ['Content-Type' => 'application/json']
+        ['Content-Type' => 'application/json', 'X-Forwarded-Proto' => 'https']
     ),
     [200],
     'POST passkey assertion with wrong userHandle'
@@ -1337,7 +1439,7 @@ $forgedResultBody = assertResponse(
     $passkeyLoginSite->postRaw(
         '/index.php/action/passkey?do=process-get',
         json_encode($forgedAssertion, JSON_THROW_ON_ERROR),
-        ['Content-Type' => 'application/json']
+        ['Content-Type' => 'application/json', 'X-Forwarded-Proto' => 'https']
     ),
     [200],
     'POST forged passkey assertion'
@@ -1349,7 +1451,7 @@ $loginResultBody = assertResponse(
     $passkeyLoginSite->postRaw(
         '/index.php/action/passkey?do=process-get',
         json_encode($assertionPayload, JSON_THROW_ON_ERROR),
-        ['Content-Type' => 'application/json']
+        ['Content-Type' => 'application/json', 'X-Forwarded-Proto' => 'https']
     ),
     [200],
     'POST valid passkey assertion'

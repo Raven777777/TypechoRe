@@ -136,9 +136,8 @@ RewriteRule . {$basePath}index.php [L]
             }
 
             return false;
-        } elseif (file_exists(__TYPECHO_ROOT_DIR__ . '/.htaccess')) {
-            @unlink(__TYPECHO_ROOT_DIR__ . '/.htaccess');
         }
+        // .htaccess may contain access controls; disabling pretty URLs must not remove it.
 
         return true;
     }

@@ -122,7 +122,7 @@ class Passkey extends BaseOptions implements ActionInterface
         }
 
         $registration = $rp->processCreate(
-            $this->decode($data['clientDataJSON'] ?? ''),
+            $this->clientData($data['clientDataJSON'] ?? ''),
             $this->decode($data['attestationObject'] ?? ''),
             $state['challenge'],
             true,
@@ -213,7 +213,7 @@ class Passkey extends BaseOptions implements ActionInterface
 
         $rp = $this->webAuthn();
         $rp->processGet(
-            $this->decode($data['clientDataJSON'] ?? ''),
+            $this->clientData($data['clientDataJSON'] ?? ''),
             $this->decode($data['authenticatorData'] ?? ''),
             $this->decode($data['signature'] ?? ''),
             $row['public_key'],
@@ -279,6 +279,17 @@ class Passkey extends BaseOptions implements ActionInterface
         if (!$this->user->pass('administrator', true)) {
             throw new WidgetException(_t('禁止访问'), 403);
         }
+    }
+
+    private function clientData(string $encoded): string
+    {
+        $clientData = $this->decode($encoded);
+        $data = json_decode($clientData, true);
+        if (!is_array($data) || !is_string($data['origin'] ?? null)
+            || !Common::isSameOrigin($data['origin'], $this->options->siteUrl)) {
+            throw new WidgetException(_t('Passkey 请求来源无效'), 403);
+        }
+        return $clientData;
     }
 
     private function webAuthn(): WebAuthn

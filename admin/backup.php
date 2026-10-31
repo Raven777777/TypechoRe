@@ -27,6 +27,7 @@ $backupFiles = \Widget\Backup::alloc()->listFiles();
                     <h3><?php _e('备份您的数据'); ?></h3>
                     <ul>
                         <li><?php _e('此备份操作仅包含<strong>内容数据</strong>, 并不会涉及任何<strong>设置信息</strong>'); ?></li>
+                        <li><?php _e('恢复内容备份会清除已注册的 Passkey, 恢复后请重新注册; 如需保留 Passkey, 请备份完整 SQLite 数据库'); ?></li>
                         <li><?php _e('如果您的数据量过大, 为了避免操作超时, 建议您直接使用数据库提供的备份工具备份数据'); ?></li>
                         <li><strong class="warning"><?php _e('为了缩小备份文件体积, 建议您在备份前删除不必要的数据'); ?></strong></li>
                     </ul>

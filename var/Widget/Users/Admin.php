@@ -55,6 +55,7 @@ class Admin extends Users
     #[\Override]
     public function execute()
     {
+        $this->user->pass('administrator');
         $this->parameter->setDefault('pageSize=20');
         $select = $this->select();
         $this->currentPage = $this->request->filter('int')->get('page', 1);

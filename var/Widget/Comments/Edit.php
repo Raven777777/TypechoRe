@@ -189,30 +189,20 @@ class Edit extends Comments implements ActionInterface
         $deleteRows = 0;
 
         foreach ($comments as $coid) {
-            $comment = $this->db->fetchRow($this->select()
-                ->where('coid = ?', $coid)->limit(1), [$this, 'push']);
-
-            if ($comment && $this->commentIsWriteable()) {
-                self::pluginHandle()->call('delete', $comment, $this);
-
-                /** 删除评论并同步计数, 两条语句必须同时成功或同时失败 */
-                $deleted = $this->db->transaction(function () use ($coid, $comment): int {
-                    $rows = $this->db->query($this->db->delete('table.comments')->where('coid = ?', $coid));
-
-                    /** 更新相关内容的评论数 */
-                    if ($rows > 0 && 'approved' == $comment['status']) {
-                        $this->db->query($this->db->update('table.contents')
-                            ->expression('commentsNum', 'commentsNum - 1')
-                            ->where('cid = ? AND commentsNum > 0', $comment['cid']));
-                    }
-
-                    return $rows;
-                });
-
-                if ($deleted > 0) {
-                    self::pluginHandle()->call('finishDelete', $comment, $this);
-                    $deleteRows++;
+            $comment = null;
+            $deleted = $this->db->transaction(function () use ($coid, &$comment): int {
+                $comment = $this->db->fetchRow($this->select()
+                    ->where('coid = ?', $coid)->limit(1), [$this, 'push']);
+                if (!$comment || !$this->commentIsWriteable()) {
+                    return 0;
                 }
+                self::pluginHandle()->call('delete', $comment, $this);
+                return $this->delete($this->db->sql()->where('coid = ?', $coid));
+            });
+
+            if ($deleted > 0) {
+                self::pluginHandle()->call('finishDelete', $comment, $this);
+                $deleteRows++;
             }
         }
 

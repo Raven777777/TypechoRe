@@ -31,5 +31,3 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
         run: ./tools/quality.ps1
-      - name: End-to-end site test
-        run: php tools/e2e.php

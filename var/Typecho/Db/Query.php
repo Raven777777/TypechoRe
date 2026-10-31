@@ -342,7 +342,7 @@ class Query
     {
         foreach ($rows as $key => $row) {
             $this->sqlPreBuild['rows'][$this->filterColumn($key)]
-                = is_null($row) ? 'NULL' : $this->adapter->quoteValue($row);
+                = $this->quoteValue($row);
         }
         return $this;
     }

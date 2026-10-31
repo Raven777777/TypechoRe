@@ -787,9 +787,7 @@ class Request
         //处理requestUri
         $requestUri = '/';
 
-        if (isset($_SERVER['HTTP_X_REWRITE_URL'])) { // check this first so IIS will catch
-            $requestUri = $_SERVER['HTTP_X_REWRITE_URL'];
-        } elseif (
+        if (
             // IIS7 with URL Rewrite: make sure we get the unencoded url (double slash problem)
             isset($_SERVER['IIS_WasUrlRewritten'])
             && $_SERVER['IIS_WasUrlRewritten'] == '1'

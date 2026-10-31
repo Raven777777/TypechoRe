@@ -583,7 +583,7 @@ class Sitemap extends Contents implements ActionInterface
         $hours = intdiv($offset, 3600);
         $minutes = intdiv($offset % 3600, 60);
 
-        return gmdate('Y-m-d\TH:i:s', $timestamp)
+        return gmdate('Y-m-d\TH:i:s', $timestamp + intval($this->options->timezone))
             . $sign . sprintf('%02d:%02d', $hours, $minutes);
     }
 

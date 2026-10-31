@@ -3,7 +3,9 @@
 namespace Widget\Base;
 
 use Typecho\Common;
+use Typecho\Cookie;
 use Typecho\Date;
+use Typecho\Db;
 use Typecho\Db\Exception;
 use Typecho\Db\Query;
 use Typecho\Router;
@@ -137,17 +139,15 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
             $insertStruct['agent'] = Common::subStr($insertStruct['agent'], 0, 511, '');
         }
 
-        /** 首先插入部分数据 */
-        $insertId = $this->db->query($this->db->insert('table.comments')->rows($insertStruct));
-
-        /** 更新评论数, 使用原子表达式避免并发覆盖 */
-        if ('approved' == ($insertStruct['status'] ?? null)) {
-            $this->db->query($this->db->update('table.contents')
-                ->expression('commentsNum', 'commentsNum + 1')
-                ->where('cid = ?', $rows['cid']));
-        }
-
-        return $insertId;
+        return $this->db->transaction(function () use ($insertStruct): int {
+            $insertId = $this->db->query($this->db->insert('table.comments')->rows($insertStruct));
+            if ('approved' === $insertStruct['status']) {
+                $this->db->query($this->db->update('table.contents')
+                    ->expression('commentsNum', 'commentsNum + 1')
+                    ->where('cid = ?', $insertStruct['cid']));
+            }
+            return $insertId;
+        });
     }
 
     /**
@@ -161,55 +161,57 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
     #[\Override]
     public function update(array $rows, Query $condition): int
     {
-        /** 获取内容主键 */
-        $updateCondition = clone $condition;
-        $updateComment = $this->db->fetchObject($condition->select('cid', 'status')->from('table.comments')->limit(1));
+        return $this->db->transaction(function () use ($rows, $condition): int {
+            /** 获取内容主键 */
+            $updateCondition = clone $condition;
+            $updateComment = $this->db->fetchObject($condition->select('cid', 'status')->from('table.comments')->limit(1));
 
-        if ($updateComment) {
-            $cid = $updateComment->cid;
-            $prevStatus = $updateComment->status;
-        } else {
-            return 0;
-        }
-
-        /** 构建插入结构 */
-        $preUpdateStruct = [
-            'author' => Common::strBy($rows['author'] ?? null),
-            'mail'   => Common::strBy($rows['mail'] ?? null),
-            'url'    => Common::strBy($rows['url'] ?? null),
-            'text'   => Common::strBy($rows['text'] ?? null),
-            'status' => Common::strBy($rows['status'] ?? null, 'approved'),
-        ];
-
-        $updateStruct = [];
-        foreach ($rows as $key => $val) {
-            if ((array_key_exists($key, $preUpdateStruct))) {
-                $updateStruct[$key] = $preUpdateStruct[$key];
+            if ($updateComment) {
+                $cid = $updateComment->cid;
+                $prevStatus = $updateComment->status;
+            } else {
+                return 0;
             }
-        }
 
-        /** 更新创建时间 */
-        if (!empty($rows['created'])) {
-            $updateStruct['created'] = $rows['created'];
-        }
+            /** 构建插入结构 */
+            $preUpdateStruct = [
+                'author' => Common::strBy($rows['author'] ?? null),
+                'mail'   => Common::strBy($rows['mail'] ?? null),
+                'url'    => Common::strBy($rows['url'] ?? null),
+                'text'   => Common::strBy($rows['text'] ?? null),
+                'status' => Common::strBy($rows['status'] ?? null, 'approved'),
+            ];
 
-        /** 更新评论数据 */
-        $updateRows = $this->db->query($updateCondition->update('table.comments')->rows($updateStruct));
-
-        /** 更新评论数, 状态在 approved 与非 approved 之间切换时使用原子表达式增减 */
-        $newStatus = $updateStruct['status'] ?? $prevStatus;
-        if ($newStatus != $prevStatus) {
-            if ('approved' == $newStatus) {
-                $this->db->query($this->db->update('table.contents')
-                    ->expression('commentsNum', 'commentsNum + 1')->where('cid = ?', $cid));
-            } elseif ('approved' == $prevStatus) {
-                $this->db->query($this->db->update('table.contents')
-                    ->expression('commentsNum', 'commentsNum - 1')
-                    ->where('cid = ? AND commentsNum > 0', $cid));
+            $updateStruct = [];
+            foreach ($rows as $key => $val) {
+                if ((array_key_exists($key, $preUpdateStruct))) {
+                    $updateStruct[$key] = $preUpdateStruct[$key];
+                }
             }
-        }
 
-        return $updateRows;
+            /** 更新创建时间 */
+            if (!empty($rows['created'])) {
+                $updateStruct['created'] = $rows['created'];
+            }
+
+            /** 更新评论数据 */
+            $updateRows = $this->db->query($updateCondition->update('table.comments')->rows($updateStruct));
+
+            /** 更新评论数, 状态在 approved 与非 approved 之间切换时使用原子表达式增减 */
+            $newStatus = $updateStruct['status'] ?? $prevStatus;
+            if ($newStatus != $prevStatus) {
+                if ('approved' == $newStatus) {
+                    $this->db->query($this->db->update('table.contents')
+                        ->expression('commentsNum', 'commentsNum + 1')->where('cid = ?', $cid));
+                } elseif ('approved' == $prevStatus) {
+                    $this->db->query($this->db->update('table.contents')
+                        ->expression('commentsNum', 'commentsNum - 1')
+                        ->where('cid = ? AND commentsNum > 0', $cid));
+                }
+            }
+
+            return $updateRows;
+        });
     }
 
     /**
@@ -222,35 +224,37 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
     #[\Override]
     public function delete(Query $condition): int
     {
-        /** 获取删除条件 */
-        $deleteCondition = clone $condition;
+        return $this->db->transaction(function () use ($condition): int {
+            /** 获取删除条件 */
+            $deleteCondition = clone $condition;
 
-        /** 统计将被删除的各 post 的 approved 评论数, 用于原子递减评论数 */
-        $approvals = [];
-        $matched = $this->db->fetchAll($condition->select('cid', 'status')->from('table.comments'));
+            /** 统计将被删除的各 post 的 approved 评论数, 用于原子递减评论数 */
+            $approvals = [];
+            $matched = $this->db->fetchAll($condition->select('cid', 'status')->from('table.comments'));
 
-        if (empty($matched)) {
-            return 0;
-        }
-
-        foreach ($matched as $row) {
-            if ('approved' == $row['status']) {
-                $cid = $row['cid'];
-                $approvals[$cid] = ($approvals[$cid] ?? 0) + 1;
+            if (empty($matched)) {
+                return 0;
             }
-        }
 
-        /** 删除评论数据 */
-        $deleteRows = $this->db->query($deleteCondition->delete('table.comments'));
+            foreach ($matched as $row) {
+                if ('approved' == $row['status']) {
+                    $cid = $row['cid'];
+                    $approvals[$cid] = ($approvals[$cid] ?? 0) + 1;
+                }
+            }
 
-        /** 更新评论数, 使用原子表达式避免并发覆盖 */
-        foreach ($approvals as $cid => $num) {
-            $this->db->query($this->db->update('table.contents')
-                ->expression('commentsNum', 'commentsNum - ' . (int)$num)
-                ->where('cid = ? AND commentsNum >= ?', $cid, (int)$num));
-        }
+            /** 删除评论数据 */
+            $deleteRows = $this->db->query($deleteCondition->delete('table.comments'));
 
-        return $deleteRows;
+            /** 更新评论数, 使用原子表达式避免并发覆盖 */
+            foreach ($approvals as $cid => $num) {
+                $this->db->query($this->db->update('table.contents')
+                    ->expression('commentsNum', 'commentsNum - ' . (int)$num)
+                    ->where('cid = ? AND commentsNum >= ?', $cid, (int)$num));
+            }
+
+            return $deleteRows;
+        });
     }
 
     /**
@@ -393,6 +397,35 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
         return $this->db->select(...$fields)->from('table.comments');
     }
 
+    protected function selectVisibleComments(int $cid, bool $rootsOnly = false): Query
+    {
+        $cookie = explode(':', (string) Cookie::get('__typecho_unapproved_comment', ''), 2);
+        $unapprovedId = count($cookie) === 2 && ctype_digit($cookie[0])
+            && hash_equals(hash_hmac('sha256', $cookie[0], $this->options->secret), $cookie[1])
+                ? (int) $cookie[0] : 0;
+        $select = $this->select('table.comments.*')->where('table.comments.cid = ?', $cid)
+            ->where('table.comments.status = ? OR (table.comments.coid = ? AND table.comments.status <> ?)',
+                'approved', $unapprovedId, 'approved');
+        $commentOnly = (bool) $this->options->commentsShowCommentOnly;
+        if ($commentOnly) {
+            $select->where('table.comments.type = ?', 'comment');
+        }
+        if ($rootsOnly) {
+            $select->join('table.comments AS comment_parent',
+                'comment_parent.coid = table.comments.parent AND comment_parent.cid = table.comments.cid'
+                    . ' AND table.comments.parent <> 0', Db::LEFT_JOIN);
+            $condition = 'comment_parent.coid IS NULL OR comment_parent.status IS NULL'
+                . ' OR (comment_parent.status <> ? AND comment_parent.coid <> ?)';
+            $args = ['approved', $unapprovedId];
+            if ($commentOnly) {
+                $condition .= ' OR comment_parent.type IS NULL OR comment_parent.type <> ?';
+                $args[] = 'comment';
+            }
+            $select->where($condition, ...$args);
+        }
+        return $select;
+    }
+
     /**
      * markdown
      *
@@ -460,55 +493,37 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
      */
     protected function ___commentPage(): int
     {
-        if ($this->options->commentsPageBreak) {
-            $coid = $this->coid;
-            $parent = $this->parent;
-
-            while ($parent > 0 && $this->options->commentsThreaded) {
-                $parentRows = $this->db->fetchRow($this->db->select('parent')->from('table.comments')
-                    ->where('coid = ? AND status = ?', $parent, 'approved')->limit(1));
-
-                if (!empty($parentRows)) {
-                    $coid = $parent;
-                    $parent = $parentRows['parent'];
-                } else {
+        if (!$this->options->commentsPageBreak) {
+            return 0;
+        }
+        $coid = (int) $this->coid;
+        $threaded = (bool) $this->options->commentsThreaded;
+        if ($threaded) {
+            $visible = $this->selectVisibleComments((int) $this->cid);
+            $parent = (int) $this->parent;
+            $seen = [$coid => true];
+            while ($parent > 0) {
+                if (isset($seen[$parent])) {
+                    // shortcut: cyclic parent data has no archive root; repair it to make links reachable.
+                    return 1;
+                }
+                $ancestor = clone $visible;
+                $row = $this->db->fetchRow($ancestor->select('table.comments.parent')
+                    ->where('table.comments.coid = ?', $parent)->limit(1));
+                if (!$row) {
                     break;
                 }
+                $seen[$parent] = true;
+                $coid = $parent;
+                $parent = (int) $row['parent'];
             }
-
-            $select = $this->db->select('coid', 'parent')
-                ->from('table.comments')
-                ->where(
-                    'cid = ? AND (status = ? OR coid = ?)',
-                    $this->cid,
-                    'approved',
-                    $this->status !== 'approved' ? $this->coid : 0
-                )
-                ->where('coid ' . ('DESC' == $this->options->commentsOrder ? '>=' : '<=') . ' ?', $coid)
-                ->order('coid');
-
-            if ($this->options->commentsShowCommentOnly) {
-                $select->where('type = ?', 'comment');
-            }
-
-            $comments = $this->db->fetchAll($select);
-
-            $commentsMap = [];
-            $total = 0;
-
-            foreach ($comments as $comment) {
-                $commentsMap[$comment['coid']] = $comment['parent'];
-
-                if (0 == $comment['parent'] || !isset($commentsMap[$comment['parent']])) {
-                    $total++;
-                }
-            }
-
-            $pageSize = (int) $this->options->commentsPageSize;
-            return intdiv($total + $pageSize - 1, $pageSize);
         }
-
-        return 0;
+        $rank = $this->selectVisibleComments((int) $this->cid, $threaded)
+            ->select(['COUNT(*)' => 'num'])
+            ->where('table.comments.coid ' . ('DESC' === $this->options->commentsOrder ? '>=' : '<=') . ' ?', $coid);
+        $total = (int) $this->db->fetchObject($rank)->num;
+        $pageSize = max(1, (int) $this->options->commentsPageSize);
+        return max(1, intdiv($total + $pageSize - 1, $pageSize));
     }
 
     /**

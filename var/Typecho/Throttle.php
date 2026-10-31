@@ -27,7 +27,8 @@ final class Throttle
             return false;
         }
 
-        return self::read($file)[1] >= self::LIMIT;
+        [$since, $count] = self::read($file);
+        return time() - $since < self::WINDOW && $count >= self::LIMIT;
     }
 
     public static function fail(string $scope, string $subject): void

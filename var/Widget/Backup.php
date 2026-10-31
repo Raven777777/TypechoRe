@@ -4,8 +4,8 @@ namespace Widget;
 
 use Typecho\Common;
 use Typecho\Cookie;
+use Typecho\Db;
 use Typecho\Exception;
-use Typecho\Plugin;
 use Widget\Base\Options as BaseOptions;
 
 if (!defined('__TYPECHO_ROOT_DIR__')) {
@@ -59,19 +59,7 @@ class Backup extends BaseOptions implements ActionInterface
         ]
     ];
 
-    /**
-     * @var array
-     */
-
-    /**
-     * @var array
-     */
-    private array $cleared = [];
-
-    /**
-     * @var bool
-     */
-    private bool $login = false;
+    private ?array $login = null;
 
     /**
      * 列出已有备份文件
@@ -104,43 +92,61 @@ class Backup extends BaseOptions implements ActionInterface
     private function export()
     {
         $backupFile = tempnam(sys_get_temp_dir(), 'backup_');
-        $fp = fopen($backupFile, 'wb');
+        if (false === $backupFile) {
+            throw new Exception(_t('无法创建备份文件'));
+        }
+        register_shutdown_function(static fn() => is_file($backupFile) && @unlink($backupFile));
+        $fp = @fopen($backupFile, 'wb');
+        if (!$fp) {
+            throw new Exception(_t('无法创建备份文件'));
+        }
+
+        try {
+            $header = str_replace('XXXX', self::HEADER_VERSION, self::HEADER);
+            $this->writeBuffer($fp, $header);
+            $this->exportData($fp);
+            self::pluginHandle()->call('export', $fp);
+            $this->writeBuffer($fp, $header);
+        } finally {
+            fclose($fp);
+        }
+
         $host = parse_url($this->options->siteUrl, PHP_URL_HOST);
         $this->response->setContentType('application/octet-stream');
         $this->response->setHeader('Content-Disposition', 'attachment; filename="'
             . date('Ymd') . '_' . $host . '_' . uniqid() . '.dat"');
-
-        $header = str_replace('XXXX', self::HEADER_VERSION, self::HEADER);
-        fwrite($fp, $header);
-        $db = $this->db;
-
-        foreach ($this->types as $type => $val) {
-            $page = 1;
-            do {
-                $rows = $db->fetchAll($db->select()->from('table.' . $type)->page($page, 20));
-                $page++;
-
-                foreach ($rows as $row) {
-                    fwrite($fp, $this->buildBuffer($val, $this->applyFields($type, $row)));
-                }
-            } while (count($rows) == 20);
-        }
-
-        self::pluginHandle()->call('export', $fp);
-        fwrite($fp, $header);
-        fclose($fp);
-
-        // throwFile 内部会 exit, 注册 shutdown 清理临时文件, 避免包含敏感数据的副本残留在临时目录
-        $cleanup = is_string($backupFile) ? $backupFile : null;
-        if (null !== $cleanup) {
-            register_shutdown_function(function () use ($cleanup) {
-                if (is_file($cleanup)) {
-                    @unlink($cleanup);
-                }
-            });
-        }
-
         $this->response->throwFile($backupFile, 'application/octet-stream');
+    }
+
+    /** @param resource $fp */
+    private function exportData($fp): void
+    {
+        $db = $this->db;
+        // A deferred read transaction gives all pages one snapshot without reserving the writer lock.
+        $db->query('BEGIN', Db::READ, '');
+        try {
+            foreach ($this->types as $type => $val) {
+                $page = 1;
+                do {
+                    $rows = $db->fetchAll($db->select()->from('table.' . $type)->page($page++, 20));
+                    foreach ($rows as $row) {
+                        $this->writeBuffer($fp, $this->buildBuffer($val, $this->applyFields($type, $row)));
+                    }
+                } while (count($rows) === 20);
+            }
+            $db->query('COMMIT', Db::READ, '');
+        } catch (\Throwable $e) {
+            $db->query('ROLLBACK', Db::READ, '');
+            throw $e;
+        }
+    }
+
+    /** @param resource $fp */
+    private function writeBuffer($fp, string $buffer): void
+    {
+        if (fwrite($fp, $buffer) !== strlen($buffer)) {
+            throw new Exception(_t('备份文件写入失败'));
+        }
     }
 
     /**
@@ -230,58 +236,73 @@ class Backup extends BaseOptions implements ActionInterface
      */
     private function extractData($file)
     {
-        $fp = @fopen($file, 'rb');
-
-        if (!$fp) {
-            Notice::alloc()->set(_t('无法读取备份文件'), 'error');
-            $this->response->goBack();
+        try {
+            $this->restoreData($file);
+            Notice::alloc()->set(_t('数据恢复完成'), 'success');
+        } catch (\Throwable $e) {
+            Notice::alloc()->set(_t('恢复过程中遇到如下错误: %s', $e->getMessage()), 'error');
         }
-
-        $fileSize = filesize($file);
-        $headerSize = strlen(self::HEADER);
-
-        if ($fileSize < $headerSize) {
-            @fclose($fp);
-            Notice::alloc()->set(_t('备份文件格式错误'), 'error');
-            $this->response->goBack();
-        }
-
-        $fileHeader = @fread($fp, $headerSize);
-
-        if (!$this->parseHeader($fileHeader, $version)) {
-            @fclose($fp);
-            Notice::alloc()->set(_t('备份文件格式错误'), 'error');
-            $this->response->goBack();
-        }
-
-        fseek($fp, $fileSize - $headerSize);
-        $fileFooter = @fread($fp, $headerSize);
-
-        if (!$this->parseHeader($fileFooter, $version)) {
-            @fclose($fp);
-            Notice::alloc()->set(_t('备份文件格式错误'), 'error');
-            $this->response->goBack();
-        }
-
-        fseek($fp, $headerSize);
-        $offset = $headerSize;
-
-        while (!feof($fp) && $offset + $headerSize < $fileSize) {
-            $data = Common::extractBackupBuffer($fp, $offset, $version);
-
-            if (!$data) {
-                @fclose($fp);
-                Notice::alloc()->set(_t('恢复数据出现错误'), 'error');
-                $this->response->goBack();
-            }
-
-            [$type, $header, $body] = $data;
-            $this->processData($type, $header, $body);
-        }
-
-        @fclose($fp);
-        Notice::alloc()->set(_t('数据恢复完成'), 'success');
         $this->response->goBack();
+    }
+
+    private function restoreData(string $file): void
+    {
+        $fp = @fopen($file, 'rb');
+        if (!$fp) {
+            throw new Exception(_t('无法读取备份文件'));
+        }
+        $this->login = null;
+        try {
+            $fileSize = fstat($fp)['size'];
+            $headerSize = strlen(self::HEADER);
+            if ($fileSize < 2 * $headerSize) {
+                throw new Exception(_t('备份文件格式错误'));
+            }
+            $fileHeader = fread($fp, $headerSize);
+            if (!$this->parseHeader($fileHeader, $version)) {
+                throw new Exception(_t('备份文件格式错误'));
+            }
+            fseek($fp, $fileSize - $headerSize);
+            if (fread($fp, $headerSize) !== $fileHeader) {
+                throw new Exception(_t('备份文件格式错误'));
+            }
+            fseek($fp, $headerSize);
+            $offset = $headerSize;
+            $end = $fileSize - $headerSize;
+            $login = $this->db->transaction(function () use ($fp, &$offset, $end, $version): ?array {
+                foreach (array_keys($this->types) as $table) {
+                    $this->db->truncate('table.' . $table);
+                }
+                // Credentials are tied to the old users; restored users must enroll again.
+                if ($this->db->fetchRow($this->db->select('name')->from('sqlite_master')
+                    ->where('type = ? AND name = ?', 'table', $this->db->getPrefix() . 'passkeys'))) {
+                    $this->db->truncate('table.passkeys');
+                }
+                while ($offset < $end) {
+                    $data = Common::extractBackupBuffer($fp, $offset, $version, $end);
+                    if (false === $data) {
+                        throw new Exception(_t('恢复数据出现错误'));
+                    }
+                    $this->processData(...$data);
+                }
+                if ($offset !== $end) {
+                    throw new Exception(_t('备份文件格式错误'));
+                }
+                return $this->login;
+            });
+        } catch (\Throwable $e) {
+            $this->login = null;
+            throw $e;
+        } finally {
+            fclose($fp);
+        }
+        if (null !== $login) {
+            Cookie::set('__typecho_uid', $login[0]);
+            Cookie::set('__typecho_authCode', $login[1]);
+        } else {
+            Cookie::delete('__typecho_uid');
+            Cookie::delete('__typecho_authCode');
+        }
     }
 
     /**
@@ -295,7 +316,7 @@ class Backup extends BaseOptions implements ActionInterface
             return false;
         }
 
-        if (!preg_match("/%TYPECHO_BACKUP_[A-Z0-9]{4}%/", $str)) {
+        if (!preg_match('/^%TYPECHO_BACKUP_(FILE|0001|0002)%$/D', $str)) {
             return false;
         }
 
@@ -314,14 +335,21 @@ class Backup extends BaseOptions implements ActionInterface
 
         if (!empty($table)) {
             $schema = json_decode($header, true);
+            if (!is_array($schema) || !$schema) {
+                throw new Exception(_t('备份文件格式错误'));
+            }
             $data = [];
             $offset = 0;
-
             foreach ($schema as $key => $val) {
+                if (null !== $val && (!is_int($val) || $val < 0 || $val > strlen($body) - $offset)) {
+                    throw new Exception(_t('备份文件格式错误'));
+                }
                 $data[$key] = null === $val ? null : substr($body, $offset, $val);
-                $offset += $val;
+                $offset += $val ?? 0;
             }
-
+            if ($offset !== strlen($body)) {
+                throw new Exception(_t('备份文件格式错误'));
+            }
             $this->importData($table, $data);
         } else {
             self::pluginHandle()->call('import', $type, $header, $body);
@@ -336,25 +364,10 @@ class Backup extends BaseOptions implements ActionInterface
      */
     private function importData($table, $data)
     {
-        $db = $this->db;
-
-        try {
-            if (empty($this->cleared[$table])) {
-                // 清除数据
-                $db->truncate('table.' . $table);
-                $this->cleared[$table] = true;
-            }
-
-            if (!$this->login && 'users' == $table && $data['group'] == 'administrator') {
-                // 重新登录
-                $this->reLogin($data);
-            }
-
-            $db->query($db->insert('table.' . $table)->rows($this->applyFields($table, $data)));
-        } catch (Exception $e) {
-            Notice::alloc()->set(_t('恢复过程中遇到如下错误: %s', $e->getMessage()), 'error');
-            $this->response->goBack();
+        if (null === $this->login && 'users' === $table && ($data['group'] ?? null) === 'administrator') {
+            $this->reLogin($data);
         }
+        $this->db->query($this->db->insert('table.' . $table)->rows($this->applyFields($table, $data)));
     }
 
     /**
@@ -373,8 +386,6 @@ class Backup extends BaseOptions implements ActionInterface
         $user['activated'] = $this->options->time;
         $user['logged'] = $user['activated'];
 
-        Cookie::set('__typecho_uid', $user['uid']);
-        Cookie::set('__typecho_authCode', $authCode);
-        $this->login = true;
+        $this->login = [$user['uid'], $authCode];
     }
 }

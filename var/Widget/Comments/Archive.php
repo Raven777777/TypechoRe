@@ -3,7 +3,6 @@
 namespace Widget\Comments;
 
 use Typecho\Config;
-use Typecho\Cookie;
 use Typecho\Router;
 use Typecho\Widget\Exception;
 use Typecho\Widget\Helper\PageNavigator\Box;
@@ -106,22 +105,7 @@ class Archive extends Comments
             return;
         }
 
-        $unapprovedComment = explode(':', (string) Cookie::get('__typecho_unapproved_comment', ''), 2);
-        $unapprovedCommentId = count($unapprovedComment) === 2
-            && ctype_digit($unapprovedComment[0])
-            && hash_equals(hash_hmac('sha256', $unapprovedComment[0], $this->options->secret), $unapprovedComment[1])
-                ? (int) $unapprovedComment[0] : 0;
-        $select = $this->select()->where('cid = ?', $this->parameter->parentId)
-            ->where(
-                'status = ? OR (coid = ? AND status <> ?)',
-                'approved',
-                $unapprovedCommentId,
-                'approved'
-            );
-
-        if ($this->options->commentsShowCommentOnly) {
-            $select->where('table.comments.type = ?', 'comment');
-        }
+        $select = $this->selectVisibleComments((int) $this->parameter->parentId);
 
         $select->order('table.comments.coid', 'ASC');
         $pagedComments = (bool) $this->options->commentsPageBreak;
@@ -131,11 +115,11 @@ class Archive extends Comments
         }
         $pagedRoots = $pagedComments && $this->options->commentsThreaded;
         if ($pagedComments) {
-            $countQuery = clone $select;
+            $pageSelect = $pagedRoots
+                ? $this->selectVisibleComments((int) $this->parameter->parentId, true)
+                    ->order('table.comments.coid', 'ASC') : $select;
+            $countQuery = clone $pageSelect;
             $countQuery->cleanAttribute('order')->select(['COUNT(*)' => 'num']);
-            if ($pagedRoots) {
-                $countQuery->where('table.comments.parent = ?', 0);
-            }
             $total = (int) $this->db->fetchObject($countQuery)->num;
             $this->total = $total;
             $pageSize = max(1, (int) $this->options->commentsPageSize);
@@ -145,10 +129,7 @@ class Archive extends Comments
             $offset = ('DESC' === $this->options->commentsOrder)
                 ? max(0, $total - $this->currentPage * $pageSize)
                 : ($this->currentPage - 1) * $pageSize;
-            $page = clone $select;
-            if ($pagedRoots) {
-                $page->where('table.comments.parent = ?', 0);
-            }
+            $page = clone $pageSelect;
             // DESC 时 offset = total - page*size, 最后一页不足 pageSize 行, 需要同时收紧 limit
             $limit = min($pageSize, $total - ($this->currentPage - 1) * $pageSize);
             if ($limit > 0) {

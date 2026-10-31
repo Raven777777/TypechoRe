@@ -112,14 +112,7 @@ class Edit extends Options implements ActionInterface
 
         if (is_writable($path)) {
             $content = (string)$this->request->get('content');
-            $handle = fopen($path, 'wb');
-            $written = $handle ? fwrite($handle, $content) : false;
-
-            if ($handle) {
-                fclose($handle);
-            }
-
-            if (strlen($content) === $written) {
+            if (self::writeThemeFile($path, $content)) {
                 PageCache::invalidate();
                 Notice::alloc()->set(_t("文件 %s 的更改已经保存", $file), 'success');
             } else {
@@ -128,6 +121,27 @@ class Edit extends Options implements ActionInterface
             $this->response->goBack();
         } else {
             throw new Exception(_t('您编辑的文件不存在'));
+        }
+    }
+
+    private static function writeThemeFile(string $path, string $content): bool
+    {
+        $path = realpath($path);
+        if (false === $path) {
+            return false;
+        }
+        $temp = @tempnam(dirname($path), '.theme-');
+        if ($temp === false) {
+            return false;
+        }
+        try {
+            return strlen($content) === @file_put_contents($temp, $content)
+                && @chmod($temp, fileperms($path) & 0777)
+                && @rename($temp, $path);
+        } finally {
+            if (is_file($temp)) {
+                @unlink($temp);
+            }
         }
     }
 

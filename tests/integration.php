@@ -14,6 +14,8 @@
 
 declare(strict_types=1);
 
+ob_start();
+
 const ROOT = __DIR__ . '/..';
 define('__TYPECHO_ROOT_DIR__', ROOT);
 define('__TYPECHO_PAGE_CACHE_DIR__', sys_get_temp_dir() . '/typechore-page-cache-integration-' . getmypid());
@@ -237,6 +239,8 @@ function runAdapter(string $adapter): void
             ])
         );
 
+        checkRegressions($db, $sqliteFile);
+
         dropTables($db, $tables);
         $db->flushPool();
 
@@ -248,6 +252,10 @@ function runAdapter(string $adapter): void
         $db->flushPool();
     }
 }
+
+require_once __DIR__ . '/regressions.php';
+require_once __DIR__ . '/file-regressions.php';
+checkFileRegressions();
 
 $requested = getenv('TYPECHORE_TEST_ADAPTER');
 $adapters = $requested

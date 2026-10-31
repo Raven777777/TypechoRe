@@ -1,9 +1,8 @@
 # ============================================================
 # TypechoRe 部署加固 (Apache)
 #
-# 本文件只负责访问控制与安全响应头。
-# 若站点启用了「地址重写」, 重写规则由
-# 后台 -> 设置 -> 永久链接 自动生成, 请勿在此重复添加。
+# 本文件包含访问控制、安全响应头和永久链接重写规则。
+# 未启用「地址重写」时, 带 index.php 的链接仍可正常使用。
 # ============================================================
 
 # 禁止目录列表
@@ -47,6 +46,9 @@ Options -Indexes
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteRule ^usr/backups(/|$) - [F,L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . index.php [L]
 </IfModule>
 
 # ---- 屏蔽版本库 / 环境变量等元数据 ----

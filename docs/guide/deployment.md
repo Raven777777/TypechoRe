@@ -140,6 +140,9 @@ limit_req_status 429;
 9. 测试登录、文章、评论、上传、Sitemap 和 Passkey
 10. 确认运行正常后删除部署压缩包
 
+后台「备份」导出的是内容数据，不包含设置、上传文件或 Passkey。恢复内容备份时会清除现有 Passkey，
+防止旧凭证登录到恢复后复用用户 ID 的其他账号；恢复后需要重新注册。要保留这些凭证，请备份完整 SQLite 数据库。
+
 发布包由 `tools/build_release.py` 构建（或由 GitHub Release 自动构建），已排除
 `config.inc.php`、SQLite 主库及 WAL/SHM/journal 辅助文件、`*.log`、`usr/uploads/` 与 `usr/backups/`，
 以及主题的 `tests/`、`src/`、Node 构建配置与后台的 `admin/src/`；包内样式表与静态 HTML 已在打包时压缩。部署前仍建议确认 zip 内没有遗留的数据库或日志文件，

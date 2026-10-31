@@ -50,6 +50,17 @@ check(
     !$general->checkPageCacheTtl('0') && !$general->checkPageCacheTtl('86401') && !$general->checkPageCacheTtl('1.5'),
     'page cache TTL validation accepted an invalid value'
 );
+$sitemap = (new ReflectionClass(\Widget\Action\Sitemap::class))->newInstanceWithoutConstructor();
+$sitemapOptions = (new ReflectionClass(\Widget\Options::class))->newInstanceWithoutConstructor();
+(new ReflectionProperty(\Widget\Base::class, 'options'))->setValue($sitemap, $sitemapOptions);
+$sitemapDate = new ReflectionMethod($sitemap, 'w3cDate');
+foreach ([0, 28800, -18000, 20700] as $timezone) {
+    $sitemapOptions->push(['timezone' => $timezone]);
+    foreach ([0, 1735687800] as $timestamp) {
+        $formattedDate = $sitemapDate->invoke($sitemap, $timestamp);
+        check(strtotime($formattedDate) === $timestamp, "sitemap lastmod changed the instant at offset {$timezone}");
+    }
+}
 $cacheKey = hash('sha256', 'smoke-page-cache');
 $cacheFile = __TYPECHO_PAGE_CACHE_DIR__ . '/' . $cacheKey;
 @unlink($cacheFile);
@@ -64,6 +75,7 @@ check(
 check(\Typecho\PageCache::get($cacheKey) === '<html>cached</html>', 'page cache did not return its stored body');
 $nullOptionKey = \Typecho\PageCache::key('generation', 'https://example.test/', null, null);
 $expectedNullOptionKey = hash('sha256', implode("\n", [
+    'private-cookie-fix-v2',
     $_SERVER['HTTP_HOST'] ?? '', $_SERVER['REQUEST_URI'] ?? '/', 'https://example.test/', '', '', 'generation',
 ]));
 check($nullOptionKey === $expectedNullOptionKey, 'page cache key failed with null theme/language options');
@@ -104,6 +116,24 @@ foreach (['__typecho_uid=1', session_name() . '=abc'] as $stateCookie) {
     $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_COOKIE' => $stateCookie];
     check(!\Typecho\PageCache::eligible(), "page cache accepted the state cookie {$stateCookie}");
 }
+$cookieDefaults = (new ReflectionClass(\Typecho\Cookie::class))->getStaticProperties();
+\Typecho\Cookie::setPrefix('https://blog.example.test/');
+check((new ReflectionProperty(\Typecho\Cookie::class, 'domain'))->getValue() === '', 'cookies are not host-only by default');
+\Typecho\Cookie::setOptions(['domain' => '.example.test']);
+\Typecho\Cookie::setOptions(['domain' => '']);
+check((new ReflectionProperty(\Typecho\Cookie::class, 'domain'))->getValue() === '', 'explicit empty cookie domain was ignored');
+foreach (['__typecho_uid', '__typecho_remember_mail', 'protectPassword_1', '__typecho_unapproved_comment'] as $name) {
+    $name = \Typecho\Cookie::getPrefix() . $name;
+    $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_COOKIE' => $name . '=value'];
+    check(!\Typecho\PageCache::eligible(), 'page cache accepted a real prefixed state cookie');
+    $_SERVER['HTTP_COOKIE'] = '';
+    $_COOKIE[$name] = 'value';
+    check(!\Typecho\PageCache::eligible(), 'page cache accepted state from parsed cookies');
+    unset($_COOKIE[$name]);
+}
+foreach ($cookieDefaults as $name => $value) {
+    (new ReflectionProperty(\Typecho\Cookie::class, $name))->setValue(null, $value);
+}
 \Typecho\Plugin::init(['activated' => ['test' => []]]);
 $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/'];
 check(\Typecho\PageCache::eligible(), 'page cache rejected a plugin that does not hook the whole page');
@@ -120,9 +150,46 @@ check(\Typecho\Common::isSameOrigin('https://example.test:443/', 'https://exampl
 check(!\Typecho\Common::isSameOrigin('https://not-example.test/', 'https://example.test'), 'lookalike host passed same-origin check');
 check(!\Typecho\Common::isSameOrigin('https://example.test:444/', 'https://example.test'), 'different port passed same-origin check');
 
+require_once ROOT . '/var/lbuchs/WebAuthn/Binary/ByteBuffer.php';
+$passkey = (new ReflectionClass(\Widget\Passkey::class))->newInstanceWithoutConstructor();
+$passkeyOptions = (new ReflectionClass(\Widget\Options::class))->newInstanceWithoutConstructor();
+$passkeyOptions->push(['siteUrl' => 'https://example.test/']);
+(new ReflectionProperty(\Typecho\Widget::class, 'request'))->setValue($passkeyOptions,
+    new \Typecho\Widget\Request(\Typecho\Request::getInstance()));
+(new ReflectionProperty(\Widget\Base::class, 'options'))->setValue($passkey, $passkeyOptions);
+foreach (['https://example.test', 'https://example.test:443', 'https://evil.example.test', 'https://example.test:8443'] as $origin) {
+    $clientData = json_encode(['origin' => $origin]);
+    try {
+        $decoded = (new ReflectionMethod($passkey, 'clientData'))->invoke($passkey,
+            rtrim(strtr(base64_encode($clientData), '+/', '-_'), '='));
+        check($decoded === $clientData && \Typecho\Common::isSameOrigin($origin, 'https://example.test'),
+            'passkey accepted a different application origin');
+    } catch (\Typecho\Widget\Exception $e) {
+        check(!\Typecho\Common::isSameOrigin($origin, 'https://example.test'), 'passkey rejected its own origin');
+    }
+}
+foreach (['http', 'https', 'forced', 'proxy', 'ini'] as $mode) {
+    $code = 'define("__TYPECHO_ROOT_DIR__", ' . var_export(ROOT, true) . ');'
+        . 'require __TYPECHO_ROOT_DIR__ . "/var/Typecho/Request.php";'
+        . 'require __TYPECHO_ROOT_DIR__ . "/var/Typecho/Common.php";'
+        . '$_SERVER = ["REMOTE_ADDR" => "127.0.0.1"];'
+        . ($mode === 'https' ? '$_SERVER["HTTPS"] = "on";' : '')
+        . ($mode === 'forced' ? 'define("__TYPECHO_SECURE__", true);' : '')
+        . ($mode === 'proxy' ? '$_SERVER["HTTP_X_FORWARDED_PROTO"] = "https";' : '')
+        . 'ini_set("session.cookie_secure", ' . ($mode === 'ini' ? '"1"' : '"0"') . ');'
+        . '\\Typecho\\Common::startSession(); echo (int) session_get_cookie_params()["secure"]; session_destroy();';
+    $output = [];
+    exec(escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg($code), $output, $status);
+    check($status === 0 && implode('', $output) === ($mode === 'http' ? '0' : '1'), 'wrong session Secure flag for ' . $mode);
+}
 check(\Typecho\Common::hashValidate('password', \Typecho\Common::hashPassword('password')), 'password hash validation failed');
 check(\Typecho\Common::likeEscape('50%_!') === '50!%!_!!', 'LIKE wildcard escaping failed');
 check(\Typecho\Common::safeUrl('http:///broken') === '/', 'safeUrl did not survive an unparsable URL');
+$_SERVER['HTTP_X_REWRITE_URL'] = '/admin/login.php';
+$_SERVER['REQUEST_URI'] = '/admin/manage-users.php';
+$request = (new ReflectionClass(\Typecho\Request::class))->newInstanceWithoutConstructor();
+check($request->getRequestUri() === '/admin/manage-users.php', 'client header changed the authorization path');
+$_SERVER = $server;
 \Typecho\Throttle::clear('smoke', 'subject');
 check(!\Typecho\Throttle::tooMany('smoke', 'subject'), 'throttle tripped before any failure');
 for ($i = 0; $i < \Typecho\Throttle::LIMIT; $i++) {
@@ -130,6 +197,11 @@ for ($i = 0; $i < \Typecho\Throttle::LIMIT; $i++) {
 }
 check(\Typecho\Throttle::tooMany('smoke', 'subject'), 'throttle did not trip after ' . \Typecho\Throttle::LIMIT . ' failures');
 check(!\Typecho\Throttle::tooMany('smoke', 'other-subject'), 'throttle leaked between subjects');
+$throttleFile = (new ReflectionMethod(\Typecho\Throttle::class, 'file'))->invoke(null, 'smoke', 'subject');
+file_put_contents($throttleFile, (time() - \Typecho\Throttle::WINDOW) . '|' . \Typecho\Throttle::LIMIT);
+check(!\Typecho\Throttle::tooMany('smoke', 'subject'), 'expired throttle remained blocked');
+\Typecho\Throttle::fail('smoke', 'subject');
+check(str_ends_with(file_get_contents($throttleFile), '|1'), 'expired throttle did not reset before next failure');
 \Typecho\Throttle::clear('smoke', 'subject');
 check(!\Typecho\Throttle::tooMany('smoke', 'subject'), 'throttle did not clear');
 foreach (['$T$' . str_repeat('x', 40), '$P$' . str_repeat('x', 31), md5('password')] as $legacyPasswordHash) {
@@ -159,6 +231,10 @@ foreach ([
         "Apache rules do not deny {$databaseFile}"
     );
 }
+check(
+    str_contains($apacheRules, 'RewriteRule . index.php [L]'),
+    'bundled Apache security rules do not route pretty URLs to index.php'
+);
 $iisRules = file_get_contents(ROOT . '/web.config');
 check(
     is_string($iisRules)

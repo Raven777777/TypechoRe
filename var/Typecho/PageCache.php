@@ -33,12 +33,15 @@ final class PageCache
     private static function hasStateCookie(): bool
     {
         $sessionName = (string) session_name();
+        $prefix = Cookie::getPrefix();
 
-        foreach ([$_SERVER['HTTP_COOKIE'] ?? '', $_SERVER['REDIRECT_HTTP_COOKIE'] ?? ''] as $header) {
+        foreach ([$_SERVER['HTTP_COOKIE'] ?? '', $_SERVER['REDIRECT_HTTP_COOKIE'] ?? '', implode(';', array_keys($_COOKIE))] as $header) {
             foreach (explode(';', (string) $header) as $pair) {
                 $name = trim(explode('=', $pair, 2)[0]);
 
-                if ($name !== '' && (($sessionName !== '' && $name === $sessionName) || str_starts_with($name, '__typecho_'))) {
+                if ($name !== '' && (($sessionName !== '' && $name === $sessionName)
+                    || ($prefix !== '' && str_starts_with($name, $prefix))
+                    || str_starts_with($name, '__typecho_') || str_starts_with($name, 'protectPassword_'))) {
                     return true;
                 }
             }
@@ -65,6 +68,7 @@ final class PageCache
     {
         // shortcut: add request headers here if the active theme varies output by them.
         return hash('sha256', implode("\n", [
+            'private-cookie-fix-v2',
             $_SERVER['HTTP_HOST'] ?? '',
             $_SERVER['REQUEST_URI'] ?? '/',
             $rootUrl,

@@ -98,7 +98,7 @@ class SQLite implements Adapter
                 }
             }
 
-            if (\SQLITE_BUSY != $handle->lastErrorCode()) {
+            if (5 !== $handle->lastErrorCode()) {
                 break;
             }
         }
@@ -160,8 +160,10 @@ class SQLite implements Adapter
     #[\Override]
     public function quoteValue($string): string
     {
-        /** SQLite 的 C 接口在 \0 处截断字符串, 先剥掉 NUL, 避免「abc\0x」被当成「abc」参与比较 */
-        $string = str_replace("\0", '', (string) $string);
+        $string = (string) $string;
+        if (str_contains($string, "\0")) {
+            throw new SQLException('SQLite text values cannot contain NUL bytes');
+        }
 
         return '\'' . str_replace('\'', '\'\'', $string) . '\'';
     }

@@ -248,15 +248,19 @@ class Edit extends Contents implements ActionInterface
      */
     public function clearAttachment()
     {
-        $page = 1;
+        $lastId = 0;
         $deleteCount = 0;
 
         do {
             $posts = array_column($this->db->fetchAll($this->db->select('cid')
                 ->from('table.contents')
                 ->where('type = ? AND parent = ?', 'attachment', 0)
-                ->page($page, 100)), 'cid');
-            $page++;
+                ->where('cid > ?', $lastId)
+                ->order('cid', \Typecho\Db::SORT_ASC)
+                ->limit(100)), 'cid');
+            if ($posts) {
+                $lastId = (int)end($posts);
+            }
 
             $this->deleteByIds($posts, $deleteCount);
         } while (count($posts) == 100);
@@ -306,18 +310,20 @@ class Edit extends Contents implements ActionInterface
     protected function deleteByIds(array $posts, int &$deleteCount): void
     {
         foreach ($posts as $post) {
-            // 删除插件接口
-            self::pluginHandle()->call('delete', $post, $this);
-
-            $condition = $this->db->sql()->where('cid = ?', $post);
+            $condition = $this->db->sql()->where('cid = ? AND type = ?', $post, 'attachment');
             $row = $this->db->fetchRow($this->select()
                 ->where('table.contents.type = ?', 'attachment')
                 ->where('table.contents.cid = ?', $post)
-                ->limit(1), [$this, 'push']);
+                ->limit(1));
 
-            if ($this->isWriteable(clone $condition) && $this->delete($condition)) {
-                /** 删除文件 */
-                Upload::deleteHandle($this->toColumn(['cid', 'attachment', 'parent']));
+            if (!$row || !$this->isWriteable(clone $condition)) {
+                continue;
+            }
+            $this->push($row);
+            self::pluginHandle()->call('delete', $post, $this);
+
+            // Keep the record if the file cannot be removed, so deletion can be retried.
+            if (Upload::deleteHandle($this->toColumn(['cid', 'attachment', 'parent'])) && $this->delete($condition)) {
 
                 /** 删除评论 */
                 $this->db->query($this->db->delete('table.comments')

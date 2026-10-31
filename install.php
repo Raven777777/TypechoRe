@@ -1022,7 +1022,7 @@ function install_step_2_perform()
         ->addRule('dbPrefix', 'required', _t('确认您的配置'))
         ->addRule('dbPrefix', 'minLength', _t('确认您的配置'), 1)
         ->addRule('dbPrefix', 'maxLength', _t('确认您的配置'), 16)
-        ->addRule('dbPrefix', 'alphaDash', _t('确认您的配置'))
+        ->addRule('dbPrefix', static fn(string $prefix): bool => preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $prefix) === 1, _t('确认您的配置'))
         ->addRule('dbAdapter', 'required', _t('确认您的配置'))
         ->addRule('dbAdapter', 'enum', _t('确认您的配置'), array_keys($drivers))
         ->addRule('dbNext', 'required', _t('确认您的配置'))
@@ -1109,6 +1109,7 @@ function install_step_2_perform()
             $config['dbPrefix'] . 'fields',
             $config['dbPrefix'] . 'metas',
             $config['dbPrefix'] . 'options',
+            $config['dbPrefix'] . 'passkeys',
             $config['dbPrefix'] . 'relationships',
             $config['dbPrefix'] . 'users'
         ];

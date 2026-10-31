@@ -75,7 +75,7 @@ class Cookie
         self::$prefix = md5($url);
         $parsed = parse_url($url);
 
-        self::$domain = $parsed['host'] ?? '';
+        self::$domain = '';
         /** 在路径后面强制加上斜杠 */
         self::$path = empty($parsed['path']) ? '/' : Common::url(null, $parsed['path']);
 
@@ -134,7 +134,9 @@ class Cookie
      */
     public static function setOptions(array $options)
     {
-        self::$domain = ($options['domain'] ?? '') ?: self::$domain;
+        if (array_key_exists('domain', $options)) {
+            self::$domain = (string) $options['domain'];
+        }
 
         if (array_key_exists('secure', $options)) {
             self::$secure = !!$options['secure'];

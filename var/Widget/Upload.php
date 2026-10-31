@@ -38,7 +38,11 @@ class Upload extends Contents implements ActionInterface
             return $result;
         }
 
-        return @unlink(__TYPECHO_ROOT_DIR__ . '/' . $content['attachment']->path);
+        $path = Common::url(
+            $content['attachment']->path,
+            defined('__TYPECHO_UPLOAD_ROOT_DIR__') ? __TYPECHO_UPLOAD_ROOT_DIR__ : __TYPECHO_ROOT_DIR__
+        );
+        return !file_exists($path) || @unlink($path);
     }
 
     /**
@@ -204,34 +208,40 @@ class Upload extends Contents implements ActionInterface
         }
 
         // 先写临时文件再 rename: 直接 unlink 旧文件后写入失败会把附件弄丢
-        $temp = $path . '.tmp';
-
-        if (isset($file['tmp_name'])) {
-            //移动上传文件
-            if (!@move_uploaded_file($file['tmp_name'], $temp)) {
-                return false;
-            }
-        } elseif (isset($file['bytes'])) {
-            //直接写入文件
-            if (false === @file_put_contents($temp, $file['bytes'])) {
-                return false;
-            }
-        } elseif (isset($file['bits'])) {
-            //直接写入文件
-            if (false === @file_put_contents($temp, $file['bits'])) {
-                return false;
-            }
-        } else {
+        $temp = @tempnam($dir, '.upload-');
+        if ($temp === false) {
             return false;
         }
 
-        if (!@rename($temp, $path)) {
-            @unlink($temp);
-            return false;
-        }
+        try {
+            if (isset($file['tmp_name'])) {
+                //移动上传文件
+                if (!@move_uploaded_file($file['tmp_name'], $temp)) {
+                    return false;
+                }
+            } elseif (isset($file['bytes'])) {
+                //直接写入文件
+                if (strlen($file['bytes']) !== @file_put_contents($temp, $file['bytes'])) {
+                    return false;
+                }
+            } elseif (isset($file['bits'])) {
+                //直接写入文件
+                if (strlen($file['bits']) !== @file_put_contents($temp, $file['bits'])) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
 
-        if (!isset($file['size'])) {
-            $file['size'] = filesize($path);
+            $file['size'] = filesize($temp);
+            $mode = file_exists($path) ? fileperms($path) & 0777 : 0666 & ~umask();
+            if (!@chmod($temp, $mode) || !@rename($temp, $path)) {
+                return false;
+            }
+        } finally {
+            if (is_file($temp)) {
+                @unlink($temp);
+            }
         }
 
         //返回相对存储路径

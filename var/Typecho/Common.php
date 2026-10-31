@@ -318,8 +318,7 @@ namespace Typecho {
                 return;
             }
 
-            $secure = (!empty($_SERVER['HTTPS']) && 'off' !== strtolower($_SERVER['HTTPS']))
-                || 0 === stripos($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '', 'https');
+            $secure = Request::getInstance()->isSecure() || (bool) ini_get('session.cookie_secure');
 
             /** PHP 8.5 起 session.use_strict_mode 可编程设置, 拒绝未初始化的会话 ID */
             ini_set('session.use_strict_mode', '1');
@@ -1267,11 +1266,19 @@ EOF;
          * @param resource $fp
          * @param int|null $offset
          * @param string $version
+         * @param int|null $end
          * @return array|bool
          */
-        public static function extractBackupBuffer($fp, ?int &$offset, string $version)
+        public static function extractBackupBuffer($fp, ?int &$offset, string $version, ?int $end = null)
         {
+            if (!in_array($version, ['FILE', '0001', '0002'], true)) {
+                return false;
+            }
+            $end ??= fstat($fp)['size'];
             $realMetaLen = $version == 'FILE' ? 6 : 8;
+            if ($end - $offset < $realMetaLen) {
+                return false;
+            }
 
             $meta = fread($fp, $realMetaLen);
             $offset += $realMetaLen;
@@ -1289,7 +1296,11 @@ EOF;
             $headerLen = (int) $headerLen;
             $bodyLen = (int) $bodyLen;
 
-            $header = @fread($fp, $headerLen);
+            $hashLen = '0002' === $version ? 64 : 32;
+            if ($headerLen <= 0 || $headerLen > $end - $offset - $hashLen) {
+                return false;
+            }
+            $header = fread($fp, $headerLen);
             $offset += $headerLen;
 
             if (false === $header || strlen($header) != $headerLen) {
@@ -1297,12 +1308,23 @@ EOF;
             }
 
             if ('FILE' == $version) {
-                $bodyLen = (int) array_reduce(json_decode($header, true), function ($carry, $len) {
-                    return null === $len ? $carry : $carry + $len;
-                }, 0);
+                $schema = json_decode($header, true);
+                if (!is_array($schema)) {
+                    return false;
+                }
+                $bodyLen = 0;
+                foreach ($schema as $len) {
+                    if (null !== $len && (!is_int($len) || $len < 0 || $len > $end - $offset - $hashLen - $bodyLen)) {
+                        return false;
+                    }
+                    $bodyLen += $len ?? 0;
+                }
             }
 
-            $body = @fread($fp, $bodyLen);
+            if ($bodyLen < 0 || $bodyLen > $end - $offset - $hashLen) {
+                return false;
+            }
+            $body = $bodyLen > 0 ? fread($fp, $bodyLen) : '';
             $offset += $bodyLen;
 
             if (false === $body || strlen($body) != $bodyLen) {
@@ -1310,8 +1332,7 @@ EOF;
             }
 
             /** 备份文件版本 0002 起使用 64 字节 SHA-256, 0001 为 32 字节 MD5 */
-            $hashLen = '0002' === $version ? 64 : 32;
-            $hash = @fread($fp, $hashLen);
+            $hash = fread($fp, $hashLen);
             $offset += $hashLen;
 
             if (false === $hash || strlen($hash) !== $hashLen) {

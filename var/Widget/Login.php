@@ -52,8 +52,14 @@ class Login extends Users implements ActionInterface
             $this->response->redirect($this->options->index);
         }
 
+        $credentials = [
+            'name' => is_string($_POST['name'] ?? null) ? $_POST['name'] : '',
+            'password' => is_string($_POST['password'] ?? null) ? $_POST['password'] : '',
+        ];
+        $remember = ($_POST['remember'] ?? '') === '1';
+
         /** 拦截暴力破解: session 计数可以被客户端丢 cookie 清零, 这里存到临时目录 */
-        $throttleSubject = (string) $this->request->get('name') . '|' . $this->request->getIp();
+        $throttleSubject = $credentials['name'] . '|' . $this->request->getIp();
         if (Throttle::tooMany('login', $throttleSubject)) {
             Notice::alloc()->set(_t('尝试次数过多, 请稍后再试'), 'error');
             $this->response->goBack();
@@ -66,15 +72,15 @@ class Login extends Users implements ActionInterface
         $expire = 30 * 24 * 3600;
 
         /** 记住密码状态 */
-        if ($this->request->is('remember=1')) {
+        if ($remember) {
             Cookie::set('__typecho_remember_remember', 1, $expire);
         } elseif (Cookie::get('__typecho_remember_remember')) {
             Cookie::delete('__typecho_remember_remember');
         }
 
         /** 截获验证异常 */
-        if ($error = $validator->run($this->request->from('name', 'password'))) {
-            Cookie::set('__typecho_remember_name', $this->request->get('name'));
+        if ($error = $validator->run($credentials)) {
+            Cookie::set('__typecho_remember_name', $credentials['name']);
 
             /** 设置提示信息 */
             Notice::alloc()->set($error);
@@ -83,10 +89,10 @@ class Login extends Users implements ActionInterface
 
         /** 开始验证用户 **/
         $valid = $this->user->login(
-            $this->request->get('name'),
-            $this->request->get('password'),
+            $credentials['name'],
+            $credentials['password'],
             false,
-            $this->request->is('remember=1') ? $expire : 0
+            $remember ? $expire : 0
         );
 
         /** 比对密码 */
@@ -96,12 +102,12 @@ class Login extends Users implements ActionInterface
             self::pluginHandle()->call(
                 'loginFailure',
                 $this->user,
-                $this->request->get('name'),
-                $this->request->get('password'),
-                $this->request->is('remember=1')
+                $credentials['name'],
+                $credentials['password'],
+                $remember
             );
 
-            Cookie::set('__typecho_remember_name', $this->request->get('name'));
+            Cookie::set('__typecho_remember_name', $credentials['name']);
             Notice::alloc()->set(_t('用户名或密码无效'), 'error');
             $this->response->goBack('?referer=' . urlencode((string) $this->request->get('referer', '')));
         }
@@ -111,33 +117,26 @@ class Login extends Users implements ActionInterface
         self::pluginHandle()->call(
             'loginSuccess',
             $this->user,
-            $this->request->get('name'),
-            $this->request->get('password'),
-            $this->request->is('remember=1')
+            $credentials['name'],
+            $credentials['password'],
+            $remember
         );
 
         /** 跳转验证后地址 */
         if (!empty($this->request->referer)) {
-            /** fix #952 & validate redirect url */
-            $refererParts = parse_url($this->request->referer);
-            $siteParts = parse_url($this->options->siteUrl);
-            $adminParts = parse_url($this->options->adminUrl);
-
-            $refererHost = strtolower($refererParts['host'] ?? '');
-            $sameHost = '' !== $refererHost
-                && (($refererHost === strtolower($siteParts['host'] ?? '')
-                    && !empty($siteParts['host']))
-                || ($refererHost === strtolower($adminParts['host'] ?? '')
-                    && !empty($adminParts['host'])));
-
-            // scheme/host 必须属于本站, 防止开放重定向 (http://blog.com.evil.com 会绕过前缀比较)
-            // 相对地址需排除 // 与 /\ 前缀 (浏览器将反斜杠规范化为斜杠, /\evil.com 等价于 //evil.com)
+            // Validate the destination after the redirect layer's normalization.
+            $referer = Common::safeUrl((string) $this->request->referer);
             if (
-                ($sameHost && in_array(strtolower($refererParts['scheme'] ?? ''), ['http', 'https']))
-                || ('/' === substr($this->request->referer, 0, 1)
-                    && !in_array(substr($this->request->referer, 0, 2), ['//', '/\\'], true))
+                Common::isSameOrigin($referer, $this->options->siteUrl)
+                || Common::isSameOrigin($referer, $this->options->adminUrl)
+                || (str_starts_with($referer, '/')
+                    && !str_starts_with($referer, '//') && !str_starts_with($referer, '/\\'))
             ) {
-                $this->response->redirect($this->request->referer);
+                if (str_starts_with($referer, '/')) {
+                    $origin = array_intersect_key(parse_url($this->options->siteUrl), array_flip(['scheme', 'host', 'port']));
+                    $referer = Common::buildUrl($origin) . $referer;
+                }
+                $this->response->redirect($referer);
             }
         } elseif (!$this->user->pass('contributor', true)) {
             /** 不允许普通用户直接跳转后台 */

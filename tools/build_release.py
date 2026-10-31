@@ -23,6 +23,7 @@ import re
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 
@@ -295,7 +296,8 @@ def build(minify: str = "auto") -> Path:
     output_dir = ROOT / "dist"
     output_dir.mkdir(exist_ok=True)
     output = output_dir / f"TypechoRe-{version()}.zip"
-    temporary = output.with_suffix(".zip.tmp")
+    with tempfile.NamedTemporaryFile(prefix=output.stem + "-", suffix=".zip.tmp", dir=output_dir, delete=False) as handle:
+        temporary = Path(handle.name)
 
     try:
         with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as package:

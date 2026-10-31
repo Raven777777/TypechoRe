@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression test for the release package: exclusions and the SHA-256 manifest."""
 
+from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
 import re
@@ -8,6 +9,8 @@ import secrets
 import stat
 import subprocess
 import sys
+from threading import Barrier
+from unittest.mock import patch
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 
+import build_release
 from minify_assets import Parcel, minify_files, url_targets  # noqa: E402  (需要在 sys.path 调整之后导入)
 SUFFIXES = (
     ".db",
@@ -189,10 +193,28 @@ def check_minified_html(minifier: Parcel) -> tuple[str, str]:
     return original, resaved
 
 
+def check_concurrent_builds() -> None:
+    ready = Barrier(2)
+    verify = build_release.verify
+
+    def verify_together(archive: Path) -> None:
+        ready.wait(timeout=15)
+        verify(archive)
+
+    with patch.object(build_release, "verify", side_effect=verify_together):
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(build_release.build, "off") for _ in range(2)]
+            archives = [future.result() for future in futures]
+    for archive in archives:
+        verify(archive)
+    print("PASS: concurrent release builds use separate temporary archives")
+
+
 def main() -> None:
     prefix = f"typechore-release-filter-{secrets.token_hex(4)}"
     fixtures = [ROOT / "usr" / f"{prefix}{suffix}" for suffix in SUFFIXES]
     minifier = Parcel()
+    check_concurrent_builds()
 
     try:
         for fixture in fixtures:

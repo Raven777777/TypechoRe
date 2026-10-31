@@ -119,23 +119,6 @@ class Feedback extends Comments implements ActionInterface
                     }
                 }
 
-                /** 检查ip评论间隔 */
-                if (
-                    !$this->user->pass('editor', true) && $content->authorId != $this->user->uid &&
-                    $this->options->commentsPostIntervalEnable
-                ) {
-                    $latestComment = $this->db->fetchRow($this->db->select('created')->from('table.comments')
-                        ->where('cid = ? AND ip = ?', $content->cid, $this->request->getIp())
-                        ->order('created', Db::SORT_DESC)
-                        ->limit(1));
-
-                    if (
-                        $latestComment && ($this->options->time - $latestComment['created'] > 0 &&
-                            $this->options->time - $latestComment['created'] < $this->options->commentsPostInterval)
-                    ) {
-                        throw new Exception(_t('对不起, 您的发言过于频繁, 请稍候再次发布.'), 403);
-                    }
-                }
             }
 
             /** 如果文章不允许引用 */
@@ -273,7 +256,7 @@ class Feedback extends Comments implements ActionInterface
         }
 
         /** 添加评论 */
-        $commentId = $this->insert($comment);
+        $commentId = $this->insertComment($comment);
         Cookie::delete('__typecho_remember_text');
         $this->db->fetchRow($this->select()->where('coid = ?', $commentId)
             ->limit(1), [$this, 'push']);
@@ -287,6 +270,22 @@ class Feedback extends Comments implements ActionInterface
         }
 
         $this->response->redirect($this->permalink);
+    }
+
+    private function insertComment(array $comment): int
+    {
+        return $this->db->transaction(function () use ($comment): int {
+            if (!$this->user->pass('editor', true) && $this->content->authorId != $this->user->uid
+                && $this->options->commentsPostIntervalEnable) {
+                $latest = $this->db->fetchRow($this->db->select('created')->from('table.comments')
+                    ->where('cid = ? AND ip = ?', $comment['cid'], $comment['ip'])
+                    ->order('created', Db::SORT_DESC)->limit(1));
+                if ($latest && $comment['created'] - $latest['created'] < $this->options->commentsPostInterval) {
+                    throw new Exception(_t('对不起, 您的发言过于频繁, 请稍候再次发布.'), 403);
+                }
+            }
+            return $this->insert($comment);
+        });
     }
 
     /**
