@@ -20,10 +20,10 @@ final class PageCache
             && empty($_SERVER['QUERY_STRING'])
             && parse_url($uri, PHP_URL_QUERY) === null
             && empty($_COOKIE)
-            && !array_key_exists('HTTP_COOKIE', $_SERVER)
-            && !array_key_exists('REDIRECT_HTTP_COOKIE', $_SERVER)
-            && !array_key_exists('HTTP_AUTHORIZATION', $_SERVER)
-            && !array_key_exists('REDIRECT_HTTP_AUTHORIZATION', $_SERVER)
+            && ($_SERVER['HTTP_COOKIE'] ?? '') === ''
+            && ($_SERVER['REDIRECT_HTTP_COOKIE'] ?? '') === ''
+            && ($_SERVER['HTTP_AUTHORIZATION'] ?? '') === ''
+            && ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '') === ''
             && !preg_match('~/(?:admin|action|feed|sitemap|xmlrpc)(?:/|\.|$)~i', $path)
             && empty(Plugin::export()['activated']);
     }

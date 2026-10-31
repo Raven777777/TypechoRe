@@ -73,16 +73,21 @@ $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/'];
 $_GET = [];
 $_COOKIE = [];
 check(\Typecho\PageCache::eligible(), 'page cache rejected an anonymous public GET');
+$_SERVER = [
+    'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_COOKIE' => '', 'REDIRECT_HTTP_COOKIE' => '',
+    'HTTP_AUTHORIZATION' => '', 'REDIRECT_HTTP_AUTHORIZATION' => '',
+];
+check(\Typecho\PageCache::eligible(), 'page cache rejected empty FastCGI cookie/auth params');
 $_SERVER = ['REQUEST_METHOD' => 'POST', 'REQUEST_URI' => '/'];
 check(!\Typecho\PageCache::eligible(), 'page cache accepted a non-GET request');
 $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/?x=1', 'QUERY_STRING' => 'x=1'];
 check(!\Typecho\PageCache::eligible(), 'page cache accepted a query string');
 $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/admin/'];
 check(!\Typecho\PageCache::eligible(), 'page cache accepted an admin path');
-$_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_COOKIE' => ''];
-check(!\Typecho\PageCache::eligible(), 'page cache accepted a Cookie header');
-$_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_AUTHORIZATION' => ''];
-check(!\Typecho\PageCache::eligible(), 'page cache accepted an Authorization header');
+foreach (['HTTP_COOKIE', 'REDIRECT_HTTP_COOKIE', 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION'] as $header) {
+    $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', $header => '0'];
+    check(!\Typecho\PageCache::eligible(), "page cache accepted a non-empty {$header}");
+}
 \Typecho\Plugin::init(['activated' => ['test' => []]]);
 $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/'];
 check(!\Typecho\PageCache::eligible(), 'page cache accepted an active plugin');
