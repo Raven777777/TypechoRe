@@ -1426,6 +1426,37 @@ $passkeyJson = assertResponse(
 );
 assertTrue(str_contains($passkeyJson, 'challenge'), 'passkey create-options failed after the upgrade');
 
+// 库里版本比代码还新 (装过更高版本号的构建再回退) 也必须能重跑升级脚本,
+// 否则后台首页会一直显示旧版本号
+sitePhp(
+    $php,
+    $siteDir,
+    "\$db->query(\$db->update('table.options')->rows(['value' => 'TypechoRe 1.4.0'])->where('name = ?', 'generator'));"
+);
+$response = $site->get('/admin/');
+assertResponse($response, [302], 'GET /admin/ when the stored version is newer than the code');
+assertTrue(
+    str_contains($response['headers']['location'] ?? '', 'upgrade.php'),
+    'newer stored version did not redirect to upgrade.php: ' . ($response['headers']['location'] ?? '')
+);
+
+$upgradePage = assertResponse($site->get('/admin/upgrade.php'), [200], 'GET upgrade.php for the rollback case');
+if (!preg_match('/<form[^>]+action="([^"]*upgrade[^"]*)"/', $upgradePage, $matches)) {
+    fail('upgrade form action not found (rollback case)');
+}
+$response = $site->post(html_entity_decode($matches[1]), []);
+assertResponse($response, [200, 302], 'POST upgrade (rollback case)');
+$rolledBackVersion = sitePhp($php, $siteDir, "echo \$options->version;");
+assertTrue(
+    $expectedVersion === $rolledBackVersion,
+    "rollback upgrade did not set version {$expectedVersion}, got {$rolledBackVersion}"
+);
+$dashboard = assertResponse($site->get('/admin/'), [200], 'GET /admin/ after the rollback upgrade');
+assertTrue(
+    str_contains($dashboard, 'TypechoRe ' . $expectedVersion),
+    "admin dashboard does not show the current version {$expectedVersion}"
+);
+
 // ---------------------------------------------------------------- logout
 
 step('logout');

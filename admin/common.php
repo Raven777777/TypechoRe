@@ -36,8 +36,9 @@ if (!empty($currentMenu)) {
             \Typecho\Cookie::set('__typecho_first_run', 1);
         }
     } elseif ($user->pass('administrator', true)) {
-        /** 检测版本是否升级 */
-        $mustUpgrade = version_compare(\Typecho\Common::VERSION, $options->version, '>');
+        /** 检测版本是否升级 (库里记录的版本和当前代码不一致就要跑一次升级脚本,
+         *  包括库里版本比代码还新: 装过更高版本号的构建后回退, 否则后台会一直显示旧号) */
+        $mustUpgrade = version_compare(\Typecho\Common::VERSION, $options->version, '!=');
 
         if ($mustUpgrade && 'upgrade.php' != $adminFile && 'backup.php' != $adminFile) {
             $response->redirect(\Typecho\Common::url('upgrade.php', $options->adminUrl));
