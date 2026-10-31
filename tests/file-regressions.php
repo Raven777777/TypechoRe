@@ -50,6 +50,7 @@ function checkFileRegressions(): void
         $pid = pcntl_fork();
         check($pid !== -1, 'could not fork short-write test');
         if ($pid === 0) {
+            restore_error_handler(); // This child deliberately triggers an E_WARNING to exercise short-write handling.
             pcntl_signal(SIGXFSZ, SIG_IGN);
             posix_setrlimit(POSIX_RLIMIT_FSIZE, 8, 8);
             $themeSaved = $save->invoke(null, $theme, str_repeat('x', 1024));

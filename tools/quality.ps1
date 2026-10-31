@@ -69,6 +69,9 @@ try {
     & node tests/frontend-regressions.mjs
     if ($LASTEXITCODE -ne 0) { throw 'Frontend regression tests failed.' }
 
+    & $php tools/option-audit.php
+    if ($LASTEXITCODE -ne 0) { throw 'Option audit failed.' }
+
     & $php tests/webauthn.php
     if ($LASTEXITCODE -ne 0) { throw 'WebAuthn ceremony tests failed.' }
 

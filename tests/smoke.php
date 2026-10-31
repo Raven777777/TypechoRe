@@ -6,6 +6,13 @@
 
 declare(strict_types=1);
 
+set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
+    if (($severity & error_reporting()) && in_array($severity, [E_DEPRECATED, E_WARNING, E_NOTICE], true)) {
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    }
+    return false;
+});
+
 const ROOT = __DIR__ . '/..';
 define('__TYPECHO_ROOT_DIR__', ROOT);
 define('__TYPECHO_PAGE_CACHE_DIR__', sys_get_temp_dir() . '/typechore-page-cache-smoke-' . getmypid());
@@ -63,7 +70,9 @@ foreach ([0, 28800, -18000, 20700] as $timezone) {
 }
 $cacheKey = hash('sha256', 'smoke-page-cache');
 $cacheFile = __TYPECHO_PAGE_CACHE_DIR__ . '/' . $cacheKey;
-@unlink($cacheFile);
+if (is_file($cacheFile)) {
+    unlink($cacheFile);
+}
 check(\Typecho\PageCache::get($cacheKey) === null, 'page cache miss returned a body');
 $cacheStart = time();
 check(\Typecho\PageCache::put($cacheKey, '<html>cached</html>', 30), 'page cache could not store a body');

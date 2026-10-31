@@ -14,6 +14,13 @@
 
 declare(strict_types=1);
 
+set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
+    if (($severity & error_reporting()) && in_array($severity, [E_DEPRECATED, E_WARNING, E_NOTICE], true)) {
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    }
+    return false;
+});
+
 ob_start();
 
 const ROOT = __DIR__ . '/..';
