@@ -28,15 +28,15 @@ final class PageCache
             && empty(Plugin::export()['activated']);
     }
 
-    public static function key(string $generation, string $theme, string $language): string
+    public static function key(string $generation, string $rootUrl, ?string $theme, ?string $language): string
     {
         // shortcut: add request headers here if the active theme varies output by them.
         return hash('sha256', implode("\n", [
             $_SERVER['HTTP_HOST'] ?? '',
             $_SERVER['REQUEST_URI'] ?? '/',
-            \Widget\Options::alloc()->rootUrl,
-            $theme,
-            $language,
+            $rootUrl,
+            $theme ?? '',
+            $language ?? '',
             $generation,
         ]));
     }

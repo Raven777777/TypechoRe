@@ -32,7 +32,7 @@ try {
     $cacheableRequest = $cacheEnabled && \Typecho\PageCache::eligible();
     if ($cacheableRequest) {
         $cacheGeneration = \Typecho\PageCache::generation();
-        $cacheKey = \Typecho\PageCache::key($cacheGeneration, $options->theme, $options->lang);
+        $cacheKey = \Typecho\PageCache::key($cacheGeneration, $options->rootUrl, $options->theme, $options->lang);
         $cachedBody = \Typecho\PageCache::get($cacheKey);
         if ($cachedBody !== null && \Typecho\PageCache::generation() !== $cacheGeneration) {
             $cachedBody = null;

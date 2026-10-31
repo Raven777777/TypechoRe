@@ -62,6 +62,11 @@ check(
     'page cache did not apply its configured TTL'
 );
 check(\Typecho\PageCache::get($cacheKey) === '<html>cached</html>', 'page cache did not return its stored body');
+$nullOptionKey = \Typecho\PageCache::key('generation', 'https://example.test/', null, null);
+$expectedNullOptionKey = hash('sha256', implode("\n", [
+    $_SERVER['HTTP_HOST'] ?? '', $_SERVER['REQUEST_URI'] ?? '/', 'https://example.test/', '', '', 'generation',
+]));
+check($nullOptionKey === $expectedNullOptionKey, 'page cache key failed with null theme/language options');
 $generation = \Typecho\PageCache::generation();
 \Typecho\PageCache::invalidate();
 check(\Typecho\PageCache::generation() !== $generation, 'page cache generation did not advance');
