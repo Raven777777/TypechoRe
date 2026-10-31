@@ -176,4 +176,22 @@ class Upgrade
 
         return _t('已创建 Passkey 数据表');
     }
+
+    /**
+     * 标签/分类归档缺少 relationships.mid 索引, 会扫描整张 contents 表 (幂等)
+     *
+     * @param Db $db
+     * @param Options|null $options 未使用
+     * @return string
+     * @throws \Typecho\Db\Exception
+     */
+    public static function v1_4_0(Db $db, ?Options $options = null): string
+    {
+        $db->query(
+            "CREATE INDEX IF NOT EXISTS {$db->getPrefix()}relationships_mid ON {$db->getPrefix()}relationships (\"mid\")",
+            Db::WRITE
+        );
+
+        return _t('已为分类/标签索引添加索引');
+    }
 }

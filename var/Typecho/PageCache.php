@@ -10,6 +10,7 @@ final class PageCache
 {
     private const TTL = 60;
     private const LIMIT = 200;
+    private const MAX_SIZE = 524288;
 
     public static function eligible(): bool
     {
@@ -19,13 +20,45 @@ final class PageCache
             && empty($_GET)
             && empty($_SERVER['QUERY_STRING'])
             && parse_url($uri, PHP_URL_QUERY) === null
-            && empty($_COOKIE)
-            && ($_SERVER['HTTP_COOKIE'] ?? '') === ''
-            && ($_SERVER['REDIRECT_HTTP_COOKIE'] ?? '') === ''
+            && !self::hasStateCookie()
             && ($_SERVER['HTTP_AUTHORIZATION'] ?? '') === ''
             && ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '') === ''
             && !preg_match('~/(?:admin|action|feed|sitemap|xmlrpc)(?:/|\.|$)~i', $path)
-            && empty(Plugin::export()['activated']);
+            && !self::rendersWholePage();
+    }
+
+    /**
+     * 只认 Typecho/会话自己的 cookie, 否则任何一个统计或 CDN cookie 都会关掉缓存
+     */
+    private static function hasStateCookie(): bool
+    {
+        $sessionName = (string) session_name();
+
+        foreach ([$_SERVER['HTTP_COOKIE'] ?? '', $_SERVER['REDIRECT_HTTP_COOKIE'] ?? ''] as $header) {
+            foreach (explode(';', (string) $header) as $pair) {
+                $name = trim(explode('=', $pair, 2)[0]);
+
+                if ($name !== '' && (($sessionName !== '' && $name === $sessionName) || str_starts_with($name, '__typecho_'))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 挂了整页钩子的插件可以任意改写输出, 不缓存; 只钩子内容的插件对每个访客输出相同
+     */
+    private static function rendersWholePage(): bool
+    {
+        foreach (array_keys(Plugin::export()['handles'] ?? []) as $handle) {
+            if (strtolower(ltrim((string) $handle, '\\')) === 'index.php') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static function key(string $generation, string $rootUrl, ?string $theme, ?string $language): string
@@ -59,7 +92,7 @@ final class PageCache
     public static function put(string $key, string $body, int $ttl = self::TTL): bool
     {
         $dir = self::directory();
-        if ($dir === null) {
+        if ($dir === null || strlen($body) > self::MAX_SIZE) {
             return false;
         }
         $temp = @tempnam($dir, '.tmp-');
@@ -84,33 +117,55 @@ final class PageCache
     {
         $dir = self::directory();
         if ($dir === null) {
-            return '0';
+            return '';
         }
-        $file = $dir . '/generation';
-        return is_file($file) ? (string) @file_get_contents($file) : '0';
+
+        $generation = @file_get_contents($dir . '/generation');
+        if (is_string($generation) && $generation !== '') {
+            return $generation;
+        }
+
+        // 文件丢了就建一个新的随机 token: 计数器从 1 重新数会让旧条目重新生效
+        return self::refresh($dir . '/generation', false);
     }
 
     public static function invalidate(): void
     {
         $dir = self::directory();
-        if ($dir === null) {
-            return;
+        if ($dir !== null) {
+            self::refresh($dir . '/generation', true);
         }
-        $file = $dir . '/generation';
+    }
+
+    /**
+     * 写入新的 generation token, 返回生效的那个
+     */
+    private static function refresh(string $file, bool $force): string
+    {
         $fp = @fopen($file, 'c+');
         if (!$fp) {
-            return;
+            return '';
         }
+
         @chmod($file, 0600);
+        $generation = '';
+
         if (@flock($fp, LOCK_EX)) {
-            $generation = (string) ((int) stream_get_contents($fp) + 1);
-            rewind($fp);
-            ftruncate($fp, 0);
-            fwrite($fp, $generation);
-            fflush($fp);
+            $generation = trim((string) stream_get_contents($fp));
+
+            if ($force || $generation === '') {
+                $generation = bin2hex(random_bytes(16));
+                rewind($fp);
+                ftruncate($fp, 0);
+                fwrite($fp, $generation);
+                fflush($fp);
+            }
+
             flock($fp, LOCK_UN);
         }
+
         fclose($fp);
+        return $generation;
     }
 
     private static function directory(): ?string
@@ -133,11 +188,17 @@ final class PageCache
     private static function cleanup(string $dir): void
     {
         $files = glob($dir . '/[a-f0-9]*') ?: [];
-        if (count($files) <= self::LIMIT) {
+        if (count($files) <= self::LIMIT * 2) {
             return;
         }
-        usort($files, static fn(string $a, string $b): int => (filemtime($a) ?: 0) <=> (filemtime($b) ?: 0));
-        foreach (array_slice($files, 0, count($files) - self::LIMIT) as $file) {
+
+        $ages = [];
+        foreach ($files as $file) {
+            $ages[$file] = @filemtime($file) ?: 0;
+        }
+        asort($ages);
+
+        foreach (array_slice(array_keys($ages), 0, count($ages) - self::LIMIT) as $file) {
             @unlink($file);
         }
     }

@@ -254,35 +254,20 @@ class XmlRpc extends Contents implements ActionInterface, Hook
     }
 
     /**
-     * 连续登录失败过多时拒绝 (session 计数, 15 分钟窗口)
+     * 连续登录失败过多时拒绝 (跨会话计数, 15 分钟窗口)
      *
      * @throws Exception
      */
     private function assertNotThrottled(): void
     {
-        $fail = $_SESSION['__typecho_xmlrpc_fail'] ?? null;
-
-        if (
-            is_array($fail) && (int) ($fail['count'] ?? 0) >= 10
-            && time() - (int) ($fail['since'] ?? 0) < 900
-        ) {
+        if (\Typecho\Throttle::tooMany('xmlrpc', $this->request->getIp())) {
             throw new Exception(_t('尝试次数过多, 请稍后再试'), 429);
         }
     }
 
     private function recordFailure(): void
     {
-        $now = time();
-        $fail = $_SESSION['__typecho_xmlrpc_fail'] ?? null;
-
-        if (!is_array($fail) || $now - (int) ($fail['since'] ?? 0) >= 900) {
-            $fail = ['count' => 0, 'since' => $now];
-        }
-
-        $fail['count'] = (int) ($fail['count'] ?? 0) + 1;
-        $_SESSION['__typecho_xmlrpc_fail'] = $fail;
-
-
+        \Typecho\Throttle::fail('xmlrpc', $this->request->getIp());
     }
 
     /**
@@ -692,12 +677,11 @@ class XmlRpc extends Contents implements ActionInterface, Hook
         int $maxResults = 0
     ): array {
         /** 构造出查询语句并且查询*/
-        $key = Common::filterSearchQuery($category);
-        $key = '%' . $key . '%';
+        $key = '%' . Common::likeEscape(Common::filterSearchQuery($category)) . '%';
         $select = $this->db->select()
             ->from('table.metas')
             ->where(
-                'table.metas.type = ? AND (table.metas.name LIKE ? OR slug LIKE ?)',
+                'table.metas.type = ? AND (table.metas.name LIKE ? ESCAPE \'!\' OR slug LIKE ? ESCAPE \'!\')',
                 'category',
                 $key,
                 $key

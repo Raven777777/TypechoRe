@@ -70,6 +70,11 @@ check($nullOptionKey === $expectedNullOptionKey, 'page cache key failed with nul
 $generation = \Typecho\PageCache::generation();
 \Typecho\PageCache::invalidate();
 check(\Typecho\PageCache::generation() !== $generation, 'page cache generation did not advance');
+check(strlen($generation) >= 16 && !ctype_digit($generation), 'page cache generation is not an opaque token');
+// 计数器归零会让旧条目重新生效: 文件丢了必须换新 token
+@unlink(__TYPECHO_PAGE_CACHE_DIR__ . '/generation');
+$recreated = \Typecho\PageCache::generation();
+check($recreated !== '' && $recreated !== $generation, 'page cache regenerated the old generation token');
 $server = $_SERVER;
 $get = $_GET;
 $cookie = $_COOKIE;
@@ -89,13 +94,21 @@ $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/?x=1', 'QUERY_STRING' 
 check(!\Typecho\PageCache::eligible(), 'page cache accepted a query string');
 $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/admin/'];
 check(!\Typecho\PageCache::eligible(), 'page cache accepted an admin path');
-foreach (['HTTP_COOKIE', 'REDIRECT_HTTP_COOKIE', 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION'] as $header) {
+foreach (['HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION'] as $header) {
     $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', $header => '0'];
     check(!\Typecho\PageCache::eligible(), "page cache accepted a non-empty {$header}");
 }
+$_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_COOKIE' => '_ga=GA1.1.1; consent=1'];
+check(\Typecho\PageCache::eligible(), 'page cache rejected a visitor with only third-party cookies');
+foreach (['__typecho_uid=1', session_name() . '=abc'] as $stateCookie) {
+    $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_COOKIE' => $stateCookie];
+    check(!\Typecho\PageCache::eligible(), "page cache accepted the state cookie {$stateCookie}");
+}
 \Typecho\Plugin::init(['activated' => ['test' => []]]);
 $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/'];
-check(!\Typecho\PageCache::eligible(), 'page cache accepted an active plugin');
+check(\Typecho\PageCache::eligible(), 'page cache rejected a plugin that does not hook the whole page');
+\Typecho\Plugin::init(['activated' => ['test' => []], 'handles' => ['index.php' => ['begin']]]);
+check(!\Typecho\PageCache::eligible(), 'page cache accepted a plugin that hooks the whole page');
 \Typecho\Plugin::init([]);
 $_SERVER = $server;
 $_GET = $get;
@@ -108,6 +121,17 @@ check(!\Typecho\Common::isSameOrigin('https://not-example.test/', 'https://examp
 check(!\Typecho\Common::isSameOrigin('https://example.test:444/', 'https://example.test'), 'different port passed same-origin check');
 
 check(\Typecho\Common::hashValidate('password', \Typecho\Common::hashPassword('password')), 'password hash validation failed');
+check(\Typecho\Common::likeEscape('50%_!') === '50!%!_!!', 'LIKE wildcard escaping failed');
+check(\Typecho\Common::safeUrl('http:///broken') === '/', 'safeUrl did not survive an unparsable URL');
+\Typecho\Throttle::clear('smoke', 'subject');
+check(!\Typecho\Throttle::tooMany('smoke', 'subject'), 'throttle tripped before any failure');
+for ($i = 0; $i < \Typecho\Throttle::LIMIT; $i++) {
+    \Typecho\Throttle::fail('smoke', 'subject');
+}
+check(\Typecho\Throttle::tooMany('smoke', 'subject'), 'throttle did not trip after ' . \Typecho\Throttle::LIMIT . ' failures');
+check(!\Typecho\Throttle::tooMany('smoke', 'other-subject'), 'throttle leaked between subjects');
+\Typecho\Throttle::clear('smoke', 'subject');
+check(!\Typecho\Throttle::tooMany('smoke', 'subject'), 'throttle did not clear');
 foreach (['$T$' . str_repeat('x', 40), '$P$' . str_repeat('x', 31), md5('password')] as $legacyPasswordHash) {
     check(!\Typecho\Common::hashValidate('password', $legacyPasswordHash), 'unsupported legacy password hash was accepted');
 }

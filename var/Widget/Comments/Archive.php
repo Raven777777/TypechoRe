@@ -149,8 +149,12 @@ class Archive extends Comments
             if ($pagedRoots) {
                 $page->where('table.comments.parent = ?', 0);
             }
-            $page->limit($pageSize)->offset($offset);
-            $this->db->fetchAll($page, [$this, 'push']);
+            // DESC 时 offset = total - page*size, 最后一页不足 pageSize 行, 需要同时收紧 limit
+            $limit = min($pageSize, $total - ($this->currentPage - 1) * $pageSize);
+            if ($limit > 0) {
+                $page->limit($limit)->offset($offset);
+                $this->db->fetchAll($page, [$this, 'push']);
+            }
 
             $parents = $pagedRoots ? array_keys($this->stack) : [];
             while ($parents) {

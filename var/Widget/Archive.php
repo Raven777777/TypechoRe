@@ -53,7 +53,7 @@ class Archive extends Contents
      *
      * @var Query
      */
-    private Query $countSql;
+    private ?Query $countSql = null;
 
     /**
      * 所有文章个数
@@ -488,7 +488,8 @@ class Archive extends Contents
     public function getTotal(): int
     {
         if (!isset($this->total)) {
-            $this->total = $this->size($this->countSql);
+            // 插件可能已自行压入结果 (见 query()), 此时 countSql 尚未建立
+            $this->total = null === $this->countSql ? count($this->stack) : $this->size($this->countSql);
         }
 
         return $this->total;
@@ -2110,7 +2111,7 @@ EOF;
         if ($searchPlugged) {
             $hasPushed = true;
         } else {
-            $searchQuery = '%' . str_replace(' ', '%', $keywords) . '%';
+            $searchQuery = '%' . implode('%', array_map([Common::class, 'likeEscape'], explode(' ', $keywords))) . '%';
 
             /** 搜索无法进入隐私项保护归档 */
             if ($this->user->hasLogin()) {
@@ -2123,7 +2124,11 @@ EOF;
 
             $op = $this->db->getAdapter()->getDriver() == 'pgsql' ? 'ILIKE' : 'LIKE';
 
-            $select->where("table.contents.title {$op} ? OR table.contents.text {$op} ?", $searchQuery, $searchQuery)
+            $select->where(
+                "table.contents.title {$op} ? ESCAPE '!' OR table.contents.text {$op} ? ESCAPE '!'",
+                $searchQuery,
+                $searchQuery
+            )
                 ->where('table.contents.type = ?', 'post');
         }
 

@@ -235,6 +235,11 @@ class Edit extends Users implements ActionInterface
 
         /** 取出数据 */
         $user = $this->request->from('mail', 'screenName', 'password', 'url', 'group');
+
+        // 只接受已知用户组: 未知值会让 User::pass() 的分组比较失效
+        if (isset($user['group']) && !array_key_exists($user['group'], $this->user->groups)) {
+            unset($user['group']);
+        }
         $user['screenName'] = empty($user['screenName'])
             ? $this->request->get('name', '') : $user['screenName'];
         if (empty($user['password'])) {

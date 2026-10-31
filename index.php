@@ -49,20 +49,32 @@ if ($cachedBody !== null) {
     $response->setHeader('X-Typecho-Page-Cache', 'HIT');
     echo $cachedBody;
 } else {
-    $responseState = $response->cacheState();
-    $headersBefore = headers_list();
     ob_start();
     \Typecho\Router::dispatch();
     $body = ob_get_clean();
     $cacheStored = false;
     try {
+        $state = $response->cacheState();
+        $unsafeHeader = false;
+
+        foreach (array_keys($state[1]) as $headerName) {
+            if (in_array(strtolower((string) $headerName), ['set-cookie', 'vary', 'cache-control'], true)) {
+                $unsafeHeader = true;
+            }
+        }
+
+        /**
+         * 只拦“这个响应不能共用”的信号: 设 cookie、Vary、Cache-Control、响应器。
+         * 以前比较全部 header, 结果 X-Pingback 这种固定 header 就让单篇/页面全部缓存不上。
+         */
         if (
             $cacheableRequest
             && \Typecho\PageCache::generation() === $cacheGeneration
-            && $response->cacheState() === $responseState
-            && headers_list() === $headersBefore
-            && ($responseState[0] ?? null) === 200
-            && str_starts_with(strtolower($responseState[3] ?? ''), 'text/html')
+            && !$unsafeHeader
+            && empty($state[2])
+            && empty($state[4])
+            && ($state[0] ?? null) === 200
+            && str_starts_with(strtolower($state[3] ?? ''), 'text/html')
         ) {
             $cacheStored = \Typecho\PageCache::put($cacheKey, $body, $cacheTtl);
         }

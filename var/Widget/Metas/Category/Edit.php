@@ -293,18 +293,23 @@ class Edit extends Metas implements ActionInterface
         $category['type'] = 'category';
         $current = $this->db->fetchRow($this->select()->where('mid = ?', $category['mid']));
 
-        if ($current['parent'] != $category['parent']) {
-            $parent = $this->db->fetchRow($this->select()->where('mid = ?', $category['parent']));
+        if ((int) $current['parent'] !== (int) $category['parent']) {
+            $parentId = (int) $category['parent'];
 
-            if ($parent && $parent['mid'] == $category['mid']) {
-                $category['order'] = $parent['order'];
-                $this->update([
-                    'parent' => $current['parent'],
-                    'order'  => $current['order']
-                ], $this->db->sql()->where('mid = ?', $parent['mid']));
-            } else {
-                $category['order'] = $this->getMaxOrder('category', $category['parent']) + 1;
+            /**
+             * 不能挂到自己或自己的子孙下面: 这样树里会出现环,
+             * 环上的分类在列表里会直接消失, 其文章也不会再出现在归档里。
+             */
+            if (
+                $parentId === (int) $category['mid']
+                || ($parentId > 0 && in_array($parentId, array_map('intval', $this->getAllChildIds((int) $category['mid'])), true))
+                || ($parentId > 0 && null === $this->getRow($parentId))
+            ) {
+                Notice::alloc()->set(_t('不能把分类移动到自己或自己的子分类下'), 'error');
+                $this->response->goBack();
             }
+
+            $category['order'] = $this->getMaxOrder('category', $parentId) + 1;
         }
 
         /** 更新数据 */
@@ -339,10 +344,22 @@ class Edit extends Metas implements ActionInterface
             $row = $this->db->fetchObject($this->select()->where('mid = ?', $category));
             $parent = null === $row ? 0 : $row->parent;
 
-            if ($this->delete($this->db->sql()->where('mid = ?', $category))) {
-                $this->db->query($this->db->delete('table.relationships')->where('mid = ?', $category));
-                $this->update(['parent' => $parent], $this->db->sql()->where('parent = ?', $category));
-                $deleteCount++;
+            if ($row) {
+                // 删除分类要同时清理关系表并把子分类上提, 不能只成功一半
+                $deleted = $this->db->transaction(function () use ($category, $parent): int {
+                    $rows = $this->delete($this->db->sql()->where('mid = ?', $category));
+
+                    if ($rows > 0) {
+                        $this->db->query($this->db->delete('table.relationships')->where('mid = ?', $category));
+                        $this->update(['parent' => $parent], $this->db->sql()->where('parent = ?', $category));
+                    }
+
+                    return $rows;
+                });
+
+                if ($deleted > 0) {
+                    $deleteCount++;
+                }
             }
         }
 

@@ -306,6 +306,12 @@ class Profile extends Users implements ActionInterface
             $this->response->goBack();
         }
 
+        /** 修改密码前必须再验证一次当前密码, 否则被盗的会话可以直接改密码 */
+        if (!Common::hashValidate((string) $this->request->oldPassword, (string) $this->user->password)) {
+            Notice::alloc()->set(_t('当前密码不正确'), 'error');
+            $this->response->goBack();
+        }
+
         $password = Common::hashPassword((string)$this->request->password);
 
         /** 更新数据 (同时作废旧 authCode, 让其它已登录会话失效) */
@@ -336,6 +342,12 @@ class Profile extends Users implements ActionInterface
     {
         /** 构建表格 */
         $form = new Form($this->security->getIndex('/action/users-profile'), Form::POST_METHOD);
+
+        /** 当前密码 */
+        $old = new Form\Element\Password('oldPassword', null, null, _t('当前密码'), _t('修改密码前需要验证当前密码.'));
+        $old->input->setAttribute('class', 'w-60');
+        $form->addInput($old);
+        $old->addRule('required', _t('必须填写当前密码'));
 
         /** 用户密码 */
         $password = new Form\Element\Password('password', null, null, _t('用户密码'), _t('为此用户分配一个密码.')

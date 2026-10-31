@@ -4,6 +4,7 @@ namespace Widget;
 
 use Typecho\Common;
 use Typecho\Cookie;
+use Typecho\Throttle;
 use Typecho\Validate;
 use Widget\Base\Users;
 
@@ -30,6 +31,11 @@ class Login extends Users implements ActionInterface
     #[\Override]
     public function action()
     {
+        // 凭据只允许 POST, 否则密码会出现在访问日志 / Referer / 历史记录里
+        if (!$this->request->isPost()) {
+            throw new \Typecho\Widget\Exception(_t('请使用 POST 方式登录'), 405);
+        }
+
         $origin = $this->request->getServer('HTTP_ORIGIN') ?: $this->request->getReferer();
         if (
             !Common::isSameOrigin($origin, $this->options->rootUrl)
@@ -44,6 +50,13 @@ class Login extends Users implements ActionInterface
         if ($this->user->hasLogin()) {
             /** 直接返回 */
             $this->response->redirect($this->options->index);
+        }
+
+        /** 拦截暴力破解: session 计数可以被客户端丢 cookie 清零, 这里存到临时目录 */
+        $throttleSubject = (string) $this->request->get('name') . '|' . $this->request->getIp();
+        if (Throttle::tooMany('login', $throttleSubject)) {
+            Notice::alloc()->set(_t('尝试次数过多, 请稍后再试'), 'error');
+            $this->response->goBack();
         }
 
         /** 初始化验证类 */
@@ -78,6 +91,8 @@ class Login extends Users implements ActionInterface
 
         /** 比对密码 */
         if (!$valid) {
+            Throttle::fail('login', $throttleSubject);
+
             self::pluginHandle()->call(
                 'loginFailure',
                 $this->user,
@@ -90,6 +105,8 @@ class Login extends Users implements ActionInterface
             Notice::alloc()->set(_t('用户名或密码无效'), 'error');
             $this->response->goBack('?referer=' . urlencode((string) $this->request->get('referer', '')));
         }
+
+        Throttle::clear('login', $throttleSubject);
 
         self::pluginHandle()->call(
             'loginSuccess',

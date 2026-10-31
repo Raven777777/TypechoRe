@@ -95,20 +95,30 @@ class Edit extends Comments implements ActionInterface
             }
 
             /** 更新评论 */
-            $this->db->query($this->db->update('table.comments')
-                ->rows(['status' => $status])->where('coid = ?', $coid));
+            $updated = $this->db->transaction(function () use ($coid, $status, $comment): bool {
+                // 只改仍处于旧状态的行: 两个管理员同时处理同一条评论时, 只有一次会命中
+                $rows = $this->db->query($this->db->update('table.comments')
+                    ->rows(['status' => $status])
+                    ->where('coid = ? AND status = ?', $coid, $comment['status']));
 
-            /** 更新相关内容的评论数 */
-            if ('approved' == $comment['status'] && 'approved' != $status) {
-                $this->db->query($this->db->update('table.contents')
-                    ->expression('commentsNum', 'commentsNum - 1')
-                    ->where('cid = ? AND commentsNum > 0', $comment['cid']));
-            } elseif ('approved' != $comment['status'] && 'approved' == $status) {
-                $this->db->query($this->db->update('table.contents')
-                    ->expression('commentsNum', 'commentsNum + 1')->where('cid = ?', $comment['cid']));
-            }
+                if ($rows < 1) {
+                    return false;
+                }
 
-            return true;
+                /** 更新相关内容的评论数 */
+                if ('approved' == $comment['status']) {
+                    $this->db->query($this->db->update('table.contents')
+                        ->expression('commentsNum', 'commentsNum - 1')
+                        ->where('cid = ? AND commentsNum > 0', $comment['cid']));
+                } elseif ('approved' == $status) {
+                    $this->db->query($this->db->update('table.contents')
+                        ->expression('commentsNum', 'commentsNum + 1')->where('cid = ?', $comment['cid']));
+                }
+
+                return true;
+            });
+
+            return (bool) $updated;
         }
 
         return false;
@@ -185,18 +195,24 @@ class Edit extends Comments implements ActionInterface
             if ($comment && $this->commentIsWriteable()) {
                 self::pluginHandle()->call('delete', $comment, $this);
 
-                /** 删除评论 */
-                $this->db->query($this->db->delete('table.comments')->where('coid = ?', $coid));
+                /** 删除评论并同步计数, 两条语句必须同时成功或同时失败 */
+                $deleted = $this->db->transaction(function () use ($coid, $comment): int {
+                    $rows = $this->db->query($this->db->delete('table.comments')->where('coid = ?', $coid));
 
-                /** 更新相关内容的评论数 */
-                if ('approved' == $comment['status']) {
-                    $this->db->query($this->db->update('table.contents')
-                        ->expression('commentsNum', 'commentsNum - 1')->where('cid = ?', $comment['cid']));
+                    /** 更新相关内容的评论数 */
+                    if ($rows > 0 && 'approved' == $comment['status']) {
+                        $this->db->query($this->db->update('table.contents')
+                            ->expression('commentsNum', 'commentsNum - 1')
+                            ->where('cid = ? AND commentsNum > 0', $comment['cid']));
+                    }
+
+                    return $rows;
+                });
+
+                if ($deleted > 0) {
+                    self::pluginHandle()->call('finishDelete', $comment, $this);
+                    $deleteRows++;
                 }
-
-                self::pluginHandle()->call('finishDelete', $comment, $this);
-
-                $deleteRows++;
             }
         }
 

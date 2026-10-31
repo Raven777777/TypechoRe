@@ -6,6 +6,7 @@ use Typecho\Common;
 use Typecho\Cookie;
 use Typecho\Db\Exception;
 use Typecho\Http\Client;
+use Typecho\PageCache;
 use Typecho\Router\Parser;
 use Typecho\Widget\Helper\Form;
 use Widget\ActionInterface;
@@ -81,6 +82,7 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ {$basePath}index.php/$1 [L]
 </IfModule>");
+                    PageCache::invalidate();
                 }
             }
 

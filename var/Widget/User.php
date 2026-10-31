@@ -148,6 +148,10 @@ class User extends Users
 
         Cookie::delete('__typecho_uid');
         Cookie::delete('__typecho_authCode');
+
+        // 登出后不应继续持有登录期间建立的临时状态 (如 passkey 注册)
+        Common::startSession();
+        unset($_SESSION[\Widget\Passkey::SESSION_KEY]);
     }
 
     /**
@@ -290,7 +294,12 @@ class User extends Users
     public function pass(string $group, bool $return = false): bool
     {
         if ($this->hasLogin()) {
-            if (array_key_exists($group, $this->groups) && $this->groups[$this->group] <= $this->groups[$group]) {
+            // 未知分组一律拒绝: null <= 0 在 PHP 中为 true, 会误放行
+            if (
+                array_key_exists($group, $this->groups)
+                && isset($this->groups[$this->group])
+                && $this->groups[$this->group] <= $this->groups[$group]
+            ) {
                 return true;
             }
         } else {

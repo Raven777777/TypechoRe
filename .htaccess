@@ -33,7 +33,7 @@ Options -Indexes
     </IfModule>
 </FilesMatch>
 
-<FilesMatch "(?i)\.(sql|bak|old|swp|log|dist)$">
+<FilesMatch "(?i)\.(sql|bak|old|swp|log|dist|dat)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -42,6 +42,12 @@ Options -Indexes
         Deny from all
     </IfModule>
 </FilesMatch>
+
+# 站点备份目录 (Widget\Backup 导出的数据含密码哈希和 authCode) 不对外提供
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^usr/backups(/|$) - [F,L]
+</IfModule>
 
 # ---- 屏蔽版本库 / 环境变量等元数据 ----
 <IfModule mod_alias.c>

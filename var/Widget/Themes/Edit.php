@@ -3,6 +3,7 @@
 namespace Widget\Themes;
 
 use Typecho\Common;
+use Typecho\PageCache;
 use Typecho\Widget\Exception;
 use Typecho\Widget\Helper\Form;
 use Widget\ActionInterface;
@@ -119,6 +120,7 @@ class Edit extends Options implements ActionInterface
             }
 
             if (strlen($content) === $written) {
+                PageCache::invalidate();
                 Notice::alloc()->set(_t("文件 %s 的更改已经保存", $file), 'success');
             } else {
                 Notice::alloc()->set(_t("文件 %s 无法被写入", $file), 'error');

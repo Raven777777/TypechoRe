@@ -213,7 +213,7 @@ namespace Typecho {
     class Common
     {
         /** 程序版本 */
-        public const VERSION = '1.3.2';
+        public const VERSION = '1.4.0';
 
         /** 程序名称 (Fork 版本) */
         public const SOFTWARE = 'TypechoRe';
@@ -723,6 +723,17 @@ EOF;
         }
 
         /**
+         * 转义 LIKE 通配符, 配合 `ESCAPE '!'` 使用
+         *
+         * @param string $value
+         * @return string
+         */
+        public static function likeEscape($value): string
+        {
+            return str_replace(['!', '%', '_'], ['!!', '!%', '!_'], (string) $value);
+        }
+
+        /**
          * 将url中的非法字符串
          *
          * @param string $url 需要过滤的url
@@ -734,6 +745,11 @@ EOF;
             //~ 针对location的xss过滤, 因为其特殊性无法使用removeXSS函数
             //~ fix issue 66
             $params = parse_url(str_replace(["\r", "\n", "\t", ' '], '', $url));
+
+            /** parse_url 对 http:///x 之类的输入返回 false */
+            if (!is_array($params)) {
+                return '/';
+            }
 
             /** 禁止非法的协议跳转 */
             if (isset($params['scheme'])) {

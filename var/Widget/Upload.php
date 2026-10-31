@@ -203,28 +203,30 @@ class Upload extends Contents implements ActionInterface
             }
         }
 
-        if (isset($file['tmp_name'])) {
-            @unlink($path);
+        // 先写临时文件再 rename: 直接 unlink 旧文件后写入失败会把附件弄丢
+        $temp = $path . '.tmp';
 
+        if (isset($file['tmp_name'])) {
             //移动上传文件
-            if (!@move_uploaded_file($file['tmp_name'], $path)) {
+            if (!@move_uploaded_file($file['tmp_name'], $temp)) {
                 return false;
             }
         } elseif (isset($file['bytes'])) {
-            @unlink($path);
-
             //直接写入文件
-            if (!file_put_contents($path, $file['bytes'])) {
+            if (false === @file_put_contents($temp, $file['bytes'])) {
                 return false;
             }
         } elseif (isset($file['bits'])) {
-            @unlink($path);
-
             //直接写入文件
-            if (!file_put_contents($path, $file['bits'])) {
+            if (false === @file_put_contents($temp, $file['bits'])) {
                 return false;
             }
         } else {
+            return false;
+        }
+
+        if (!@rename($temp, $path)) {
+            @unlink($temp);
             return false;
         }
 

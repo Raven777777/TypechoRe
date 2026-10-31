@@ -253,41 +253,51 @@ class Edit extends Contents implements ActionInterface
             $postObject = $this->db->fetchObject($this->db->select('status', 'type')
                 ->from('table.contents')->where('cid = ? AND (type = ? OR type = ?)', $post, 'post', 'post_draft'));
 
-            if ($this->isWriteable(clone $condition) && count((array)$postObject) && $this->delete($condition)) {
+            if ($this->isWriteable(clone $condition) && count((array)$postObject)) {
+                // 一篇文章的删除涉及多张表, 中途失败会留下孤儿数据, 因此放在同一个事务里
+                $deleted = $this->db->transaction(function () use ($post, $postObject, $condition): bool {
+                    if (!$this->delete($condition)) {
+                        return false;
+                    }
 
-                /** 删除分类 */
-                $this->setCategories($post, [], 'publish' == $postObject->status
-                    && 'post' == $postObject->type);
+                    /** 删除分类 */
+                    $this->setCategories($post, [], 'publish' == $postObject->status
+                        && 'post' == $postObject->type);
 
-                /** 删除标签 */
-                $this->setTags($post, null, 'publish' == $postObject->status
-                    && 'post' == $postObject->type);
+                    /** 删除标签 */
+                    $this->setTags($post, null, 'publish' == $postObject->status
+                        && 'post' == $postObject->type);
 
-                /** 删除评论 */
-                $this->db->query($this->db->delete('table.comments')
-                    ->where('cid = ?', $post));
+                    /** 删除评论 */
+                    $this->db->query($this->db->delete('table.comments')
+                        ->where('cid = ?', $post));
 
-                /** 解除附件关联 */
-                $this->unAttach($post);
+                    /** 解除附件关联 */
+                    $this->unAttach($post);
 
-                /** 删除草稿 */
-                $draft = $this->db->fetchRow($this->db->select('cid')
-                    ->from('table.contents')
-                    ->where('table.contents.parent = ? AND table.contents.type = ?', $post, 'revision')
-                    ->limit(1));
+                    /** 删除草稿 */
+                    $draft = $this->db->fetchRow($this->db->select('cid')
+                        ->from('table.contents')
+                        ->where('table.contents.parent = ? AND table.contents.type = ?', $post, 'revision')
+                        ->limit(1));
 
-                /** 删除自定义字段 */
-                $this->deleteFields($post);
+                    /** 删除自定义字段 */
+                    $this->deleteFields($post);
 
-                if ($draft) {
-                    $this->deleteContent($draft['cid']);
-                    $this->deleteFields($draft['cid']);
+                    if ($draft) {
+                        $this->deleteContent($draft['cid']);
+                        $this->deleteFields($draft['cid']);
+                    }
+
+                    return true;
+                });
+
+                if ($deleted) {
+                    // 完成删除插件接口
+                    self::pluginHandle()->call('finishDelete', $post, $this);
+
+                    $deleteCount++;
                 }
-
-                // 完成删除插件接口
-                self::pluginHandle()->call('finishDelete', $post, $this);
-
-                $deleteCount++;
             }
 
             unset($condition);

@@ -370,30 +370,18 @@ function install_random_db_name(): string
 
 function install_get_db_drivers(): array
 {
+    /**
+     * 只提供 SQLite: MySQL/PostgreSQL 适配器已停止维护 (见 docs/guide/quality.md),
+     * 安装器不应再引导新站点跑在未测试的引擎上。
+     */
     $drivers = [];
-
-    if (\Typecho\Db\Adapter\Pdo\Mysql::isAvailable()) {
-        $drivers['Pdo_Mysql'] = _t('Pdo 驱动 Mysql 适配器');
-    }
 
     if (\Typecho\Db\Adapter\Pdo\SQLite::isAvailable()) {
         $drivers['Pdo_SQLite'] = _t('Pdo 驱动 SQLite 适配器');
     }
 
-    if (\Typecho\Db\Adapter\Pdo\Pgsql::isAvailable()) {
-        $drivers['Pdo_Pgsql'] = _t('Pdo 驱动 PostgreSql 适配器');
-    }
-
-    if (\Typecho\Db\Adapter\Mysqli::isAvailable()) {
-        $drivers['Mysqli'] = _t('Mysql 原生函数适配器');
-    }
-
     if (\Typecho\Db\Adapter\SQLite::isAvailable()) {
         $drivers['SQLite'] = _t('SQLite 原生函数适配器');
-    }
-
-    if (\Typecho\Db\Adapter\Pgsql::isAvailable()) {
-        $drivers['Pgsql'] = _t('Pgsql 原生函数适配器');
     }
 
     return $drivers;

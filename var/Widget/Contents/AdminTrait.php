@@ -50,10 +50,10 @@ trait AdminTrait
             $keywords = $this->request->filter('search')->get('keywords');
             $args = [];
             $keywordsList = explode(' ', $keywords);
-            $args[] = implode(' OR ', array_fill(0, count($keywordsList), 'table.contents.title LIKE ?'));
+            $args[] = implode(' OR ', array_fill(0, count($keywordsList), "table.contents.title LIKE ? ESCAPE '!'"));
 
             foreach ($keywordsList as $keyword) {
-                $args[] = '%' . $keyword . '%';
+                $args[] = '%' . \Typecho\Common::likeEscape($keyword) . '%';
             }
 
             $select->where(...$args);

@@ -2,6 +2,7 @@
 
 namespace Widget\Comments;
 
+use Typecho\Common;
 use Typecho\Cookie;
 use Typecho\Db;
 use Typecho\Db\Query;
@@ -81,7 +82,7 @@ class Admin extends Comments
 
         /** 过滤标题 */
         if (null != ($keywords = $this->request->filter('search')->get('keywords'))) {
-            $select->where('table.comments.text LIKE ?', '%' . $keywords . '%');
+            $select->where("table.comments.text LIKE ? ESCAPE '!'", '%' . Common::likeEscape($keywords) . '%');
         }
 
         /** 如果具有贡献者以上权限,可以查看所有评论,反之只能查看自己的评论 */

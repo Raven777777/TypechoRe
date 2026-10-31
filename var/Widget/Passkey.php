@@ -22,8 +22,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  */
 class Passkey extends BaseOptions implements ActionInterface
 {
-    private const SESSION_KEY = '__typecho_passkey';
-    private const THROTTLE_KEY = '__typecho_passkey_fail';
+    public const SESSION_KEY = '__typecho_passkey';
     private static bool $tableReady = false;
 
     #[\Override]
@@ -116,6 +115,11 @@ class Passkey extends BaseOptions implements ActionInterface
         $state = $this->getState('create');
         $data = $this->input();
         $rp = $this->webAuthn();
+
+        // 注册必须属于当前登录用户: 否则在共用机器上, 后一个登录者可以把指纹绑到前一个账号
+        if ((int) $state['uid'] !== (int) $this->user->uid) {
+            throw new WidgetException(_t('注册状态已失效, 请重试'), 403);
+        }
 
         $registration = $rp->processCreate(
             $this->decode($data['clientDataJSON'] ?? ''),
@@ -234,40 +238,25 @@ class Passkey extends BaseOptions implements ActionInterface
     }
 
     /**
-     * 失败次数过多时拒绝请求 (session 内计数, 15 分钟窗口)
+     * 失败次数过多时拒绝请求 (跨会话计数, 15 分钟窗口)
      *
      * @throws WidgetException
      */
     private function assertNotThrottled(): void
     {
-        $fail = $_SESSION[self::THROTTLE_KEY] ?? null;
-
-        if (
-            is_array($fail) && (int) ($fail['count'] ?? 0) >= 10
-            && time() - (int) ($fail['since'] ?? 0) < 900
-        ) {
+        if (\Typecho\Throttle::tooMany('passkey', $this->request->getIp())) {
             throw new WidgetException(_t('尝试次数过多, 请稍后再试'), 429);
         }
     }
 
     private function recordFailure(): void
     {
-        $now = time();
-        $fail = $_SESSION[self::THROTTLE_KEY] ?? null;
-
-        if (!is_array($fail) || $now - (int) ($fail['since'] ?? 0) >= 900) {
-            $fail = ['count' => 0, 'since' => $now];
-        }
-
-        $fail['count'] = (int) ($fail['count'] ?? 0) + 1;
-        $_SESSION[self::THROTTLE_KEY] = $fail;
-
-
+        \Typecho\Throttle::fail('passkey', $this->request->getIp());
     }
 
     private function resetThrottle(): void
     {
-        unset($_SESSION[self::THROTTLE_KEY]);
+        \Typecho\Throttle::clear('passkey', $this->request->getIp());
     }
 
     private function listPasskeys(): void

@@ -48,6 +48,20 @@ trait EditTrait
      */
     public function merge(int $mid, string $type, array $metas)
     {
+        // 合并要动关系表、计数字段和父级, 中途中断会丢文章归属
+        $this->db->transaction(function () use ($mid, $type, $metas): void {
+            $this->doMerge($mid, $type, $metas);
+        });
+    }
+
+    /**
+     * @param int $mid
+     * @param string $type
+     * @param array $metas
+     * @throws Exception
+     */
+    private function doMerge(int $mid, string $type, array $metas)
+    {
         $contents = array_column($this->db->fetchAll($this->db->select('cid')
             ->from('table.relationships')
             ->where('mid = ?', $mid)), 'cid');
@@ -80,7 +94,6 @@ trait EditTrait
 
         $this->update(['count' => $num], $this->db->sql()->where('mid = ?', $mid));
     }
-
 
     /**
      * 根据内容的指定类别和状态更新相关meta的计数信息

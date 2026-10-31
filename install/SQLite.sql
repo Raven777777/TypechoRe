@@ -71,6 +71,9 @@ CREATE TABLE typecho_relationships ( "cid" int(10) NOT NULL ,
 
 CREATE UNIQUE INDEX typecho_relationships_cid_mid ON typecho_relationships ("cid", "mid");
 
+-- 标签/分类归档按 mid 反查, 没有这个索引会扫描整张 contents 表
+CREATE INDEX typecho_relationships_mid ON typecho_relationships ("mid");
+
 CREATE TABLE typecho_users ( "uid" INTEGER NOT NULL PRIMARY KEY, 
 "name" varchar(32) default NULL ,
 "password" varchar(64) default NULL , 

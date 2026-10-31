@@ -21,6 +21,11 @@ declare(strict_types=1);
 const ROOT = __DIR__ . '/..';
 require_once ROOT . '/tests/WebAuthnTestFixture.php';
 
+/** 版本号以 var/Typecho/Common.php 的 VERSION 为准, 避免升级后忘记改测试 */
+$expectedVersion = preg_match('/const VERSION = \'([^\']+)\'/', (string) file_get_contents(ROOT . '/var/Typecho/Common.php'), $versionMatch)
+    ? $versionMatch[1]
+    : 'unknown';
+
 /** 响应体中出现的 PHP 错误标记 */
 const BODY_ERROR_MARKERS = [
     '<b>Warning</b>',
@@ -610,7 +615,7 @@ assertTrue(is_array($json) && ($json['success'] ?? false) && 0 === ($json['messa
 out('    installed: ' . $dbFile);
 
 $installedVersion = sitePhp($php, $siteDir, "echo \$options->version;");
-assertTrue('1.3.2' === $installedVersion, "installed version should be 1.3.2, got {$installedVersion}");
+assertTrue($expectedVersion === $installedVersion, "installed version should be {$expectedVersion}, got {$installedVersion}");
 
 // ---------------------------------------------------------------- frontend (anonymous)
 
@@ -1422,7 +1427,7 @@ $response = $site->post($upgradeAction, []);
 assertResponse($response, [200, 302], 'POST upgrade');
 
 $upgradedVersion = sitePhp($php, $siteDir, "echo \$options->version;");
-assertTrue('1.3.2' === $upgradedVersion, "upgrade did not set version 1.3.2, got {$upgradedVersion}");
+assertTrue($expectedVersion === $upgradedVersion, "upgrade did not set version {$expectedVersion}, got {$upgradedVersion}");
 assertTrue(
     'PRESENT' === sitePhp($php, $siteDir, "try { \$db->fetchObject(\$db->select(['COUNT(*)' => 'num'])->from('table.passkeys')); echo 'PRESENT'; } catch (\\Throwable \$e) { echo 'MISSING'; }"),
     'upgrade v1_3_2 did not create the passkeys table'

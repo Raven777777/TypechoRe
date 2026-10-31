@@ -168,29 +168,49 @@ class Metas extends Base implements QueryInterface, RowFilterInterface, PrimaryK
         $tags = is_array($inputTags) ? $inputTags : [$inputTags];
         $result = [];
 
+        /** 一次取回已有的同名标签, 原来每个标签一次 SELECT */
+        $names = [];
+        foreach ($tags as $tag) {
+            if (!empty($tag)) {
+                $names[(string) $tag] = true;
+            }
+        }
+
+        $existing = [];
+        if (!empty($names)) {
+            $rows = $this->db->fetchAll(
+                $this->select('mid', 'name')
+                    ->where('type = ?', 'tag')
+                    ->where('name IN ?', array_keys($names))
+            );
+
+            foreach ($rows as $row) {
+                $existing[(string) $row['name']] = $row['mid'];
+            }
+        }
+
         foreach ($tags as $tag) {
             if (empty($tag)) {
                 continue;
             }
 
-            $row = $this->db->fetchRow($this->select()
-                ->where('type = ?', 'tag')
-                ->where('name = ?', $tag)->limit(1));
+            if (isset($existing[(string) $tag])) {
+                $result[] = $existing[(string) $tag];
+                continue;
+            }
 
-            if ($row) {
-                $result[] = $row['mid'];
-            } else {
-                $slug = Common::slugName($tag);
+            // shortcut: 建立标签依赖调用方的事务 (发布/保存都包在 BEGIN IMMEDIATE 里);
+            // 若将来有游离调用, 应改成 (type,name) 唯一索引。
+            $slug = Common::slugName($tag);
 
-                if ($slug) {
-                    $result[] = $this->insert([
-                        'name'  => $tag,
-                        'slug'  => $slug,
-                        'type'  => 'tag',
-                        'count' => 0,
-                        'order' => 0,
-                    ]);
-                }
+            if ($slug) {
+                $result[] = $this->insert([
+                    'name'  => $tag,
+                    'slug'  => $slug,
+                    'type'  => 'tag',
+                    'count' => 0,
+                    'order' => 0,
+                ]);
             }
         }
 
