@@ -30,6 +30,7 @@ final class PageCache
 
     public static function key(string $generation, string $theme, string $language): string
     {
+        // shortcut: add request headers here if the active theme varies output by them.
         return hash('sha256', implode("\n", [
             $_SERVER['HTTP_HOST'] ?? '',
             $_SERVER['REQUEST_URI'] ?? '/',
@@ -114,18 +115,19 @@ final class PageCache
 
     private static function directory(): ?string
     {
-        $uid = function_exists('posix_geteuid') ? posix_geteuid() : fileowner(__TYPECHO_ROOT_DIR__);
+        // shortcut: without POSIX, use one FPM owner per cache path; split paths for multiple pools.
+        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
         $dir = defined('__TYPECHO_PAGE_CACHE_DIR__')
             ? __TYPECHO_PAGE_CACHE_DIR__
-            : sys_get_temp_dir() . '/typechore-page-cache-' . hash('sha256', __TYPECHO_ROOT_DIR__ . ':' . $uid);
+            : sys_get_temp_dir() . '/typechore-page-cache-' . hash('sha256', __TYPECHO_ROOT_DIR__ . ':' . ($uid ?? 'unknown'));
         if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
             return null;
         }
-        if (is_link($dir) || @fileowner($dir) !== $uid) {
+        if (is_link($dir) || ($uid !== null && @fileowner($dir) !== $uid)) {
             return null;
         }
         @chmod($dir, 0700);
-        return (@fileperms($dir) & 0077) === 0 ? $dir : null;
+        return is_writable($dir) && (@fileperms($dir) & 0077) === 0 ? $dir : null;
     }
 
     private static function cleanup(string $dir): void
