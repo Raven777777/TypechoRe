@@ -36,11 +36,31 @@ function check(bool $condition, string $message): void
 }
 
 require_once ROOT . '/var/Typecho/Common.php';
+$general = (new ReflectionClass(\Widget\Options\General::class))->newInstanceWithoutConstructor();
+check(
+    $general->checkPageCacheEnabled('0') && $general->checkPageCacheEnabled('1'),
+    'page cache toggle validation rejected a valid value'
+);
+check(!$general->checkPageCacheEnabled('2'), 'page cache toggle validation accepted an invalid value');
+check(
+    $general->checkPageCacheTtl('1') && $general->checkPageCacheTtl('86400'),
+    'page cache TTL validation rejected a boundary value'
+);
+check(
+    !$general->checkPageCacheTtl('0') && !$general->checkPageCacheTtl('86401') && !$general->checkPageCacheTtl('1.5'),
+    'page cache TTL validation accepted an invalid value'
+);
 $cacheKey = hash('sha256', 'smoke-page-cache');
 $cacheFile = __TYPECHO_PAGE_CACHE_DIR__ . '/' . $cacheKey;
 @unlink($cacheFile);
 check(\Typecho\PageCache::get($cacheKey) === null, 'page cache miss returned a body');
-check(\Typecho\PageCache::put($cacheKey, '<html>cached</html>'), 'page cache could not store a body');
+$cacheStart = time();
+check(\Typecho\PageCache::put($cacheKey, '<html>cached</html>', 30), 'page cache could not store a body');
+$cacheEntry = unserialize((string) file_get_contents($cacheFile), ['allowed_classes' => false]);
+check(
+    is_array($cacheEntry) && $cacheEntry['expires'] >= $cacheStart + 30 && $cacheEntry['expires'] <= time() + 30,
+    'page cache did not apply its configured TTL'
+);
 check(\Typecho\PageCache::get($cacheKey) === '<html>cached</html>', 'page cache did not return its stored body');
 $generation = \Typecho\PageCache::generation();
 \Typecho\PageCache::invalidate();

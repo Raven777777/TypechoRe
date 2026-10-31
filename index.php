@@ -20,9 +20,11 @@ if (!defined('__TYPECHO_ROOT_DIR__') && !@include_once 'config.inc.php') {
 \Typecho\Plugin::factory('index.php')->call('begin');
 
 $response = \Typecho\Response::getInstance();
-$cacheableRequest = \Typecho\PageCache::eligible();
-$cacheGeneration = $cacheableRequest ? \Typecho\PageCache::generation() : '';
 $options = \Widget\Options::alloc();
+$cacheEnabled = (string) ($options->pageCacheEnabled ?? '1') === '1';
+$cacheTtl = max(1, min(86400, (int) ($options->pageCacheTtl ?? 60)));
+$cacheableRequest = $cacheEnabled && \Typecho\PageCache::eligible();
+$cacheGeneration = $cacheableRequest ? \Typecho\PageCache::generation() : '';
 $cacheKey = $cacheableRequest
     ? \Typecho\PageCache::key($cacheGeneration, $options->theme, $options->lang)
     : '';
@@ -46,7 +48,7 @@ if ($cachedBody !== null && \Typecho\PageCache::generation() === $cacheGeneratio
         && ($responseState[0] ?? null) === 200
         && str_starts_with(strtolower($responseState[3] ?? ''), 'text/html')
     ) {
-        $cacheStored = \Typecho\PageCache::put($cacheKey, $body);
+        $cacheStored = \Typecho\PageCache::put($cacheKey, $body, $cacheTtl);
     }
     $response->setHeader('X-Typecho-Page-Cache', $cacheStored ? 'MISS' : 'BYPASS');
     echo $body;

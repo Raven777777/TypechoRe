@@ -268,6 +268,8 @@ function install_get_default_options(): array
             'charset' => 'UTF-8',
             'contentType' => 'text/html',
             'gzip' => 0,
+            'pageCacheEnabled' => 1,
+            'pageCacheTtl' => 60,
             'generator' => \Typecho\Common::SOFTWARE . ' ' . \Typecho\Common::VERSION,
             'title' => 'Hello World',
             'description' => 'Your description here.',

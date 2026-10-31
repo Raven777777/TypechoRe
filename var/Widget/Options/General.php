@@ -38,6 +38,35 @@ class General extends Options implements ActionInterface
         return isset($langs[$lang]);
     }
 
+    public function checkPageCacheEnabled($value): bool
+    {
+        return in_array((string) $value, ['0', '1'], true);
+    }
+
+    public function checkPageCacheTtl($value): bool
+    {
+        return is_scalar($value)
+            && preg_match('/^[0-9]+$/D', (string) $value) === 1
+            && (int) $value >= 1
+            && (int) $value <= 86400;
+    }
+
+    private function savePageCacheSettings(int $enabled, int $ttl): void
+    {
+        $this->db->transaction(function () use ($enabled, $ttl): void {
+            foreach (['pageCacheEnabled' => $enabled, 'pageCacheTtl' => $ttl] as $name => $value) {
+                $condition = $this->db->sql()->where('name = ?', $name)->where('user = ?', 0);
+                $exists = $this->db->fetchRow($this->db->select('name')->from('table.options')
+                    ->where('name = ?', $name)->where('user = ?', 0)->limit(1));
+                if ($exists !== null) {
+                    $this->update(['value' => (string) $value], $condition);
+                } else {
+                    $this->insert(['name' => $name, 'user' => 0, 'value' => (string) $value]);
+                }
+            }
+        });
+    }
+
     /**
      * 获取语言列表
      *
@@ -117,6 +146,10 @@ class General extends Options implements ActionInterface
         foreach ($settings as $name => $value) {
             $this->update(['value' => $value], $this->db->sql()->where('name = ?', $name));
         }
+        $this->savePageCacheSettings(
+            (int) $this->request->get('pageCacheEnabled'),
+            (int) $this->request->get('pageCacheTtl')
+        );
 
         Notice::alloc()->set(_t("设置已经保存"), 'success');
         $this->response->goBack();
@@ -285,6 +318,40 @@ class General extends Options implements ActionInterface
         );
         $form->addInput($attachmentTypes->multiMode());
 
+        /** 页面缓存 */
+        $pageCacheEnabled = new Form\Element\Radio(
+            'pageCacheEnabled',
+            ['0' => _t('关闭'), '1' => _t('开启')],
+            $this->options->pageCacheEnabled ?? '1',
+            _t('匿名页面缓存'),
+            _t('仅缓存匿名公开页面；登录用户和带 Cookie 的请求不会缓存。')
+        );
+        $form->addInput($pageCacheEnabled->addRule(
+            [$this, 'checkPageCacheEnabled'],
+            _t('请选择是否启用页面缓存')
+        ));
+
+        $pageCacheTtl = new Form\Element\Text(
+            'pageCacheTtl',
+            null,
+            $this->options->pageCacheTtl ?? 60,
+            _t('页面缓存时间（秒）'),
+            _t('有效范围为 1 到 86400 秒。')
+        );
+        $pageCacheTtl->input->setAttribute('type', 'number');
+        $pageCacheTtl->input->setAttribute('min', '1');
+        $pageCacheTtl->input->setAttribute('max', '86400');
+        $form->addInput($pageCacheTtl->addRule(
+            [$this, 'checkPageCacheTtl'],
+            _t('缓存时间必须是 1 到 86400 之间的整数')
+        ));
+
+        $clearPageCache = new Form\Element\Submit('clearPageCache', null, _t('清空页面缓存'));
+        $clearPageCache->input->setAttribute('name', 'clearPageCache');
+        $clearPageCache->input->setAttribute('value', '1');
+        $clearPageCache->input->setAttribute('class', 'btn');
+        $form->addItem($clearPageCache);
+
         /** 提交按钮 */
         $submit = new Form\Element\Submit('submit', null, _t('保存设置'));
         $submit->input->setAttribute('class', 'btn primary');
@@ -301,6 +368,12 @@ class General extends Options implements ActionInterface
     {
         $this->user->pass('administrator');
         $this->security->protect();
+        if ($this->request->isPost() && $this->request->get('clearPageCache') === '1') {
+            \Typecho\PageCache::invalidate();
+            Notice::alloc()->set(_t('页面缓存已清空'), 'success');
+            $this->response->goBack();
+            return;
+        }
         $this->on($this->request->isPost())->updateGeneralSettings();
         $this->response->redirect($this->options->adminUrl);
     }

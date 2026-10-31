@@ -55,7 +55,7 @@ final class PageCache
         return $entry['body'];
     }
 
-    public static function put(string $key, string $body): bool
+    public static function put(string $key, string $body, int $ttl = self::TTL): bool
     {
         $dir = self::directory();
         if ($dir === null) {
@@ -66,7 +66,10 @@ final class PageCache
             return false;
         }
         @chmod($temp, 0600);
-        $written = @file_put_contents($temp, serialize(['expires' => time() + self::TTL, 'body' => $body]), LOCK_EX) !== false
+        $written = @file_put_contents($temp, serialize([
+            'expires' => time() + max(1, min(86400, $ttl)),
+            'body' => $body,
+        ]), LOCK_EX) !== false
             && @rename($temp, $dir . '/' . $key);
         if (!$written) {
             @unlink($temp);
