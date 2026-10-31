@@ -447,7 +447,7 @@ class Db
 
         /** 提交查询 */
         $resource = $this->adapter->query($sql, $handle, $op, $action, $table);
-        $rawSql = is_string($sql) ? $sql : '';
+        $rawSql = $sql;
         $isWrite = in_array($action, [self::UPDATE, self::DELETE, self::INSERT], true)
             || (is_string($query) && !(bool) preg_match('/^\s*(?:SELECT|PRAGMA|EXPLAIN|BEGIN|COMMIT|ROLLBACK)\b/i', $query))
             || (bool) preg_match('/^\s*(?:--[^\n]*\n|\/\*.*?\*\/\s*)*(?:INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE)\b/is', $rawSql);
