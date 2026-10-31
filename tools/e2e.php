@@ -618,6 +618,10 @@ $body = assertResponse($response, [200], 'install step 2');
 $json = json_decode($body, true);
 assertTrue(is_array($json) && ($json['success'] ?? false) && 3 === ($json['message'] ?? null), 'install step 2 did not advance to step 3: ' . $body);
 assertTrue(is_file($siteDir . '/config.inc.php'), 'config.inc.php was not created');
+// Keep the cookie namespace stable while emulating TLS termination on the local HTTP test server.
+assertTrue(false !== file_put_contents($siteDir . '/config.inc.php', "\ndefine('__TYPECHO_ROOT_URL__', "
+    . var_export("http://127.0.0.1:{$port}", true)
+    . " . (defined('__TYPECHO_ADMIN__') ? '/admin' : ''));\n", FILE_APPEND), 'could not update config.inc.php');
 assertTrue(is_file($dbFile), 'SQLite database was not created');
 
 $adminUser = 'e2eadmin';
@@ -1320,10 +1324,6 @@ assertTrue(sitePhp($php, $siteDir, "echo (int) \$db->fetchObject(\$db->select(['
 // ---------------------------------------------------------------- passkey
 
 step('passkey registration and assertion');
-// Keep the cookie namespace stable while emulating TLS termination on the local HTTP test server.
-file_put_contents($siteDir . '/config.inc.php', "\ndefine('__TYPECHO_ROOT_URL__', "
-    . var_export("http://127.0.0.1:{$port}", true)
-    . " . (defined('__TYPECHO_ADMIN__') ? '/admin' : ''));\n", FILE_APPEND);
 $profile = assertResponse($site->get('/admin/profile.php'), [200], 'GET profile (passkey section)');
 assertTrue(str_contains($profile, 'passkey-management'), 'passkey management section missing in profile');
 assertTrue(
