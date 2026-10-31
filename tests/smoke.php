@@ -17,7 +17,7 @@ register_shutdown_function(static function (): void {
 });
 
 spl_autoload_register(static function (string $class): void {
-    foreach (['Typecho\\' => ROOT . '/var/Typecho/', 'Widget\\' => ROOT . '/var/Widget/', 'Utils\\' => ROOT . '/var/Utils/', 'IXR\\' => ROOT . '/var/IXR/'] as $prefix => $base) {
+    foreach (['Typecho\\' => ROOT . '/var/Typecho/', 'Widget\\' => ROOT . '/var/Widget/', 'Utils\\' => ROOT . '/var/Utils/'] as $prefix => $base) {
         if (str_starts_with($class, $prefix)) {
             $file = $base . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
             if (is_file($file)) {
@@ -276,14 +276,14 @@ check(
     'legacy alias Widget_Abstract_Contents failed to resolve to Widget\\Base\\Contents'
 );
 check(
-    class_exists('Typecho_Db_Adapter_Mysql'),
-    'legacy alias Typecho_Db_Adapter_Mysql failed to resolve to Typecho\\Db\\Adapter\\Mysqli'
+    !array_key_exists('Typecho_Db_Adapter_Mysql', \Typecho\Common::CLASS_ALIASES),
+    'legacy alias Typecho_Db_Adapter_Mysql is still registered after MySQL support was removed'
 );
 
-// XmlRpc::mtSetPostCategories() 从外部调用 setCategories(), 必须保持 public
+// 插件可在 publish 前后调用 setCategories(), 必须保持 public
 check(
     (new ReflectionMethod(\Widget\Contents\Post\Edit::class, 'setCategories'))->isPublic(),
-    'Post\Edit::setCategories() must be public for XmlRpc'
+    'Post\Edit::setCategories() must stay public for plugin use'
 );
 // 附件编辑需要分页定位方法 (先前缺失, 调用会被 __call 吞掉)
 check(
@@ -369,37 +369,6 @@ check(
 check(
     str_contains(\Utils\Markdown::convert('[x](https://example.com)'), '<a href="https://example.com">'),
     'Markdown link with a safe scheme was mangled'
-);
-
-// IXR: 联合类型参数不能触发 ReflectionType::getName() 致命错误, 错误必须被识别
-$ixrProbe = new class () {
-    public function union(int|string $value): string
-    {
-        return 'ok:' . get_debug_type($value);
-    }
-
-    public function boom(): string
-    {
-        throw new \IXR\Exception('boom', 42);
-    }
-};
-$ixrServer = new \IXR\Server([
-    'probe.union' => [$ixrProbe, 'union'],
-    'probe.boom'  => [$ixrProbe, 'boom'],
-]);
-$ixrResult = $ixrServer->multiCall([
-    ['methodName' => 'probe.union', 'params' => [42]],
-    ['methodName' => 'probe.boom', 'params' => []],
-    ['methodName' => 'probe.missing', 'params' => []],
-]);
-check($ixrResult[0] === ['ok:int'], 'IXR union-typed parameter call failed');
-check(
-    isset($ixrResult[1]['faultCode']) && 42 === $ixrResult[1]['faultCode'],
-    'IXR multiCall did not report a thrown IXR\Exception as a fault'
-);
-check(
-    isset($ixrResult[2]['faultCode']) && -32601 === $ixrResult[2]['faultCode'],
-    'IXR multiCall did not report an unknown method as a fault'
 );
 
 // 全量类加载: 任何 #[\Override] 签名漂移/类链接错误都会在此致命失败

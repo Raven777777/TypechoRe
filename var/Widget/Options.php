@@ -26,7 +26,6 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property string $commentsFeedRssUrl
  * @property string $commentsFeedAtomUrl
  * @property string $themeUrl
- * @property string $xmlRpcUrl
  * @property string $index
  * @property string $siteUrl
  * @property string $siteDomain
@@ -57,7 +56,6 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property string $software
  * @property string $version
  * @property bool $markdown
- * @property bool $xmlrpcMarkdown
  * @property array $allowedAttachmentTypes
  * @property string $attachmentTypes
  * @property int $time
@@ -93,7 +91,6 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property int $commentsPostInterval
  * @property string $commentsHTMLTagAllowed
  * @property bool $allowRegister
- * @property int $allowXmlRpc
  * @property int $postsListSize
  * @property bool $feedFullText
  * @property int $defaultCategory
@@ -563,16 +560,6 @@ class Options extends Base
     protected function ___commentsFeedAtomUrl(): string
     {
         return Router::url('feed', ['feed' => '/atom/comments/'], $this->index);
-    }
-
-    /**
-     * xmlrpc api地址
-     *
-     * @return string
-     */
-    protected function ___xmlRpcUrl(): string
-    {
-        return Router::url('do', ['action' => 'xmlrpc'], $this->index);
     }
 
     /**

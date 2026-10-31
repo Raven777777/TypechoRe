@@ -29,7 +29,6 @@ class Action extends Widget
         'upgrade'                  => '\Widget\Upgrade',
         'upload'                   => '\Widget\Upload',
         'service'                  => '\Widget\Service',
-        'xmlrpc'                   => '\Widget\XmlRpc',
         'comments-edit'            => '\Widget\Comments\Edit',
         'contents-page-edit'       => '\Widget\Contents\Page\Edit',
         'contents-post-edit'       => '\Widget\Contents\Post\Edit',

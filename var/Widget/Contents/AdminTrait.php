@@ -195,8 +195,7 @@ trait AdminTrait
      * 当前条目是否存在未发布的草稿
      *
      * 上游 v1.2.1 在 Widget\Contents\Post\Admin 中实现过同样逻辑, v1.3.0 重构时
-     * 丢失, 导致 XmlRpc 的 wp.getPosts / metaWeblog.getPost 无法报告 draft 状态。
-     * 这里放回共用 trait, 供文章/页面/附件管理列表使用。
+     * 丢失, 编辑器无法报告 draft 状态。这里放回共用 trait, 供文章/页面/附件管理列表使用。
      *
      * @return bool
      * @throws DbException

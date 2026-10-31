@@ -100,14 +100,6 @@ public static function charactersNum($archive)
 |logout|无||
 |simpleLoginSucceed|$user Widget\User对象<br>$authUser||
 
-### Widget\XmlRpc
-|接口|参数|描述|
-|:--|:--|:--|
-|textFilter|$input['text']<br>$xmlRpc Widget\XmlRpc对象|内容过滤（filter 接口）|
-|upload|$xmlRpc Widget\XmlRpc对象||
-|pingback|$pingback<br>$post|引用通告过滤（filter 接口）|
-|finishPingback|$xmlRpc Widget\XmlRpc对象||
-
 ### Widget\Backup
 |接口|参数|描述|
 |:--|:--|:--|
@@ -135,7 +127,7 @@ public static function charactersNum($archive)
 |markdown|$text|Markdown 解析（trigger filter 接口）|
 
 ### Widget\Base\Contents
-以下接口对 `Widget\Archive`、`Widget\Upload`、`Widget\XmlRpc`、`Widget\Contents\Related`、`Widget\Contents\Attachment\*`、`Widget\Contents\Page\Rows`、`Widget\Contents\Post\Admin`、`Widget\Contents\Page\Admin`、`Widget\Contents\Post\Edit`、`Widget\Contents\Page\Edit`、`Widget\Contents\Post\Recent`、`Widget\Contents\Related\Author` 等内容类同样生效。
+以下接口对 `Widget\Archive`、`Widget\Upload`、`Widget\Contents\Related`、`Widget\Contents\Attachment\*`、`Widget\Contents\Page\Rows`、`Widget\Contents\Post\Admin`、`Widget\Contents\Page\Admin`、`Widget\Contents\Post\Edit`、`Widget\Contents\Page\Edit`、`Widget\Contents\Post\Recent`、`Widget\Contents\Related\Author` 等内容类同样生效。
 
 |接口|参数|描述|
 |:--|:--|:--|

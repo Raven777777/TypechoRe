@@ -25,7 +25,6 @@ spl_autoload_register(static function (string $class) use ($root): void {
         'Typecho\\' => $root . '/var/Typecho/',
         'Widget\\' => $root . '/var/Widget/',
         'Utils\\' => $root . '/var/Utils/',
-        'IXR\\' => $root . '/var/IXR/',
         'lbuchs\\' => $root . '/var/lbuchs/',
     ];
 

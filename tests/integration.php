@@ -8,15 +8,8 @@
  * 用法:
  *   php tests/integration.php
  *   TYPECHORE_TEST_ADAPTER=SQLite,Pdo_SQLite php tests/integration.php
- *   TYPECHORE_TEST_ADAPTER=Pdo_Mysql TYPECHORE_TEST_HOST=127.0.0.1 \
- *     TYPECHORE_TEST_PORT=3306 TYPECHORE_TEST_USER=root \
- *     TYPECHORE_TEST_PASSWORD=secret TYPECHORE_TEST_DATABASE=typecho_test \
- *     php tests/integration.php
  *
- * 未指定适配器时默认只测 SQLite (临时文件), CI 也只跑 SQLite。
- *
- * 本项目只维护 SQLite: Mysql/Pgsql 适配器的测试路径仅为保留上游兼容性,
- * 不再维护也不在 CI 中执行; 缺少必要环境变量时会跳过并提示, 不影响退出码。
+ * 本项目只支持 SQLite, 默认测试两个 SQLite 适配器 (临时文件), 其它适配器名直接判失败。
  */
 
 declare(strict_types=1);
@@ -32,7 +25,7 @@ register_shutdown_function(static function (): void {
 });
 
 spl_autoload_register(static function (string $class): void {
-    foreach (['Typecho\\' => ROOT . '/var/Typecho/', 'Widget\\' => ROOT . '/var/Widget/', 'Utils\\' => ROOT . '/var/Utils/', 'IXR\\' => ROOT . '/var/IXR/'] as $prefix => $base) {
+    foreach (['Typecho\\' => ROOT . '/var/Typecho/', 'Widget\\' => ROOT . '/var/Widget/', 'Utils\\' => ROOT . '/var/Utils/'] as $prefix => $base) {
         if (str_starts_with($class, $prefix)) {
             $file = $base . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
             if (is_file($file)) {
@@ -59,81 +52,18 @@ function check(bool $condition, string $message): void
 }
 
 /**
- * 适配器 -> install/*.sql 类型
- */
-function sqlType(string $adapter): string
-{
-    return match ($adapter) {
-        'Mysqli', 'Pdo_Mysql' => 'Mysql',
-        'Pgsql', 'Pdo_Pgsql' => 'Pgsql',
-        'SQLite', 'Pdo_SQLite' => 'SQLite',
-        default => throw new IntegrationFailure('unknown adapter: ' . $adapter),
-    };
-}
-
-/**
- * 适配器 -> Db 配置数组
- *
- * @return array<string, mixed>
- */
-function adapterConfig(string $adapter, string $sqliteFile): array
-{
-    switch (sqlType($adapter)) {
-        case 'Mysql':
-            return [
-                'host' => getenv('TYPECHORE_TEST_HOST') ?: '127.0.0.1',
-                'port' => (int) (getenv('TYPECHORE_TEST_PORT') ?: 3306),
-                'user' => getenv('TYPECHORE_TEST_USER') ?: 'root',
-                'password' => getenv('TYPECHORE_TEST_PASSWORD') ?: '',
-                'charset' => 'utf8mb4',
-                'database' => getenv('TYPECHORE_TEST_DATABASE') ?: 'typecho_test',
-                'sslVerify' => 'off',
-            ];
-        case 'Pgsql':
-            return [
-                'host' => getenv('TYPECHORE_TEST_HOST') ?: '127.0.0.1',
-                'port' => (int) (getenv('TYPECHORE_TEST_PORT') ?: 5432),
-                'user' => getenv('TYPECHORE_TEST_USER') ?: 'postgres',
-                'password' => getenv('TYPECHORE_TEST_PASSWORD') ?: 'postgres',
-                'charset' => 'utf8',
-                'database' => getenv('TYPECHORE_TEST_DATABASE') ?: 'typecho_test',
-                'sslVerify' => 'off',
-            ];
-        default:
-            return ['file' => $sqliteFile];
-    }
-}
-
-/**
- * 该适配器所需的扩展/环境是否满足
+ * 该适配器所需的扩展是否满足
  */
 function adapterReady(string $adapter): bool
 {
-    return match ($adapter) {
-        'Mysqli' => extension_loaded('mysqli'),
-        'Pgsql' => extension_loaded('pgsql'),
-        'Pdo_Mysql', 'Pdo_SQLite', 'Pdo_Pgsql' => extension_loaded('pdo'),
-        'SQLite' => extension_loaded('sqlite3'),
-        default => false,
-    };
+    return extension_loaded($adapter === 'SQLite' ? 'sqlite3' : 'pdo_sqlite');
 }
 
 function dropTables(Db $db, array $tables): void
 {
-    $type = sqlType($db->getAdapterName());
     foreach ($tables as $table) {
         try {
-            switch ($type) {
-                case 'Mysql':
-                    $db->query("DROP TABLE IF EXISTS `{$db->getPrefix()}{$table}`");
-                    break;
-                case 'Pgsql':
-                    $db->query("DROP TABLE IF EXISTS \"{$db->getPrefix()}{$table}\" CASCADE");
-                    break;
-                default:
-                    $db->query("DROP TABLE IF EXISTS {$db->getPrefix()}{$table}");
-                    break;
-            }
+            $db->query("DROP TABLE IF EXISTS {$db->getPrefix()}{$table}");
         } catch (Typecho\Db\Exception $e) {
             // 表不存在时忽略
         }
@@ -147,15 +77,12 @@ function dropTables(Db $db, array $tables): void
  */
 function createTables(Db $db): array
 {
-    $type = sqlType($db->getAdapterName());
-    $scripts = file_get_contents(ROOT . '/install/' . $type . '.sql');
+    $scripts = file_get_contents(ROOT . '/install/SQLite.sql');
     if (false === $scripts) {
-        throw new IntegrationFailure('cannot read install/' . $type . '.sql');
+        throw new IntegrationFailure('cannot read install/SQLite.sql');
     }
 
     $scripts = str_replace('typecho_', $db->getPrefix(), $scripts);
-    $scripts = str_replace('%charset%', 'utf8mb4', $scripts);
-    $scripts = str_replace('%engine%', 'InnoDB', $scripts);
 
     foreach (explode(';', $scripts) as $script) {
         $script = trim($script);
@@ -174,7 +101,7 @@ function runAdapter(string $adapter): void
     $db = new Db($adapter, 'itest_');
 
     try {
-        $db->addServer(adapterConfig($adapter, $sqliteFile), Db::READ | Db::WRITE);
+        $db->addServer(['file' => $sqliteFile], Db::READ | Db::WRITE);
         Db::set($db);
 
         check($db->getAdapterName() === $adapter, "adapter name mismatch: {$db->getAdapterName()}");
@@ -332,13 +259,13 @@ $failed = [];
 $passed = 0;
 
 foreach ($adapters as $adapter) {
-    if (!adapterReady($adapter)) {
-        $skipped[] = "{$adapter} (extension missing)";
+    if (!in_array($adapter, ['SQLite', 'Pdo_SQLite'], true)) {
+        $failed[] = "{$adapter}: 只支持 SQLite";
         continue;
     }
 
-    if (sqlType($adapter) !== 'SQLite' && !getenv('TYPECHORE_TEST_HOST')) {
-        $skipped[] = "{$adapter} (TYPECHORE_TEST_HOST not set)";
+    if (!adapterReady($adapter)) {
+        $skipped[] = "{$adapter} (extension missing)";
         continue;
     }
 

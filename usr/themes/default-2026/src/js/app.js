@@ -1543,7 +1543,7 @@ document.addEventListener('click', (event) => {
  * Swup: 无刷新切页
  * -------------------------------------------------------------------------- */
 
-const IGNORED_PATH = /(^|\/)(admin|action|xmlrpc\.php|install\.php)(\/|$)/i;
+const IGNORED_PATH = /(^|\/)(admin|action|install\.php)(\/|$)/i;
 
 function shouldIgnoreVisit(url, element) {
   if (element) {

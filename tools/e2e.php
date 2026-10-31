@@ -7,7 +7,8 @@ declare(strict_types=1);
  *
  * 用发布包在临时目录搭建一个真实站点, 通过 PHP 内置服务器发真实 HTTP 请求,
  * 覆盖: 安装向导、后台全部页面、发布文章、前台文章页、评论提交、图片上传、
- * Sitemap、404、合成 Passkey 注册/签名认证、XML-RPC 开关与请求、1.3.2 升级脚本。
+ * Sitemap、404、合成 Passkey 注册/签名认证、已移除的 XML-RPC 路由返回 404、
+ * 旧版本站点的升级脚本。
  *
  * 用法:
  *   php tools/e2e.php                      # 自动构建发布包并测试
@@ -1357,49 +1358,24 @@ $loginResult = json_decode($loginResultBody, true);
 assertTrue(is_array($loginResult) && ($loginResult['success'] ?? false) === true, 'valid passkey assertion failed: ' . $loginResultBody);
 $passkeyDashboard = assertResponse($passkeyLoginSite->get('/admin/'), [200], 'GET admin after passkey login');
 $site = $passkeyLoginSite;
-// ---------------------------------------------------------------- xmlrpc
-
-step('xmlrpc');
-assertResponse($site->post('/index.php/action/xmlrpc', []), [404], 'xmlrpc disabled by default');
-sitePhp($php, $siteDir, "\$db->query(\$db->update('table.options')->rows(['value' => '1'])->where('name = ?', 'allowXmlRpc'));");
-
-$xmlrpcBody = '<?xml version="1.0"?>'
-    . '<methodCall><methodName>system.listMethods</methodName><params></params></methodCall>';
-$response = $site->postRaw('/index.php/action/xmlrpc', $xmlrpcBody, ['Content-Type' => 'text/xml']);
-$body = assertResponse($response, [200], 'xmlrpc system.listMethods');
-assertTrue(str_contains($body, 'system.listMethods'), 'xmlrpc response does not list system.listMethods: ' . substr($body, 0, 300));
-
-$postId = (int) sitePhp($php, $siteDir, "echo (int) \$db->fetchObject(\$db->select('cid')->from('table.contents')->where('slug = ?', 'e2e-regression-post'))->cid;");
-$getPost = '<?xml version="1.0"?>'
-    . '<methodCall><methodName>metaWeblog.getPost</methodName><params>'
-    . '<param><value><int>' . $postId . '</int></value></param>'
-    . '<param><value><string>' . htmlspecialchars($adminUser, ENT_XML1) . '</string></value></param>'
-    . '<param><value><string>' . htmlspecialchars($adminPassword, ENT_XML1) . '</string></value></param>'
-    . '</params></methodCall>';
-$body = assertResponse(
-    $site->postRaw('/index.php/action/xmlrpc', $getPost, ['Content-Type' => 'text/xml']),
-    [200],
-    'xmlrpc metaWeblog.getPost'
+// ---------------------------------------------------------------- xmlrpc 已移除
+step('xmlrpc removed');
+assertResponse(
+    $site->postRaw('/index.php/action/xmlrpc', '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName></methodCall>', ['Content-Type' => 'text/xml']),
+    [404],
+    'xmlrpc action must no longer be routable'
 );
-assertTrue(str_contains($body, 'E2E 回归文章') && str_contains($body, '<int>' . $postId . '</int>'),
-    'metaWeblog.getPost did not return the real post title and id: ' . substr($body, 0, 500));
-
-/** 密码错误必须被拒绝 (并且计入失败限流) */
-$badLogin = '<?xml version="1.0"?>'
-    . '<methodCall><methodName>wp.getUsersBlogs</methodName><params>'
-    . '<param><value><string>' . htmlspecialchars($adminUser, ENT_XML1) . '</string></value></param>'
-    . '<param><value><string>definitely-not-the-password</string></value></param>'
-    . '</params></methodCall>';
-$response = $site->postRaw('/index.php/action/xmlrpc', $badLogin, ['Content-Type' => 'text/xml']);
-$body = assertResponse($response, [200], 'xmlrpc with a wrong password');
+$homeBody = assertResponse($site->get('/'), [200], 'GET / after xmlrpc removal');
 assertTrue(
-    str_contains($body, '<fault>') && str_contains($body, '<int>403</int>'),
-    'xmlrpc accepted a wrong password: ' . substr($body, 0, 300)
+    !str_contains($homeBody, 'rel="pingback"')
+    && !str_contains($homeBody, 'application/rsd+xml')
+    && !str_contains($homeBody, 'wlwmanifest'),
+    'page head still advertises XML-RPC endpoints'
 );
 
-// ---------------------------------------------------------------- 1.3.2 upgrade path
+// ---------------------------------------------------------------- upgrade path
 
-step('1.3.2 upgrade path (old site without passkeys table)');
+step('upgrade path (old site without passkeys table / relationships index)');
 sitePhp(
     $php,
     $siteDir,
@@ -1431,6 +1407,10 @@ assertTrue($expectedVersion === $upgradedVersion, "upgrade did not set version {
 assertTrue(
     'PRESENT' === sitePhp($php, $siteDir, "try { \$db->fetchObject(\$db->select(['COUNT(*)' => 'num'])->from('table.passkeys')); echo 'PRESENT'; } catch (\\Throwable \$e) { echo 'MISSING'; }"),
     'upgrade v1_3_2 did not create the passkeys table'
+);
+assertTrue(
+    'PRESENT' === sitePhp($php, $siteDir, "try { \$db->fetchObject(\$db->select(['COUNT(*)' => 'num'])->from('sqlite_master')->where('type = ?', 'index')->where('name = ?', \$db->getPrefix() . 'relationships_mid')); echo 'PRESENT'; } catch (\\Throwable \$e) { echo 'MISSING'; }"),
+    'upgrade v1_3_3 did not create the relationships.mid index'
 );
 
 $passkeyProfileAfterUpgrade = assertResponse($site->get('/admin/profile.php'), [200], 'GET profile after upgrade');

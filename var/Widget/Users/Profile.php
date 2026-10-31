@@ -61,15 +61,6 @@ class Profile extends Users implements ActionInterface
         );
         $form->addInput($markdown);
 
-        $xmlrpcMarkdown = new Form\Element\Radio(
-            'xmlrpcMarkdown',
-            ['0' => _t('关闭'), '1' => _t('打开')],
-            $this->options->xmlrpcMarkdown,
-            _t('在 XMLRPC 接口中使用 Markdown 语法'),
-            _t('对于完全支持 <a href="https://daringfireball.net/projects/markdown/">Markdown</a> 语法写作的离线编辑器, 打开此选项后将避免内容被转换为 HTML.')
-        );
-        $form->addInput($xmlrpcMarkdown);
-
         /** 自动保存 */
         $autoSave = new Form\Element\Radio(
             'autoSave',
@@ -264,7 +255,6 @@ class Profile extends Users implements ActionInterface
     {
         $settings['autoSave'] = $this->request->is('autoSave=1') ? 1 : 0;
         $settings['markdown'] = $this->request->is('markdown=1') ? 1 : 0;
-        $settings['xmlrpcMarkdown'] = $this->request->is('xmlrpcMarkdown=1') ? 1 : 0;
         $defaultAllow = $this->request->getArray('defaultAllow');
 
         $settings['defaultAllowComment'] = in_array('comment', $defaultAllow) ? 1 : 0;

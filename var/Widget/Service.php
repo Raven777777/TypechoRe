@@ -30,7 +30,7 @@ class Service extends BaseOptions implements ActionInterface
     public array $asyncRequests = [];
 
     /**
-     * 发送pingback实现
+     * 发送 trackback 实现
      *
      * @throws Exception|Client\Exception
      */
@@ -43,7 +43,7 @@ class Service extends BaseOptions implements ActionInterface
         $title = $data['title'] ?? '';
         $excerpt = $data['excerpt'] ?? '';
 
-        $response = ['trackback' => [], 'pingback' => []];
+        $response = ['trackback' => []];
 
         if (!Common::timeTokenValidate($token, $this->options->secret, 3) || empty($permalink)) {
             throw new Exception(_t('禁止访问'), 403);
@@ -58,63 +58,6 @@ class Service extends BaseOptions implements ActionInterface
 
         if (function_exists('set_time_limit')) {
             set_time_limit(30);
-        }
-
-        if (!empty($data['pingback'])) {
-            $links = $data['pingback'];
-            $permalinkPart = parse_url($permalink);
-
-            /** 发送pingback */
-            foreach ($links as $url) {
-                $urlPart = parse_url($url);
-
-                if (isset($urlPart['scheme'])) {
-                    if ('http' != $urlPart['scheme'] && 'https' != $urlPart['scheme']) {
-                        continue;
-                    }
-                } else {
-                    $urlPart['scheme'] = 'http';
-                    $url = Common::buildUrl($urlPart);
-                }
-
-                if ($permalinkPart['host'] == $urlPart['host']) {
-                    continue;
-                }
-
-                $spider = Client::get();
-
-                if ($spider) {
-                    $spider->setTimeout(10)
-                        ->setSafeHost(true)
-                        ->send($url);
-
-                    if (!($xmlrpcUrl = $spider->getResponseHeader('x-pingback'))) {
-                        if (
-                            preg_match(
-                                "/<link[^>]*rel=[\"']pingback[\"'][^>]*href=[\"']([^\"']+)[\"'][^>]*>/i",
-                                $spider->getResponseBody(),
-                                $out
-                            )
-                        ) {
-                            $xmlrpcUrl = $out[1];
-                        }
-                    }
-
-                    if (!empty($xmlrpcUrl)) {
-                        $response['pingback'][] = $url;
-
-                        try {
-                            $xmlrpc = new \IXR\Client($xmlrpcUrl);
-                            $xmlrpc->pingback->ping($permalink, $url);
-                            unset($xmlrpc);
-                        } catch (\IXR\Exception $e) {
-                            continue;
-                        }
-                    }
-                }
-
-                unset($spider);
-            }
         }
 
         /** 发送trackback */
@@ -148,7 +91,7 @@ class Service extends BaseOptions implements ActionInterface
     }
 
     /**
-     * 发送pingback
+     * 发送 trackback
      * <code>
      * $this->sendPing($post);
      * </code>
@@ -169,12 +112,6 @@ class Service extends BaseOptions implements ActionInterface
                     'title' => $content->title,
                     'token' => Common::timeToken($this->options->secret)
                 ];
-
-                // preg_match_all() 返回真值即表示至少匹配到一组链接,
-                // 这里不会再出现空数组, 无需额外判空
-                if (preg_match_all("|<a[^>]*href=[\"'](.*?)[\"'][^>]*>(.*?)</a>|", $content->content, $matches)) {
-                    $input['pingback'] = array_values(array_unique($matches[1]));
-                }
 
                 if (!empty($trackback)) {
                     $input['trackback'] = $trackback;

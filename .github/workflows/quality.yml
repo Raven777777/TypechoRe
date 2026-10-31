@@ -16,7 +16,7 @@ jobs:
         with:
           # zip 供 tools/e2e.php 解压发布包
           php-version: '8.5'
-          extensions: pdo_sqlite, sqlite3, mysqli, pdo_mysql, pgsql, pdo_pgsql, zip
+          extensions: pdo_sqlite, sqlite3, zip
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -33,17 +33,3 @@ jobs:
         run: ./tools/quality.ps1
       - name: End-to-end site test
         run: php tools/e2e.php
-
-  # 只维护 SQLite: MySQL/PostgreSQL 适配器代码保留, 但不在 CI 中测试
-  database:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.5'
-          extensions: pdo_sqlite, sqlite3
-      - name: Run database integration tests
-        env:
-          TYPECHORE_TEST_ADAPTER: SQLite,Pdo_SQLite
-        run: php tests/integration.php

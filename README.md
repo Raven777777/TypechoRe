@@ -7,9 +7,9 @@
 > **TypechoRe 不再与原版 Typecho 数据库完全兼容。**
 > TypechoRe 修改了密码处理方式并调整了部分核心数据结构和行为。建议将 TypechoRe 视为独立分支使用。
 
-> **数据库支持范围：本项目只维护 SQLite。**
-> `Mysqli` / `Pdo_Mysql` / `Pgsql` / `Pdo_Pgsql` 适配器代码虽然保留
-> 请使用 SQLite；如确需其他数据库，请自行测试验证并自行承担风险，或改用原版 Typecho。
+> **数据库支持范围：本项目只支持 SQLite。**
+> MySQL / MariaDB / PostgreSQL 支持已被永久移除（适配器代码已删除），
+> 需要其它数据库请改用原版 Typecho。
 
 ## 环境要求
 

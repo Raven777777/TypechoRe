@@ -108,12 +108,12 @@ Ed25519 公钥签名验证；部分 OpenSSL 构建（例如 Windows 发行包）
 
 ### Nginx 认证接口限速
 
-应用不使用阻塞休眠拖慢失败请求。若使用 Nginx，在 `http {}` 中配置按客户端 IP 共享计数的 zone，覆盖密码登录、Passkey 与 XML-RPC：
+应用不使用阻塞休眠拖慢失败请求。若使用 Nginx，在 `http {}` 中配置按客户端 IP 共享计数的 zone，覆盖密码登录与 Passkey：
 
 ```nginx
 map $request_uri $typechore_login_key {
     default "";
-    ~*(?:/index\.php)?/action/(?:login|passkey|xmlrpc)(?:\?|$) $binary_remote_addr;
+    ~*(?:/index\.php)?/action/(?:login|passkey)(?:\?|$) $binary_remote_addr;
 }
 limit_req_zone $typechore_login_key zone=typechore_login:10m rate=10r/m;
 ```
@@ -178,7 +178,7 @@ class "Sticky_Plugin" not found
 
 ## 数据库兼容性警告
 
-> **数据库支持范围：本项目只维护 SQLite。** MySQL / MariaDB / PostgreSQL 适配器代码虽然保留，但不维护、不在 CI 中测试，相关 Issue / PR 可能不会被处理。下面涉及 MySQL / PostgreSQL 的 SQL 仅供存量安装参考，请自行验证。
+> **数据库支持范围：本项目只支持 SQLite。** MySQL / MariaDB / PostgreSQL 适配器已被删除；非 SQLite 的 `config.inc.php` 会在启动时直接报错。
 
 TypechoRe 已经不是与原版 Typecho 完全相通的数据库分支。
 
@@ -206,31 +206,24 @@ $newHash = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => 12]);
 - 数据库迁移前必须备份
 - 数据库备份和网站代码应保持版本对应
 
-### 从 1.3.1 升级到 1.3.2
+### 从 1.3.2 升级到 1.3.3
 
-1.3.2 没有破坏性数据库变更：
+1.3.3 只修缺陷、不加功能版本号，但有一项**破坏性变更**：
 
-- 首次进入后台时版本号比对会引导执行升级脚本；
-  `Utils\Upgrade::v1_3_2()` 会为缺少 `typecho_passkeys` 的旧站点建表
-  （MySQL / PostgreSQL / SQLite 三种 DDL，重复执行安全）
-- 升级后可在数据库中确认该表已存在；不需要手动执行 SQL
-- `# [\Override]`、PHPStan level 5 等改动只涉及代码，不影响数据
+- **XML-RPC 与所有非 SQLite 数据库支持已移除**。仍在使用 MySQL / MariaDB /
+  PostgreSQL 的站点无法升级到 1.3.3，`new \Typecho\Db()` 会直接抛
+  `DbException`；迁移只能在 1.3.2 上导出数据后重装 1.3.3 并重新导入
+- 升级脚本 `Utils\Upgrade::v1_3_3()` 会为分类/标签归档补建
+  `relationships_mid` 索引（幂等，纯性能改动）
+- 首次进入后台时版本号比对会引导执行升级脚本；`Utils\Upgrade::v1_3_2()`
+  仍会为缺少 `typecho_passkeys` 的旧站点建表
+- 升级后可在数据库中确认索引存在；不需要手动执行 SQL
 
 ### 从旧版本升级 authCode 列宽
 
 authCode 摘要为 128 位十六进制（SHA-512），旧安装的 `users.authCode` 列宽
-为 varchar(64)。SQLite 不受影响（TEXT 亲和性不强制列宽）；MySQL / PgSQL
-存量安装需手动执行：
-
-```sql
--- MySQL
-ALTER TABLE `typecho_users` MODIFY `authCode` varchar(128) default NULL;
-
--- PostgreSQL
-ALTER TABLE "typecho_users" ALTER COLUMN "authCode" TYPE varchar(128);
-```
-
-执行后重新登录一次，所有会话凭证即切换为新格式。
+为 varchar(64)。SQLite 不受影响（TEXT 亲和性不强制列宽），无需手动改表；
+重新登录一次即可，所有会话凭证都会切换为新格式。
 
 ## 敏感文件保护
 

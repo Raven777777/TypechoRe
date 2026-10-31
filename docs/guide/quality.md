@@ -43,12 +43,10 @@
     `Typecho\Widget\Request`（请求参数名由 URL 决定）
   - `ignoreErrors`：主题模板访问 `Widget\Archive` 的 protected 成员
     （模板由 `Archive::render()` 以 `require` 载入，运行在组件作用域内）、
-    `Plugin::$signal` 的「只写不读」（它通过引用绑定到调用方变量）、
-    `IXR\Client::__call()`（XML-RPC 方法名由远端接口决定）
+    `Plugin::$signal` 的「只写不读」（它通过引用绑定到调用方变量）
 
-CI 中额外的 `database` job 只跑 `tests/integration.php` 的 `SQLite` 与
-`Pdo_SQLite` 适配器。MySQL/PostgreSQL 适配器代码保留但**不维护、不测试**（详见
-[未完成与已知限制](#未完成与已知限制)）。
+`tools/quality.ps1` 会跑 `tests/integration.php` 的 `SQLite` 与 `Pdo_SQLite`
+两个适配器。MySQL/PostgreSQL 支持已被移除，适配器代码不再随包发布。
 
 ### `#[\Override]` 审计
 
@@ -73,9 +71,10 @@ trait 中声明的覆盖方法不参与审计：属性会由 trait 原样带到�
 - 匿名访客提交评论（CSRF + 反垃圾 + 来源校验）并校验审核状态
 - 图片上传（multipart）→ 附件入库 → 附件编辑页 → 文件列表
 - Passkey 合成注册与登录：HTTP 注册后检查数据库记录；错误 User Handle 和伪造签名均被拒绝；有效签名登录后获得后台会话；升级后再次检查 Passkey 参数可用
-- XML-RPC 默认关闭返回 404、开启后 `system.listMethods` 正常
-- 1.3.2 升级路径：把版本改回 1.3.1 并删除 passkeys 表，验证后台跳转
-  `upgrade.php`、执行升级、版本回到 1.3.2 且 passkey 恢复可用
+- `/action/xmlrpc` 返回 404，且页面头部不再输出 pingback / RSD / wlwmanifest 链接
+- 升级路径：把版本改回 1.3.1 并删除 passkeys 表，验证后台跳转
+  `upgrade.php`、执行升级、版本回到 `Common::VERSION`、passkey 与
+  `relationships_mid` 索引恢复可用
 - 后台登出，并检查服务器日志中没有任何 PHP Warning/Notice/Deprecated/Fatal
 
 运行方式：
@@ -98,9 +97,7 @@ php-8.5.10/php.exe tools/e2e.php --zip=dist/x.zip --keep --verbose
 - 三表 JOIN、聚合查询、`truncate()`
 - 1.3.2 升级脚本 `Utils\Upgrade::v1_3_2()` 建表且幂等
 
-MySQL/PostgreSQL 适配器只有在显式设置 `TYPECHORE_TEST_ADAPTER` 与
-`TYPECHORE_TEST_HOST` 时才会本地执行（未设置则跳过并提示，退出码仍为 0）；
-CI 只跑 SQLite。
+`TYPECHORE_TEST_ADAPTER` 只接受 `SQLite` / `Pdo_SQLite`，其它值直接判失败。
 
 ### 发布包敏感文件排除与校验清单
 
@@ -164,14 +161,12 @@ PASS: PHP 8.5 smoke tests
 - `Typecho\Config` 的 `Iterator`/`ArrayAccess` 原生 `mixed` 返回类型
 - `fileinfo` 内容嗅探 MIME、备份缓冲 v2（SHA-256）与 v1（MD5）双向兼容
 - 遗留类名别名表：每个别名目标都能加载，`Typecho_Plugin_Interface`、
-  `Widget_Abstract_Contents`、`Typecho_Db_Adapter_Mysql` 等旧类名可被自动加载器解析
+  `Widget_Abstract_Contents` 等旧类名可被自动加载器解析
 - SQLite 建表、插入、查询和读取；WebAuthn Passkey 完整注册与认证签名流程见下文
 - 回归断言（对应本轮修复）：
-  - `XmlRpc` 依赖的 `Post\Edit::setCategories()` 保持 public
+  - `Post\Edit::setCategories()` 保持 public（供插件调用）
   - `Attachment\Edit` 具备 `PageOffsetTrait::getPageOffset()`
   - `PageNavigator` 的 `ceil()` 整数等价实现（10/5→2、10/4→3）
-  - IXR 联合类型参数不再触发 `ReflectionUnionType::getName()` 致命错误
-  - IXR `system.multicall` 能正确识别错误（`instanceof`）
 - 全量类加载（覆盖 170+ 类），任一 `#[\Override]` 签名漂移或类链接错误都会在此失败
 
 ### JavaScript
@@ -214,11 +209,8 @@ XML-RPC、合成 Passkey 注册与登录（含伪造签名拒绝）和后台登�
 
 | 位置 | 问题 | 结果 |
 | --- | --- | --- |
-| `var/Widget/XmlRpc.php` | `mt.setPostCategories` 调用 protected 的 `setCategories()` | 调用即致命错误；方法已改为 public |
-| `var/IXR/Server.php` | 联合类型参数调用 `ReflectionType::getName()` | 致命错误；只对 `ReflectionNamedType` 处理 |
-| `var/IXR/Server.php` | `is_a($result, 'Error')` 匹配到 PHP 内置 `\Error` | multicall 永不返回错误；改为 `instanceof` |
 | `var/Widget/Contents/Attachment/Edit.php` | 调用不存在的 `getPageOffset()` | 分页参数被 `__call()` 吞掉；抽出 `PageOffsetTrait` |
-| `var/Widget/Contents/AdminTrait.php` | v1.3.0 重构丢失 `___hasSaved()` | XML-RPC 无法报告草稿状态；已恢复 |
+| `var/Widget/Contents/AdminTrait.php` | v1.3.0 重构丢失 `___hasSaved()` | 编辑器无法报告草稿状态；已恢复 |
 | `var/Widget/Base/Metas.php` | `clearTags()` 未上移到基类 | 删除文章后孤立标签不清理；已上移 |
 | `var/Widget/Contents/Page/Rows.php` | `listRows()` 参数错位 | 页面树 CSS 类错误、主题回调失效 |
 | `var/Widget/Archive.php` | 日期归档非法参数使用未定义变量 | 现在返回 404 |
@@ -236,15 +228,13 @@ Typecho 大量使用运行时动态派发，以下几处在 PHPStan 中无法用
   来自数据表列或 `___xxx()` 方法。基础类已用 `@property` / `@method` 标注常用成员；
   请求参数与插件钩子名无法穷举，故采用对象箱语义
 - `Typecho\Config::__call()`：主题自定义的评论选项名
-- `IXR\Client::__call()`：XML-RPC 方法名由远端接口决定
 - 主题模板：`$this->options` 等 protected 成员访问在组件内部作用域内合法
 
 ## 未完成与已知限制
 
-- **MySQL / PostgreSQL 不再维护**：本项目只维护 SQLite，`Mysqli`/`Pdo_Mysql`/
-  `Pgsql`/`Pdo_Pgsql` 适配器代码保留但不在 CI 中测试、不修复问题（已知问题：
-  `Pgsql` 适配器会把字符串形式的 `sslVerify`（如 `'off'`）当作真值，从而强制
-  `sslmode=require`；`options` 这类复合主键表也不会返回有效的 `lastInsertId()`）
+- **只支持 SQLite**：`Mysqli`/`Pdo_Mysql`/`Pgsql`/`Pdo_Pgsql` 适配器与整套
+  XML-RPC（`var/IXR/**`、`Widget\XmlRpc`）已删除，非 SQLite 的 `config.inc.php`
+  会在 `new \Typecho\Db()` 时抛出 `DbException`
 - 项目没有 PHPUnit/Psalm：基础回归测试使用 `tests/smoke.php`，数据库测试使用
   `tests/integration.php`，真实请求测试使用 `tools/e2e.php`
 - `tools/e2e.php` 与 `tests/integration.php` 都只覆盖 SQLite 站点与适配器
@@ -253,7 +243,7 @@ Typecho 大量使用运行时动态派发，以下几处在 PHPStan 中无法用
 - `#[\Override]` 无法标注 trait 中声明的覆盖方法（见上文说明）
 - 默认主题的 TagCloud 使用了第三方库的 `_next()` 内部方法，后续升级 TagCloud 时
   需要重新验证
-- `var/Utils/HyperDown.php`、`var/Utils/AutoP.php`、`var/IXR/**` 为内嵌的上游代码，
+- `var/Utils/HyperDown.php`、`var/Utils/AutoP.php` 为内嵌的上游代码，
   已纳入 level 5 扫描并修复类型问题，但保持与上游一致的实现风格
 - `Utils\Upgrade` 的升级脚本按版本号顺序执行；新增数据库结构时应在其中补充对应
   `vX_Y_Z()` 方法，而不是只改 `install/*.sql`
@@ -263,6 +253,6 @@ Typecho 大量使用运行时动态派发，以下几处在 PHPStan 中无法用
 - `php-8.5.10/php.ini` 只适合作为本地测试配置，不应直接作为生产配置
 - 生产环境应关闭 `__TYPECHO_DEBUG__` 和 `display_errors`
 - 部署完成后应删除安装压缩包，并确认数据库文件不能通过 Web 直接下载
-- 升级到 1.3.2 后请访问一次后台以执行升级脚本（会为旧站点补建
-  `typecho_passkeys` 表，幂等）
+- 升级到 1.3.3 后请访问一次后台以执行升级脚本（会为旧站点补建
+  `typecho_passkeys` 表与 `relationships_mid` 索引，幂等）
 - TypechoRe 数据库不再保证与原版 Typecho 兼容，不能让两个程序连接同一个生产数据库

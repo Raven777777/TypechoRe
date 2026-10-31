@@ -298,7 +298,6 @@ function install_get_default_options(): array
             'editorSize' => 350,
             'autoSave' => 0,
             'markdown' => 1,
-            'xmlrpcMarkdown' => 0,
             'commentsMaxNestingLevels' => 5,
             'commentsPostTimeout' => 24 * 3600 * 30,
             'commentsUrlNofollow' => 1,
@@ -322,8 +321,7 @@ function install_get_default_options(): array
             'panelTable' => json_encode([]),
             'attachmentTypes' => '@image@',
             'secret' => \Typecho\Common::randString(32, true),
-            'installed' => 0,
-            'allowXmlRpc' => 0
+            'installed' => 0
         ];
     }
 
@@ -338,8 +336,11 @@ function install_get_default_options(): array
  */
 function install_get_db_type(string $driver): string
 {
-    $parts = explode('_', $driver);
-    return $driver == 'Mysqli' ? 'Mysql' : array_pop($parts);
+    if (!in_array($driver, ['SQLite', 'Pdo_SQLite'], true)) {
+        install_raise_error(_t('本项目只支持 SQLite 数据库, 请重新选择适配器'));
+    }
+
+    return 'SQLite';
 }
 
 /**
@@ -371,8 +372,7 @@ function install_random_db_name(): string
 function install_get_db_drivers(): array
 {
     /**
-     * 只提供 SQLite: MySQL/PostgreSQL 适配器已停止维护 (见 docs/guide/quality.md),
-     * 安装器不应再引导新站点跑在未测试的引擎上。
+     * 只提供 SQLite: MySQL/PostgreSQL 支持已被永久移除 (见 docs/guide/quality.md)。
      */
     $drivers = [];
 
@@ -823,7 +823,7 @@ function install_step_1_perform()
         'mbstring',
         'json',
         'Reflection',
-        ['mysqli', 'sqlite3', 'pgsql', 'pdo_mysql', 'pdo_sqlite', 'pdo_pgsql']
+        ['sqlite3', 'pdo_sqlite']
     ];
 
     foreach ($checks as $check) {
@@ -997,25 +997,6 @@ function install_step_2_perform()
     $drivers = install_get_db_drivers();
 
     $configMap = [
-        'Mysql' => [
-            'dbHost' => 'localhost',
-            'dbPort' => 3306,
-            'dbUser' => null,
-            'dbPassword' => null,
-            'dbCharset' => 'utf8mb4',
-            'dbDatabase' => null,
-            'dbSslCa' => null,
-            'dbSslVerify' => 'off',
-        ],
-        'Pgsql' => [
-            'dbHost' => 'localhost',
-            'dbPort' => 5432,
-            'dbUser' => null,
-            'dbPassword' => null,
-            'dbCharset' => 'utf8',
-            'dbDatabase' => null,
-            'dbSslVerify' => 'off',
-        ],
         'SQLite' => [
             'dbFile' => __TYPECHO_ROOT_DIR__ . '/usr/' . install_random_db_name() . '.db'
         ]
@@ -1023,35 +1004,17 @@ function install_step_2_perform()
 
     if (install_is_cli()) {
         $config = [
-            'dbHost' => $request->getServer('TYPECHO_DB_HOST'),
-            'dbUser' => $request->getServer('TYPECHO_DB_USER'),
-            'dbPassword' => $request->getServer('TYPECHO_DB_PASSWORD'),
-            'dbCharset' => $request->getServer('TYPECHO_DB_CHARSET'),
-            'dbPort' => $request->getServer('TYPECHO_DB_PORT'),
-            'dbDatabase' => $request->getServer('TYPECHO_DB_DATABASE'),
             'dbFile' => $request->getServer('TYPECHO_DB_FILE'),
-            'dbDsn' => $request->getServer('TYPECHO_DB_DSN'),
             'dbPrefix' => $request->getServer('TYPECHO_DB_PREFIX', 'typecho_'),
             'dbAdapter' => $request->getServer('TYPECHO_DB_ADAPTER', install_get_current_db_driver()),
             'dbNext' => $request->getServer('TYPECHO_DB_NEXT', 'none'),
-            'dbSslCa' => $request->getServer('TYPECHO_DB_SSL_CA'),
-            'dbSslVerify' => $request->getServer('TYPECHO_DB_SSL_VERIFY', 'off'),
         ];
     } else {
         $config = $request->from([
-            'dbHost',
-            'dbUser',
-            'dbPassword',
-            'dbCharset',
-            'dbPort',
-            'dbDatabase',
             'dbFile',
-            'dbDsn',
             'dbPrefix',
             'dbAdapter',
             'dbNext',
-            'dbSslCa',
-            'dbSslVerify',
         ]);
     }
 
@@ -1078,31 +1041,6 @@ function install_step_2_perform()
     }
 
     switch ($type) {
-        case 'Mysql':
-            $error = (new \Typecho\Validate())
-                ->addRule('dbHost', 'required', _t('确认您的配置'))
-                ->addRule('dbPort', 'required', _t('确认您的配置'))
-                ->addRule('dbPort', 'isInteger', _t('确认您的配置'))
-                ->addRule('dbUser', 'required', _t('确认您的配置'))
-                ->addRule('dbCharset', 'required', _t('确认您的配置'))
-                ->addRule('dbCharset', 'enum', _t('确认您的配置'), ['utf8', 'utf8mb4'])
-                ->addRule('dbDatabase', 'required', _t('确认您的配置'))
-                ->addRule('dbSslCa', 'file_exists', _t('确认您的配置'))
-                ->addRule('dbSslVerify', 'enum', _t('确认您的配置'), ['on', 'off'])
-                ->run($config);
-            break;
-        case 'Pgsql':
-            $error = (new \Typecho\Validate())
-                ->addRule('dbHost', 'required', _t('确认您的配置'))
-                ->addRule('dbPort', 'required', _t('确认您的配置'))
-                ->addRule('dbPort', 'isInteger', _t('确认您的配置'))
-                ->addRule('dbUser', 'required', _t('确认您的配置'))
-                ->addRule('dbCharset', 'required', _t('确认您的配置'))
-                ->addRule('dbCharset', 'enum', _t('确认您的配置'), ['utf8'])
-                ->addRule('dbDatabase', 'required', _t('确认您的配置'))
-                ->addRule('dbSslVerify', 'enum', _t('确认您的配置'), ['on', 'off'])
-                ->run($config);
-            break;
         case 'SQLite':
             $error = (new \Typecho\Validate())
                 ->addRule('dbFile', 'required', _t('确认您的配置'))
@@ -1128,20 +1066,6 @@ function install_step_2_perform()
         $dbConfig[lcfirst(substr($key, 2))] = $config[$key];
     }
 
-    // intval port number
-    if (isset($dbConfig['port'])) {
-        if (str_contains($dbConfig['host'], '/') && $type == 'Mysql') {
-            $dbConfig['port'] = null;
-        } else {
-            $dbConfig['port'] = intval($dbConfig['port']);
-        }
-    }
-
-    // bool ssl verify
-    if (isset($dbConfig['sslVerify'])) {
-        $dbConfig['sslVerify'] = $dbConfig['sslVerify'] == 'on' || !empty($dbConfig['sslCa']);
-    }
-
     if (isset($dbConfig['file']) && preg_match("/^[a-z0-9]+\.[a-z0-9]{2,}$/i", $dbConfig['file'])) {
         $dbConfig['file'] = __DIR__ . '/usr/' . $dbConfig['file'];
     }
@@ -1157,12 +1081,9 @@ function install_step_2_perform()
             $installDb->addServer($dbConfig, \Typecho\Db::READ | \Typecho\Db::WRITE);
             $installDb->query('SELECT 1=1');
         } catch (\Typecho\Db\Adapter\ConnectionException $e) {
-            $code = $e->getCode();
-            if (('Mysql' == $type && 1049 == $code) || ('Pgsql' == $type && 7 == $code)) {
-                install_raise_error(_t('数据库: "%s"不存在，请手动创建后重试', $config['dbDatabase']));
-            } else {
-                install_raise_error(_t('对不起, 无法连接数据库, 请先检查数据库配置再继续进行安装: "%s"', $e->getMessage()));
-            }
+            install_raise_error(
+                _t('对不起, 无法连接数据库, 请先检查数据库配置再继续进行安装: "%s"', $e->getMessage())
+            );
         } catch (\Typecho\Db\Exception $e) {
             install_raise_error(_t('安装程序捕捉到以下错误: "%s". 程序被终止, 请检查您的配置信息.', $e->getMessage()));
         }
@@ -1194,15 +1115,7 @@ function install_step_2_perform()
 
         try {
             foreach ($tables as $table) {
-                switch ($type) {
-                    case 'Mysql':
-                        $installDb->query("DROP TABLE IF EXISTS `{$table}`");
-                        break;
-                    case 'Pgsql':
-                    case 'SQLite':
-                        $installDb->query("DROP TABLE {$table}");
-                        break;
-                }
+                $installDb->query("DROP TABLE IF EXISTS {$table}");
             }
         } catch (\Typecho\Db\Exception $e) {
             install_raise_error(_t('安装程序捕捉到以下错误: "%s". 程序被终止, 请检查您的配置信息.', $e->getMessage()));
@@ -1214,13 +1127,6 @@ function install_step_2_perform()
         $scripts = file_get_contents(__TYPECHO_ROOT_DIR__ . '/install/' . $type . '.sql');
         $scripts = str_replace('typecho_', $config['dbPrefix'], $scripts);
 
-        if (isset($dbConfig['charset'])) {
-            $scripts = str_replace('%charset%', $dbConfig['charset'], $scripts);
-        }
-
-        /** MySQL 5.5.3+ 仅支持 InnoDB + utf8mb4, MyISAM 已于 2026 弃用 (不支持事务/外键/crash-safe) */
-        $scripts = str_replace('%engine%', 'InnoDB', $scripts);
-
         $scripts = explode(';', $scripts);
         foreach ($scripts as $script) {
             $script = trim($script);
@@ -1229,18 +1135,13 @@ function install_step_2_perform()
             }
         }
     } catch (\Typecho\Db\Exception $e) {
-        // PDO 抛出的是 SQLSTATE 字符串 ('42S01' / 'HY000'), mysqli 抛出的是
-        // 数字错误码 (1050)。PHPStan 依据 Throwable::getCode(): int 推断为 int,
-        // 这里显式声明联合类型 (PDOException 实际会返回字符串)
+        // PDO 抛出的是 SQLSTATE 字符串 ('HY000'), SQLite3 抛出的是数字错误码 (1)。
+        // PHPStan 依据 Throwable::getCode(): int 推断为 int, 这里显式声明联合类型
         /** @var int|string $rawCode */
         $rawCode = $e->getCode();
         $code = (string) $rawCode;
 
-        if (
-            ('Mysql' == $type && in_array($code, ['1050', '42S01'], true)) ||
-            ('SQLite' == $type && in_array($code, ['HY000', '1'], true)) ||
-            ('Pgsql' == $type && in_array($code, ['42P07'], true))
-        ) {
+        if (in_array($code, ['HY000', '1'], true)) {
             if ($config['dbNext'] == 'keep') {
                 if (install_check('db_data')) {
                     install_success(0);

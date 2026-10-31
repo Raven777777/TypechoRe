@@ -295,15 +295,12 @@ class Passkey extends BaseOptions implements ActionInterface
         }
 
         $prefix = $this->db->getPrefix();
-        $driver = strtolower((string) $this->db->getAdapterName());
-        if (false !== strpos($driver, 'sqlite')) {
-            $sql = "CREATE TABLE IF NOT EXISTS {$prefix}passkeys (id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER NOT NULL, credential_id TEXT NOT NULL UNIQUE, public_key TEXT NOT NULL, sign_count INTEGER NOT NULL DEFAULT 0, transports TEXT NOT NULL DEFAULT '', name TEXT NOT NULL, created INTEGER NOT NULL, last_used INTEGER NOT NULL DEFAULT 0)";
-        } elseif (false !== strpos($driver, 'pgsql')) {
-            $sql = "CREATE TABLE IF NOT EXISTS {$prefix}passkeys (id SERIAL PRIMARY KEY, uid INTEGER NOT NULL, credential_id VARCHAR(512) NOT NULL UNIQUE, public_key TEXT NOT NULL, sign_count INTEGER NOT NULL DEFAULT 0, transports VARCHAR(255) NOT NULL DEFAULT '', name VARCHAR(100) NOT NULL, created INTEGER NOT NULL, last_used INTEGER NOT NULL DEFAULT 0)";
-        } else {
-            $sql = "CREATE TABLE IF NOT EXISTS {$prefix}passkeys (id INTEGER PRIMARY KEY AUTO_INCREMENT, uid INTEGER NOT NULL, credential_id VARCHAR(512) NOT NULL UNIQUE, public_key TEXT NOT NULL, sign_count INTEGER NOT NULL DEFAULT 0, transports VARCHAR(255) NOT NULL DEFAULT '', name VARCHAR(100) NOT NULL, created INTEGER NOT NULL, last_used INTEGER NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-        }
-        $this->db->query($sql);
+        $this->db->query(
+            "CREATE TABLE IF NOT EXISTS {$prefix}passkeys (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            . " uid INTEGER NOT NULL, credential_id TEXT NOT NULL UNIQUE, public_key TEXT NOT NULL,"
+            . " sign_count INTEGER NOT NULL DEFAULT 0, transports TEXT NOT NULL DEFAULT '',"
+            . " name TEXT NOT NULL, created INTEGER NOT NULL, last_used INTEGER NOT NULL DEFAULT 0)"
+        );
         self::$tableReady = true;
     }
 

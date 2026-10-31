@@ -62,7 +62,6 @@ class Backup extends BaseOptions implements ActionInterface
     /**
      * @var array
      */
-    private array $lastIds = [];
 
     /**
      * @var array
@@ -179,11 +178,6 @@ class Backup extends BaseOptions implements ActionInterface
 
             if ($index !== false) {
                 $result[$key] = $val;
-
-                if ($index === 0 && !in_array($table, ['relationships', 'fields'])) {
-                    $this->lastIds[$table] = isset($this->lastIds[$table])
-                        ? max($this->lastIds[$table], $val) : $val;
-                }
             }
         }
 
@@ -283,14 +277,6 @@ class Backup extends BaseOptions implements ActionInterface
 
             [$type, $header, $body] = $data;
             $this->processData($type, $header, $body);
-        }
-
-        // 针对PGSQL重置计数
-        if (false !== strpos(strtolower($this->db->getAdapterName()), 'pgsql')) {
-            foreach ($this->lastIds as $table => $id) {
-                $seq = $this->db->getPrefix() . $table . '_seq';
-                $this->db->query('ALTER SEQUENCE ' . $seq . ' RESTART WITH ' . ($id + 1));
-            }
         }
 
         @fclose($fp);

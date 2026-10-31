@@ -74,12 +74,4 @@ trait SQLiteTrait
     {
         return $this->buildQuery($sql);
     }
-
-    /**
-     * @return string
-     */
-    public function getDriver(): string
-    {
-        return 'sqlite';
-    }
 }

@@ -72,8 +72,7 @@ try {
     & $php tools/audit-override.php
     if ($LASTEXITCODE -ne 0) { throw 'PHP #[\Override] audit failed.' }
 
-    # 数据库适配器集成测试: 默认只跑 SQLite; MySQL/PostgreSQL 需通过
-    # TYPECHORE_TEST_ADAPTER / TYPECHORE_TEST_HOST 等环境变量指定
+    # 数据库适配器集成测试: 只跑 SQLite / Pdo_SQLite (本项目已不支持其它数据库)
     & $php tests/integration.php
     if ($LASTEXITCODE -ne 0) { throw 'Database integration test failed.' }
 

@@ -38,3 +38,6 @@ Thumbs.db
 # 本地临时目录 (PHPStan 缓存等; Windows 上跑 phpstan 需要把 TMPDIR/TEMP/TMP 指到可写目录)
 .tmp/
 .tmp-test/
+
+# tools/quality.ps1 下载的 PHPStan phar
+tools/phpstan/

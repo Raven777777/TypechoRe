@@ -3,7 +3,26 @@
 本文件记录 TypechoRe 各版本的代码级改动。主题改动见
 [`usr/themes/default/CHANGELOG.md`](usr/themes/default/CHANGELOG.md)。
 
-## 未发布
+## 1.3.3（未发布）
+
+1.3.3 是缺陷修复版本，主体是新增匿名全页缓存与移除非 SQLite 数据库支持。
+
+### 破坏性变更: 移除 XML-RPC 与所有非 SQLite 数据库
+
+- **删除整套 XML-RPC**: `var/IXR/**`（11 个文件）、`var/Widget/XmlRpc.php`、
+  `action/xmlrpc` 路由、`allowXmlRpc` / `xmlrpcMarkdown` 选项与后台表单项、
+  页面头部的 `pingback` / `EditURI`(RSD) / `wlwmanifest` 链接与 `X-Pingback`
+  响应头、`Widget\Service` 的对外 pingback 发送（trackback 与站内引用通告列表保留）。
+  可选依赖的 XML-RPC 客户端不复存在，离线写作类工具（Windows Live Writer、MarsEdit 等）
+  不再可用
+- **删除 MySQL / MariaDB / PostgreSQL 支持**: `Mysqli`、`MysqlTrait`、`Pgsql`、
+  `PgsqlTrait`、`Pdo\Mysql`、`Pdo\Pgsql` 适配器与 `install/{Mysql,Pgsql}.{php,sql}`
+  已删除。`new \Typecho\Db()` 只接受 `SQLite` / `Pdo_SQLite`，其它适配器名直接抛出
+  `DbException`（只有 SQLite adapters are supported），安装向导只提供 SQLite，
+  `TYPECHORE_TEST_ADAPTER` 传其它值会判失败
+- 顺带清理：`Typecho_Db_Adapter_Mysql` 旧类名别名、`Db\Adapter::getDriver()`、
+  `Widget\Backup::$lastIds`（仅为 PostgreSQL 序列重置而生）、`Utils\Upgrade::v1_3_2()`
+  的 MySQL/PostgreSQL DDL 分支
 
 ### 缓存: 匿名全页缓存
 

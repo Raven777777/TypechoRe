@@ -38,13 +38,6 @@ interface Adapter
     public function getVersion($handle): string;
 
     /**
-     * 获取数据库类型
-     *
-     * @return string
-     */
-    public function getDriver(): string;
-
-    /**
      * 清空数据表
      *
      * @param string $table 数据表名
@@ -55,9 +48,8 @@ interface Adapter
     /**
      * 执行数据库查询
      *
-     * PHP 8 起各数据库扩展的查询句柄均为对象 (PDOStatement / mysqli_result /
-     * SQLite3Result / PgSql\Result), 不再是 resource, 因此接口只描述为 mixed,
-     * 具体类型由各适配器声明。
+     * PHP 8 起查询句柄为对象 (PDOStatement / SQLite3Result), 不再是 resource,
+     * 因此接口只描述为 mixed, 具体类型由各适配器声明。
      *
      * @param string $query 数据库查询SQL字符串
      * @param mixed $handle 连接对象

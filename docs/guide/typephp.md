@@ -149,7 +149,7 @@ tools\typephp\runner\typechore-runner.exe > page.html
 `PHPRC` 指向的 php.ini 决定可用扩展。实测：**不设** `PHPRC` 时只有静态编译进去的
 `json`/`session`/`zlib`/`dom` 可用（`pdo_sqlite=no`、`mb_strlen` 不存在，连 SQLite 都连不上）；
 指向普通 php.ini 后 `pdo_sqlite`/`sqlite3`/`mbstring`/`openssl`/`curl`/`dom` 全部可用，
-`PDO::getAvailableDrivers()` 返回 `mysql,pgsql,sqlite`，`sqlite::memory:` 建表读写正常。
+`PDO::getAvailableDrivers()` 返回 `sqlite`，`sqlite::memory:` 建表读写正常。
 也就是说：**二进制必须随包带 `php.ini` 与 `ext\`，否则站点起不来。**
 
 ## 运行时依赖

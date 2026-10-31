@@ -144,7 +144,7 @@ namespace Typecho {
                 $path = str_replace('\\', '/', $className);
             }
         } elseif (str_contains($className, '_') || $isAlias) {
-            $isPlugin = !$isAlias && !preg_match("/^(Typecho|Widget|IXR)_/", $className);
+            $isPlugin = !$isAlias && !preg_match("/^(Typecho|Widget)_/", $className);
 
             if ($isPlugin) {
                 $alias = '\\TypechoPlugin\\' . str_replace('_', '\\', $className);
@@ -213,7 +213,7 @@ namespace Typecho {
     class Common
     {
         /** 程序版本 */
-        public const VERSION = '1.4.0';
+        public const VERSION = '1.3.3';
 
         /** 程序名称 (Fork 版本) */
         public const SOFTWARE = 'TypechoRe';
@@ -229,7 +229,6 @@ namespace Typecho {
         public const CLASS_ALIASES = [
             'Typecho_Plugin_Interface'    => '\Typecho\Plugin\PluginInterface',
             'Typecho_Widget_Helper_Empty' => '\Typecho\Widget\Helper\EmptyClass',
-            'Typecho_Db_Adapter_Mysql'    => '\Typecho\Db\Adapter\Mysqli',
             'Widget_Abstract'             => '\Widget\Base',
             'Widget_Abstract_Contents'    => '\Widget\Base\Contents',
             'Widget_Abstract_Comments'    => '\Widget\Base\Comments',

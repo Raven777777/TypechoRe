@@ -108,12 +108,17 @@ class Db
      */
     public function __construct($adapterName, string $prefix = 'typecho_')
     {
-        /** 获取适配器名称 */
-        $adapterName = $adapterName == 'Mysql' ? 'Mysqli' : $adapterName;
-        $this->adapterName = $adapterName;
+        /** 仅支持 SQLite: 其它数据库请修改 config.inc.php 中的适配器 */
+        $this->adapterName = (string) $adapterName;
+
+        if (!in_array($this->adapterName, ['SQLite', 'Pdo_SQLite'], true)) {
+            throw new DbException(
+                "Only the SQLite adapters are supported ('SQLite', 'Pdo_SQLite'), got '{$this->adapterName}'"
+            );
+        }
 
         /** 数据库适配器 */
-        $adapterName = '\Typecho\Db\Adapter\\' . str_replace('_', '\\', $adapterName);
+        $adapterName = '\Typecho\Db\Adapter\\' . str_replace('_', '\\', $this->adapterName);
 
         if (!$adapterName::isAvailable()) {
             throw new DbException("Adapter {$adapterName} is not available");
@@ -385,8 +390,7 @@ class Db
             return $callback();
         }
 
-        $begin = str_contains(strtolower($this->adapterName), 'sqlite') ? 'BEGIN IMMEDIATE' : 'BEGIN';
-        $this->query($begin, self::WRITE, '');
+        $this->query('BEGIN IMMEDIATE', self::WRITE, '');
         $this->inTransaction = true;
 
         try {

@@ -33,8 +33,3 @@ parameters:
         -
             identifier: property.onlyWritten
             message: '#^Property Typecho\\Plugin::\$signal is never read, only written\.$#'
-        # IXR\Client::__call() 是 XML-RPC 方法名的通用派发 (如 pingback.ping),
-        # 方法名由远端接口决定, 无法穷举。
-        -
-            identifier: method.notFound
-            message: '#^Call to an undefined method IXR\\Client::#'

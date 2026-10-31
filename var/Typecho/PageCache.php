@@ -23,7 +23,7 @@ final class PageCache
             && !self::hasStateCookie()
             && ($_SERVER['HTTP_AUTHORIZATION'] ?? '') === ''
             && ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '') === ''
-            && !preg_match('~/(?:admin|action|feed|sitemap|xmlrpc)(?:/|\.|$)~i', $path)
+            && !preg_match('~/(?:admin|action|feed|sitemap)(?:/|\.|$)~i', $path)
             && !self::rendersWholePage();
     }
 

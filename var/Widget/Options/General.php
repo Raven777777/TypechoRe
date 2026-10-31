@@ -109,7 +109,6 @@ class General extends Options implements ActionInterface
             'description',
             'keywords',
             'allowRegister',
-            'allowXmlRpc',
             'lang',
             'timezone'
         );
@@ -216,15 +215,6 @@ class General extends Options implements ActionInterface
             _t('允许访问者注册到你的网站, 默认的注册用户不享有任何写入权限.')
         );
         $form->addInput($allowRegister);
-
-        /** XMLRPC */
-        $allowXmlRpc = new Form\Element\Radio(
-            'allowXmlRpc',
-            ['0' => _t('关闭'), '1' => _t('仅关闭 Pingback 接口'), '2' => _t('打开')],
-            $this->options->allowXmlRpc,
-            _t('XMLRPC 接口')
-        );
-        $form->addInput($allowXmlRpc);
 
         /** 语言项 */
         // hack 语言扫描

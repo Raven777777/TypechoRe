@@ -299,14 +299,26 @@ class Edit extends Metas implements ActionInterface
             /**
              * 不能挂到自己或自己的子孙下面: 这样树里会出现环,
              * 环上的分类在列表里会直接消失, 其文章也不会再出现在归档里。
+             * 顺着"新父分类"的祖先链往上走, 撞到自己就是环; 走不到根说明父分类不存在。
              */
-            if (
-                $parentId === (int) $category['mid']
-                || ($parentId > 0 && in_array($parentId, array_map('intval', $this->getAllChildIds((int) $category['mid'])), true))
-                || ($parentId > 0 && null === $this->getRow($parentId))
-            ) {
-                Notice::alloc()->set(_t('不能把分类移动到自己或自己的子分类下'), 'error');
-                $this->response->goBack();
+            $ancestor = $parentId;
+            $visited = [];
+
+            while ($ancestor > 0) {
+                if ($ancestor === (int) $category['mid'] || isset($visited[$ancestor])) {
+                    Notice::alloc()->set(_t('不能把分类移动到自己或自己的子分类下'), 'error');
+                    $this->response->goBack();
+                }
+
+                $visited[$ancestor] = true;
+                $row = $this->db->fetchRow($this->select('mid', 'parent')->where('mid = ?', $ancestor));
+
+                if (empty($row)) {
+                    Notice::alloc()->set(_t('父分类不存在'), 'error');
+                    $this->response->goBack();
+                }
+
+                $ancestor = (int) $row['parent'];
             }
 
             $category['order'] = $this->getMaxOrder('category', $parentId) + 1;

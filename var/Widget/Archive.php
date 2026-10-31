@@ -1006,9 +1006,6 @@ class Archive extends Contents
             'keywords'     => htmlspecialchars($this->archiveKeywords ?? ''),
             'generator'    => $this->options->generator,
             'template'     => $this->options->theme,
-            'pingback'     => $this->options->xmlRpcUrl,
-            'xmlrpc'       => $this->options->xmlRpcUrl . '?rsd',
-            'wlw'          => $this->options->xmlRpcUrl . '?wlw',
             'rss2'         => $this->archiveFeedUrl,
             'rss1'         => $this->archiveFeedRssUrl,
             'commentReply' => 1,
@@ -1029,20 +1026,6 @@ class Archive extends Contents
         $title = (empty($this->archiveTitle) ? '' : $this->archiveTitle . ' &raquo; ') . $this->options->title;
 
         $header = ($this->is('single') && !$this->is('index')) ? '<link rel="canonical" href="' . $this->archiveUrl . '" />' . "\n" : '';
-
-        if (!empty($allows['pingback']) && 2 == $this->options->allowXmlRpc) {
-            $header .= '<link rel="pingback" href="' . $allows['pingback'] . '" />' . "\n";
-        }
-
-        if (!empty($allows['xmlrpc']) && 0 < $this->options->allowXmlRpc) {
-            $header .= '<link rel="EditURI" type="application/rsd+xml" title="RSD" href="'
-                . $allows['xmlrpc'] . '" />' . "\n";
-        }
-
-        if (!empty($allows['wlw']) && 0 < $this->options->allowXmlRpc) {
-            $header .= '<link rel="wlwmanifest" type="application/wlwmanifest+xml" href="'
-                . $allows['wlw'] . '" />' . "\n";
-        }
 
         if (!empty($allows['rss2']) && $allowFeed) {
             $header .= '<link rel="alternate" type="application/rss+xml" title="'
@@ -1331,10 +1314,6 @@ EOF;
         /** 处理静态链接跳转 */
         $this->checkPermalink();
 
-        /** 添加Pingback */
-        if (2 == $this->options->allowXmlRpc) {
-            $this->response->setHeader('X-Pingback', $this->options->xmlRpcUrl);
-        }
         $valid = false;
 
         //~ 自定义模板
@@ -2122,10 +2101,8 @@ EOF;
                 $select->where("table.contents.password IS NULL OR table.contents.password = ''");
             }
 
-            $op = $this->db->getAdapter()->getDriver() == 'pgsql' ? 'ILIKE' : 'LIKE';
-
             $select->where(
-                "table.contents.title {$op} ? ESCAPE '!' OR table.contents.text {$op} ? ESCAPE '!'",
+                "table.contents.title LIKE ? ESCAPE '!' OR table.contents.text LIKE ? ESCAPE '!'",
                 $searchQuery,
                 $searchQuery
             )

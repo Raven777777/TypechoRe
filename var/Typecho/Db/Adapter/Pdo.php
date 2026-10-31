@@ -11,7 +11,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 }
 
 /**
- * 数据库PDOMysql适配器
+ * 数据库 PDO 适配器基类
  *
  * @package Db
  */
