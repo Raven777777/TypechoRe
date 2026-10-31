@@ -23,7 +23,7 @@ body>nav{margin-top:1rem;color:var(--muted);font-size:1em}
 ::selection{background:#284b63;color:#fff}
 .c{color:#8a8a94}
 .s{color:#9df}
-.n,.l{color:#7bf}
+.n,.l,.p{color:#7bf}
 .k,.o{color:#f88}
 .f{color:#c9f}
 .v{color:#fa6}
@@ -33,11 +33,11 @@ body>nav{margin-top:1rem;color:var(--muted);font-size:1em}
 .comment-list li{margin:1.2em 0}
 .comment-list .comment-author{color:#f0f0f4}
 .comment-list .comment-content{margin:.3em 0 0}
-.comment-list .comment-reply,.cancel-comment-reply{font-size:.9em}
-textarea,button{font:inherit;color:inherit;background:#17171b;border:1px solid var(--line);border-radius:6px;padding:.35em .6em;max-width:100%;box-sizing:border-box}
-textarea{width:100%}
+.comment-list .comment-reply,#cancel-comment-reply-link{font-size:.9em}
+input,textarea,button{font:inherit;color:inherit;background:#17171b;border:1px solid var(--line);border-radius:6px;padding:.35em .6em;max-width:100%;box-sizing:border-box}
+input,textarea{width:100%}
 button{cursor:pointer;color:var(--accent)}
 .notice-box{color:#f88}
 .tag-cloud{line-height:2.2}
-.tag-cloud a{display:inline-block;margin:0 .8em .2em 0;white-space:nowrap}
+.tag-cloud a{display:inline-block;margin:0 .8em .2em 0;white-space:normal;overflow-wrap:anywhere}
 .tag-cloud small{margin-left:.25em;font-size:.62em;color:var(--muted)}

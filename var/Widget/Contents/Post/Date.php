@@ -17,6 +17,12 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @author qining
  * @category typecho
  * @package Widget
+ * @property string $date
+ * @property string $year
+ * @property string $month
+ * @property string $day
+ * @property int $count
+ * @property-read string $permalink
  */
 class Date extends Base
 {

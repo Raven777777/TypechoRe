@@ -21,7 +21,7 @@ $bits[] = (string) ob_get_clean();
 ob_start();
 $this->thePrev('%s', '', ['title' => 'Old']);
 $bits[] = (string) ob_get_clean();
-$bits = array_values(array_filter($bits, 'strlen'));
+$bits = array_values(array_filter($bits));
 if ($bits): ?>
 <nav><?php echo implode(' · ', $bits); ?></nav>
 <?php endif; ?>

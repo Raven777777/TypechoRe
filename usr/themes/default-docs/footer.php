@@ -19,7 +19,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
         box.textContent = JSON.parse(decodeURIComponent(m[2])).join('\n');
         box.hidden = false;
     } catch (e) { return; }
-    document.cookie = m[1] + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+    document.cookie = m[1] + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path='
+        + <?php echo json_encode(\Typecho\Common::url(null, parse_url((string) $this->options->rootUrl, PHP_URL_PATH))); ?>;
 })();
 </script>
 <?php $this->footer(); ?>

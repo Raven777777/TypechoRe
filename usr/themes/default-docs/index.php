@@ -6,6 +6,8 @@
  * @author TypechoRe
  * @version 1.0.0
  * @link https://github.com/Raven777777/TypechoRe
+ *
+ * @var Widget\Archive $this
  */
 
 if (!defined('__TYPECHO_ROOT_DIR__')) {
@@ -16,7 +18,7 @@ $this->need('header.php');
 ?>
 <h1><?php $this->options->title(); ?></h1>
 <?php
-$pages = $this->widget('Widget\Contents\Page\Rows');
+$pages = \Widget\Contents\Page\Rows::alloc();
 $pageLinks = [];
 while ($pages->next()) {
     // 分类/归档索引页只作为导航，不重复列在独立页链接里

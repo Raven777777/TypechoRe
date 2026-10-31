@@ -75,3 +75,22 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 }
 
 console.log('PASS: frontend audit regressions (editor, profile URL, comment refresh)');
+
+// default-docs: index pages are created by PHP once, never re-published or duplicated.
+{
+  const functions = read('usr/themes/default-docs/functions.php');
+  assert.match(functions, /function themeInit/, 'theme must create index pages in PHP');
+  assert.match(functions, /transaction\(/, 'index page creation must be atomic');
+  assert.doesNotMatch(functions, /transaction\(\s*static function\s*\([^)]*[\w$]/,
+    'transaction callback is invoked without arguments, it must not require one');
+  assert.match(functions, /default_docs_indexes/, 'creation must be guarded by a one-time marker');
+  assert.doesNotMatch(functions, /\$i\+\+/, 'slugs must not be suffixed into duplicate pages');
+  const comments = read('usr/themes/default-docs/comments.php');
+  for (const field of ['author', 'mail', 'url']) {
+    assert.match(comments, new RegExp(`<input[^>]+name="${field}"[^>]+id="${field}"`), `${field} must be a normal input`);
+    assert.match(comments, new RegExp(`<label for="${field}">`), `${field} needs a label`);
+  }
+  assert.match(comments, /<label for="textarea">/);
+  assert.doesNotMatch(comments, /textarea\.value\s*=|querySelector\('#author'\)/, 'comment text must not be parsed for identity');
+}
+console.log('PASS: default-docs regressions (one-time PHP pages, labelled comment fields)');

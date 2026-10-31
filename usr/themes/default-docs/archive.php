@@ -22,10 +22,10 @@ if ($this->is('date') && $year > 0) {
     $archiveLink = $archiveUrl
         ? '<a href="' . htmlspecialchars($archiveUrl, ENT_QUOTES, 'UTF-8') . '">archive</a>'
         : 'archive';
-    $heading = '<a href="' . $this->options->siteUrl . '">home</a>/' . $archiveLink . '/'
+    $heading = '<a href="' . htmlspecialchars($this->options->siteUrl, ENT_QUOTES, 'UTF-8') . '">home</a>/' . $archiveLink . '/'
         . htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
 } else {
-    $heading = '<a href="' . $this->options->siteUrl . '">home</a>/'
+    $heading = '<a href="' . htmlspecialchars($this->options->siteUrl, ENT_QUOTES, 'UTF-8') . '">home</a>/'
         . htmlspecialchars((string) $this->getArchiveTitle(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 ?>

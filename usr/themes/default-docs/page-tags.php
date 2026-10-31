@@ -4,6 +4,8 @@
  *
  * @package custom
  * @description 标签索引页
+ *
+ * @var Widget\Archive $this
  */
 
 if (!defined('__TYPECHO_ROOT_DIR__')) {
@@ -12,7 +14,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 
 $this->need('header.php');
 
-$tags = $this->widget('Widget\Metas\Tag\Cloud', 'sort=count&desc=1&ignoreZeroCount=1');
+$tags = \Widget\Metas\Tag\Cloud::alloc('sort=count&desc=1&ignoreZeroCount=1');
 $items = [];
 $max = 0;
 $min = null;

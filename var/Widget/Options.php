@@ -110,6 +110,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property string $faviconUrl
  * @property string $logoUrl
  * @property bool $showTagCloud
+ * default-docs 主题: 索引页已创建标记, 由主题首次启用时写入
+ * @property string $default_docs_indexes
  *
  * @method void charset()
  * @method void title()

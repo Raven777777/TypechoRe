@@ -4,6 +4,8 @@
  *
  * @package custom
  * @description 分类索引页
+ *
+ * @var Widget\Archive $this
  */
 
 if (!defined('__TYPECHO_ROOT_DIR__')) {
@@ -12,7 +14,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 
 $this->need('header.php');
 
-$categories = $this->widget('Widget\Metas\Category\Rows');
+$categories = \Widget\Metas\Category\Rows::alloc();
 $rows = [];
 while ($categories->next()) {
     $rows[] = '<a href="' . htmlspecialchars((string) $categories->permalink, ENT_QUOTES, 'UTF-8') . '">'

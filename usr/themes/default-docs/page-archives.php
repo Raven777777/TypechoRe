@@ -4,6 +4,8 @@
  *
  * @package custom
  * @description 归档索引页
+ *
+ * @var Widget\Archive $this
  */
 
 if (!defined('__TYPECHO_ROOT_DIR__')) {
@@ -12,7 +14,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 
 $this->need('header.php');
 
-$archives = $this->widget('Widget\Contents\Post\Date', 'format=Y-m&type=month');
+$archives = \Widget\Contents\Post\Date::alloc('format=Y-m&type=month');
 $rows = [];
 while ($archives->next()) {
     $rows[] = '<a href="' . htmlspecialchars((string) $archives->permalink, ENT_QUOTES, 'UTF-8') . '">'
