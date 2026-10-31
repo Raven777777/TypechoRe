@@ -26,7 +26,9 @@ python tools/build_release.py --require-minify
 # 只验证打包逻辑（含对压缩结果的断言）
 python tests/build_release.py
 
-# 一次性质量门禁
+# 一次性质量门禁 (PHPStan 与 Semgrep 会自己装到 .tools/, 装过就不再下载)
+# Linux 上先备好: php 8.5、node/npm、python3 + python3-venv、PowerShell(pwsh)
+# 只有设了 SEMGREP_APP_TOKEN 才会跑 Pro 规则; 没设时只有社区规则 (规则数比 CI 少)
 pwsh tools/quality.ps1
 ```
 
