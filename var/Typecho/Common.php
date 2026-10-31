@@ -213,7 +213,7 @@ namespace Typecho {
     class Common
     {
         /** 程序版本 */
-        public const VERSION = '1.3.3';
+        public const VERSION = '1.3.4';
 
         /** 程序名称 (Fork 版本) */
         public const SOFTWARE = 'TypechoRe';
@@ -282,6 +282,10 @@ namespace Typecho {
 
         public static function isSameOrigin(?string $source, ?string $target): bool
         {
+            // Browsers treat backslashes as HTTP URL separators; parse_url does not.
+            if (str_contains($source ?? '', '\\') || str_contains($target ?? '', '\\')) {
+                return false;
+            }
             $source = null === $source ? false : parse_url($source);
             $target = null === $target ? false : parse_url($target);
             if (

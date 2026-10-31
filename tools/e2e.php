@@ -658,6 +658,29 @@ assertTrue(str_contains($notFound, '404') || str_contains($notFound, '没有找�
 assertResponse($site->get('/index.php/sitemap.xml'), [200], 'GET sitemap.xml');
 assertResponse($site->get('/index.php/feed/'), [200], 'GET feed');
 
+// ---------------------------------------------------------------- registration trust boundary
+
+step('registration request validation');
+sitePhp($php, $siteDir, "\$db->query(\$db->update('table.options')->rows(['value' => '1'])->where('name = ?', 'allowRegister')); ");
+$registrationProbe = new Site("http://127.0.0.1:{$port}", $verbose);
+$registrationPage = assertResponse($registrationProbe->get('/admin/register.php'), [200], 'GET registration form');
+assertTrue((bool) preg_match('/<form[^>]+action="([^"]+)"/', $registrationPage, $registrationMatch), 'registration form has no action');
+$registrationAction = html_entity_decode($registrationMatch[1]);
+$registrationData = ['name' => 'auditmember', 'mail' => 'auditmember@example.test',
+    'password' => 'audit-Reg-Pass1', 'confirm' => 'audit-Reg-Pass1'];
+assertResponse($registrationProbe->get($registrationAction . '&' . http_build_query($registrationData)), [405], 'registration rejects GET');
+assertResponse($registrationProbe->post($registrationAction, $registrationData,
+    ['Origin' => 'https://evil.invalid', 'Referer' => 'https://evil.invalid/']), [403], 'registration rejects foreign origin');
+assertTrue(sitePhp($php, $siteDir, "echo \$db->fetchObject(\$db->select(['COUNT(*)' => 'num'])->from('table.users'))->num;") === '1',
+    'rejected registration created an account');
+assertResponse($registrationProbe->post($registrationAction . '&name=queryattacker&mail=query@example.test&password=query-password',
+    $registrationData, ['Origin' => "http://127.0.0.1:{$port}"]), [302], 'same-origin POST registration');
+assertResponse($registrationProbe->get('/admin/welcome.php'), [200], 'registered user welcome');
+$registeredProfile = assertResponse($registrationProbe->get('/admin/profile.php'), [200], 'registered user profile');
+assertTrue(str_contains($registeredProfile, 'auditmember@example.test') && !str_contains($registeredProfile, 'query@example.test'),
+    'query credentials overrode POST registration or legitimate registration failed');
+sitePhp($php, $siteDir, "\$db->query(\$db->update('table.options')->rows(['value' => '0'])->where('name = ?', 'allowRegister')); ");
+
 // ---------------------------------------------------------------- admin login
 
 step('admin login');
@@ -680,7 +703,8 @@ assertTrue($probe->get('/admin/profile.php')['status'] === 302, 'query-only cred
 $probe->post($queryCredentials, ['name' => $adminUser, 'password' => 'wrong-password'],
     ['Referer' => "http://127.0.0.1:{$port}/admin/login.php"]);
 assertTrue($probe->get('/admin/profile.php')['status'] === 302, 'query credentials overrode the POST body');
-foreach (['/<b>/evil.invalid/', "/\t\\evil.invalid/", "http://127.0.0.1:1/", '/%0%0ad/evil.invalid/'] as $badReferer) {
+foreach (['/<b>/evil.invalid/', "/\t\\evil.invalid/", "http://127.0.0.1:1/", '/%0%0ad/evil.invalid/',
+    "http://evil.invalid\\@127.0.0.1:{$port}/admin/"] as $badReferer) {
     $redirectProbe = new Site("http://127.0.0.1:{$port}", $verbose);
     $redirect = $redirectProbe->post($loginAction, [
         'name' => $adminUser, 'password' => $adminPassword, 'referer' => $badReferer,

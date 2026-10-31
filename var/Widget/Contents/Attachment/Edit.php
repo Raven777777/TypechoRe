@@ -262,7 +262,7 @@ class Edit extends Contents implements ActionInterface
                 $lastId = (int)end($posts);
             }
 
-            $this->deleteByIds($posts, $deleteCount);
+            $this->deleteByIds($posts, $deleteCount, true);
         } while (count($posts) == 100);
 
         /** 设置提示信息 */
@@ -307,35 +307,62 @@ class Edit extends Contents implements ActionInterface
      * @param int $deleteCount
      * @return void
      */
-    protected function deleteByIds(array $posts, int &$deleteCount): void
+    protected function deleteByIds(array $posts, int &$deleteCount, bool $unarchivedOnly = false): void
     {
         foreach ($posts as $post) {
-            $condition = $this->db->sql()->where('cid = ? AND type = ?', $post, 'attachment');
-            $row = $this->db->fetchRow($this->select()
-                ->where('table.contents.type = ?', 'attachment')
-                ->where('table.contents.cid = ?', $post)
-                ->limit(1));
-
-            if (!$row || !$this->isWriteable(clone $condition)) {
-                continue;
+            $path = $staged = null;
+            try {
+                $deleted = $this->db->transaction(function () use ($post, $unarchivedOnly, &$path, &$staged): bool {
+                    $condition = $this->db->sql()->where('cid = ? AND type = ?', $post, 'attachment');
+                    if ($unarchivedOnly) {
+                        $condition->where('parent = ?', 0);
+                    }
+                    $row = $this->db->fetchRow((clone $condition)->select('*')->from('table.contents')->limit(1));
+                    if (!$row || !$this->isWriteable(clone $condition)) {
+                        return false;
+                    }
+                    $this->push($row);
+                    self::pluginHandle()->call('delete', $post, $this);
+                    $content = $this->toColumn(['cid', 'attachment', 'parent']);
+                    $custom = !empty(\Typecho\Plugin::export()['handles']['Widget_Upload:deleteHandle']);
+                    if (!$custom) {
+                        $path = Common::url($content['attachment']->path,
+                            defined('__TYPECHO_UPLOAD_ROOT_DIR__') ? __TYPECHO_UPLOAD_ROOT_DIR__ : __TYPECHO_ROOT_DIR__);
+                        if (file_exists($path) || is_link($path)) {
+                            $temporary = @tempnam(dirname($path), '.typechore-delete-');
+                            if ($temporary === false) {
+                                return false;
+                            }
+                            if (!@rename($path, $temporary)) {
+                                @unlink($temporary);
+                                return false;
+                            }
+                            $staged = $temporary;
+                        }
+                    }
+                    // shortcut: external storage hooks cannot undo deletion on DB failure; require reversible hooks to extend this guarantee.
+                    if ($custom && !Upload::deleteHandle($content)) {
+                        return false;
+                    }
+                    if (!$this->delete($condition)) {
+                        throw new Exception(_t('文件记录删除失败'), 500);
+                    }
+                    $this->db->query($this->db->delete('table.comments')->where('cid = ?', $post));
+                    return true;
+                });
+            } catch (\Throwable $e) {
+                if ($staged !== null && !@rename($staged, $path)) {
+                    throw new \RuntimeException('Could not restore attachment from ' . $staged, 500, $e);
+                }
+                throw $e;
             }
-            $this->push($row);
-            self::pluginHandle()->call('delete', $post, $this);
-
-            // Keep the record if the file cannot be removed, so deletion can be retried.
-            if (Upload::deleteHandle($this->toColumn(['cid', 'attachment', 'parent'])) && $this->delete($condition)) {
-
-                /** 删除评论 */
-                $this->db->query($this->db->delete('table.comments')
-                    ->where('cid = ?', $post));
-
-                // 完成删除插件接口
+            if ($deleted) {
+                if ($staged !== null && !@unlink($staged)) {
+                    error_log('Could not remove staged attachment: ' . $staged);
+                }
                 self::pluginHandle()->call('finishDelete', $post, $this);
-
                 $deleteCount++;
             }
-
-            unset($condition);
         }
     }
 }

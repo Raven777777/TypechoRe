@@ -273,6 +273,8 @@ function checkRegressions(Db $db, string $sqliteFile): void
     $db->query($db->insert('table.relationships')->rows(['cid' => 1, 'mid' => 1]));
     checkPrefetchRegressions($db, $options);
     checkBackupRegressions($db, $sqliteFile, $options);
+    require_once __DIR__ . '/audit-regressions.php';
+    checkAuditRegressions($db);
 }
 
 /**

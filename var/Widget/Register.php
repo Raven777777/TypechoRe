@@ -32,8 +32,19 @@ class Register extends Users implements ActionInterface
     #[\Override]
     public function action()
     {
-        // protect
+        if (!$this->request->isPost()) {
+            throw new \Typecho\Widget\Exception(_t('请使用 POST 方式注册'), 405);
+        }
+        $origin = $this->request->getServer('HTTP_ORIGIN') ?: $this->request->getReferer();
+        if (!Common::isSameOrigin($origin, $this->options->rootUrl)
+            && !Common::isSameOrigin($origin, $this->options->adminUrl)) {
+            throw new \Typecho\Widget\Exception(_t('注册请求来源无效'), 403);
+        }
         $this->security->protect();
+        $credentials = [];
+        foreach (['name', 'mail', 'password', 'confirm'] as $name) {
+            $credentials[$name] = is_string($_POST[$name] ?? null) ? $_POST[$name] : '';
+        }
 
         /** 如果已经登录 */
         if ($this->user->hasLogin() || !$this->options->allowRegister) {
@@ -61,21 +72,21 @@ class Register extends Users implements ActionInterface
         $validator->addRule('confirm', 'confirm', _t('两次输入的密码不一致'), 'password');
 
         /** 截获验证异常 */
-        if ($error = $validator->run($this->request->from('name', 'password', 'mail', 'confirm'))) {
-            Cookie::set('__typecho_remember_name', $this->request->get('name'));
-            Cookie::set('__typecho_remember_mail', $this->request->get('mail'));
+        if ($error = $validator->run($credentials)) {
+            Cookie::set('__typecho_remember_name', $credentials['name']);
+            Cookie::set('__typecho_remember_mail', $credentials['mail']);
 
             /** 设置提示信息 */
             Notice::alloc()->set($error);
             $this->response->goBack();
         }
 
-        $password = (string) $this->request->get('password');
+        $password = $credentials['password'];
 
         $dataStruct = [
-            'name' => $this->request->get('name'),
-            'mail' => $this->request->get('mail'),
-            'screenName' => $this->request->get('name'),
+            'name' => $credentials['name'],
+            'mail' => $credentials['mail'],
+            'screenName' => $credentials['name'],
             'password' => Common::hashPassword($password),
             'created' => $this->options->time,
             'group' => 'subscriber'
@@ -89,7 +100,7 @@ class Register extends Users implements ActionInterface
 
         self::pluginHandle()->call('finishRegister', $this);
 
-        $this->user->login($this->request->get('name'), $password);
+        $this->user->login($credentials['name'], $password);
 
         Cookie::delete('__typecho_first_run');
         Cookie::delete('__typecho_remember_name');

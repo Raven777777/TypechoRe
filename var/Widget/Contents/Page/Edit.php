@@ -191,10 +191,12 @@ class Edit extends Contents implements ActionInterface
         foreach ($pages as $page) {
             // 删除插件接口
             self::pluginHandle()->call('delete', $page, $this);
-            $row = $this->db->fetchObject($this->select()->where('cid = ?', $page));
-            $parent = null === $row ? 0 : $row->parent;
-
-            if ($this->delete($this->db->sql()->where('cid = ?', $page))) {
+            $deleted = $this->db->transaction(function () use ($page): bool {
+                $row = $this->db->fetchObject($this->select()->where('cid = ?', $page));
+                $parent = null === $row ? 0 : $row->parent;
+                if (!$this->delete($this->db->sql()->where('cid = ?', $page))) {
+                    return false;
+                }
                 /** 删除评论 */
                 $this->db->query($this->db->delete('table.comments')
                     ->where('cid = ?', $page));
@@ -230,6 +232,10 @@ class Edit extends Contents implements ActionInterface
                         ->where('type = ? OR type = ?', 'page', 'page_draft')
                 );
 
+                return true;
+            });
+
+            if ($deleted) {
                 // 完成删除插件接口
                 self::pluginHandle()->call('finishDelete', $page, $this);
 

@@ -1291,12 +1291,12 @@ function enhanceCommentBox() {
         return;
       }
 
-      const freshList = incoming.querySelector('.comment-list');
+      const freshList = incoming.querySelector('.thread-list');
       /* 服务端把最新页码放在标题下面的分页里, 这里跟着回第一页 */
       const freshNav = incoming.querySelector('.page-navigator');
-      const currentList = comments.querySelector('.comment-list');
+      const currentList = comments.querySelector('.thread-list');
       const currentNav = comments.querySelector('.page-navigator');
-      /* 「暂无评论」提示在空评论区里; 空评论区抓回来的模板里没有 .comment-list,
+      /* 「暂无评论」提示在空评论区里; 空评论区抓回来的模板里没有 .thread-list,
          这时退化成整体替换整段 (#comments 的内部), 只是别忘了把评论框搬回去 */
       const anchor = currentList || currentNav;
 
@@ -1329,7 +1329,7 @@ function enhanceCommentBox() {
       const respondIsFloating = !!(previousRespond && previousRespond.classList.contains('respond-floating'));
 
       if (previousRespond && !respondIsFloating) {
-        const after = comments.querySelector('.comment-list') || comments.querySelector('.page-navigator');
+        const after = comments.querySelector('.thread-list') || comments.querySelector('.page-navigator');
 
         if (after) {
           after.after(previousRespond);

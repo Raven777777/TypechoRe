@@ -94,7 +94,7 @@ class Security extends Base
      */
     private function currentPath(): string
     {
-        return $this->normalizeTokenPath($this->request->getRequestUri() ?? '/');
+        return $this->request->getRequestUri() ?? '/';
     }
 
     /**
@@ -143,7 +143,7 @@ class Security extends Base
      */
     public function getRootUrl(?string $path): string
     {
-        return Common::url($this->getTokenUrl($path), $this->options->rootUrl);
+        return $this->getTokenUrl(Common::url($path, $this->options->rootUrl));
     }
 
     /**
@@ -187,7 +187,7 @@ class Security extends Base
      */
     public function getAdminUrl(string $path): string
     {
-        return Common::url($this->getTokenUrl($path), $this->options->adminUrl);
+        return $this->getTokenUrl(Common::url($path, $this->options->adminUrl));
     }
 
     /**
@@ -208,7 +208,7 @@ class Security extends Base
      */
     public function getIndex($path): string
     {
-        return Common::url($this->getTokenUrl($path), $this->options->index);
+        return $this->getTokenUrl(Common::url($path, $this->options->index));
     }
 }
  

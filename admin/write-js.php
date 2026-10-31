@@ -308,6 +308,7 @@ $(document).ready(function() {
             data: data,
             success: callback,
             error: function () {
+                changed = true;
                 autoSave.text(<?php echo _je('保存失败, 请重试'); ?>);
             },
             complete: function () {

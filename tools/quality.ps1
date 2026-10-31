@@ -66,6 +66,9 @@ try {
     & $php tests/smoke.php
     if ($LASTEXITCODE -ne 0) { throw 'Smoke tests failed.' }
 
+    & node tests/frontend-regressions.mjs
+    if ($LASTEXITCODE -ne 0) { throw 'Frontend regression tests failed.' }
+
     & $php tests/webauthn.php
     if ($LASTEXITCODE -ne 0) { throw 'WebAuthn ceremony tests failed.' }
 

@@ -370,7 +370,7 @@ class Feedback extends Comments implements ActionInterface
         $trackback = self::pluginHandle()->filter('trackback', $trackback, $this->content);
 
         /** 添加引用 */
-        $this->insert($trackback);
+        $this->insertComment($trackback);
 
         /** 评论完成接口 */
         self::pluginHandle()->call('finishTrackback', $this);

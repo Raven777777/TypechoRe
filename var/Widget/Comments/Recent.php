@@ -40,21 +40,25 @@ class Recent extends Comments
     #[\Override]
     public function execute()
     {
-        $select = $this->select()->limit($this->parameter->pageSize)
+        $select = $this->select('table.comments.*')->limit($this->parameter->pageSize)
+            ->join('table.contents', 'table.contents.cid = table.comments.cid')
+            ->where('table.contents.status = ?', 'publish')
+            ->where('table.contents.type = ? OR table.contents.type = ?', 'post', 'page')
+            ->where('table.contents.created <= ?', $this->options->time)
             ->where('table.comments.status = ?', 'approved')
             ->order('table.comments.coid', Db::SORT_DESC);
 
         if ($this->parameter->parentId) {
-            $select->where('cid = ?', $this->parameter->parentId);
+            $select->where('table.comments.cid = ?', $this->parameter->parentId);
         }
 
         if ($this->options->commentsShowCommentOnly) {
-            $select->where('type = ?', 'comment');
+            $select->where('table.comments.type = ?', 'comment');
         }
 
         /** 忽略作者评论 */
         if ($this->parameter->ignoreAuthor) {
-            $select->where('ownerId <> authorId');
+            $select->where('table.comments.ownerId <> table.comments.authorId');
         }
 
         $this->db->fetchAll($select, [$this, 'push']);
