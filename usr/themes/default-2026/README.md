@@ -296,6 +296,12 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
 会通过 `archiveDescription = plainExcerpt` 提前渲染并缓存正文, 主题注册的钩子会错过正文。
 插件不受此限制 (插件在引导阶段注册钩子), 其过滤结果依然会体现在 `$archive->content` 中。
 
+**置顶标记 (Sticky 插件)**: 插件把配置里的 HTML 原样写进行数据的 `sticky_html` 字段
+(同时把该行标记为 `sticky = 1`), 标题本身**不**再追加纯文本后缀, 所以 RSS 与 `<title>` 是干净的。
+`post-card.php` 用 `themeStickyBadge()` 把这段 HTML 输出在标题链接里 —— 内容来自后台
+插件配置 (与主题文件同一权限级别), 这里不再转义; 自定义模板若要显示置顶标记,
+需要自己读 `sticky_html`, 直接用 `themeTitle()` / `$this->title()` 只会拿到纯标题。
+
 ## 窄屏 (手机)
 
 - **第二列 (侧边栏 / 文章目录) 在 `lg` 以下整体隐藏** (`.page-aside` + 骨架屏的

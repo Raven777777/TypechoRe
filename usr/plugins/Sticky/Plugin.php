@@ -84,7 +84,7 @@ class Plugin implements PluginInterface
             null,
             "<span style='color:red'>[置顶]</span>",
             '置顶标题的 html',
-            '纯文本部分会追加到置顶文章标题后, 原始 HTML 保存在 sticky_html 字段供主题使用'
+            '原样保存在 sticky_html 字段, 由主题显示在置顶文章标题前 (标题本身保持干净, RSS 不带标记)'
         );
         $stickyHtml->input->setAttribute('rows', '7')->setAttribute('cols', '80');
         $form->addInput($stickyHtml);
@@ -180,7 +180,7 @@ class Plugin implements PluginInterface
     }
 
     /**
-     * 给置顶文章加上标记 (标题后缀 / sticky 字段), 供主题使用
+     * 给置顶文章加上标记 (sticky 字段 + 原始 HTML), 供主题使用
      *
      * @param array $row 文章行
      * @param mixed $widget 当前内容组件
@@ -204,15 +204,8 @@ class Plugin implements PluginInterface
             return $row;
         }
 
-        $stickyHtml = (string) $config->sticky_html;
-        $titleSuffix = self::titleSuffix($stickyHtml);
-
-        if ('' !== $titleSuffix) {
-            $row['title'] = ($row['title'] ?? '') . ' ' . $titleSuffix;
-        }
-
         $row['sticky'] = 1;
-        $row['sticky_html'] = $stickyHtml;
+        $row['sticky_html'] = (string) $config->sticky_html;
 
         return $row;
     }
@@ -236,17 +229,6 @@ class Plugin implements PluginInterface
         }
 
         return $archive->is('category') && !empty($config->sticky_cat);
-    }
-
-    /**
-     * 标题后缀: 只取纯文本 (标题会被主题转义并写进 RSS, 原始 HTML 放在 sticky_html)
-     *
-     * @param string $stickyHtml
-     * @return string
-     */
-    private static function titleSuffix(string $stickyHtml): string
-    {
-        return trim((string) preg_replace('/\s+/u', ' ', strip_tags($stickyHtml)));
     }
 
     /**

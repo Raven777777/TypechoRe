@@ -2,6 +2,14 @@
 
 本主题基于 Typecho 默认主题（Typecho Replica Theme）修改，以下仅记录本 Fork 的改动。
 
+## 未发布
+
+### 修复
+
+- 置顶标记 (Sticky 插件) 只显示成纯文本, 配置里的 `<span style="color:red">` 不生效:
+  插件改为把 HTML 原样放在行数据的 `sticky_html` 字段, 本主题的 `postMeta()` 现在把这段
+  HTML 输出在标题链接里, 标题本身也不再带纯文本后缀 (RSS 保持干净)。
+
 ## 1.3.2（2026-10-14）
 
 ### 修复

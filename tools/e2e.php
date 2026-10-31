@@ -1006,6 +1006,12 @@ assertTrue(
     str_contains($homeArticles[0], '[置顶]'),
     'sticky title suffix is missing on the front page'
 );
+/* 标记必须是 HTML 而不是纯文本: 以前插件只把 strip_tags 后的文本塞进标题, 配置里的
+   <span style="color:red"> 根本到不了页面 (主题把标题转义了)。 */
+assertTrue(
+    str_contains($homeArticles[0], '<span style="color:red">[置顶]</span>'),
+    'sticky html was flattened to plain text'
+);
 
 $secondPage = assertResponse($site->get('/index.php/page/2/'), [200], 'GET /page/2/ with Sticky enabled');
 $secondArticles = $articlesOf($secondPage);

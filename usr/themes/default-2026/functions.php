@@ -455,6 +455,22 @@ function themeTitle(callable $printer): string
 }
 
 /**
+ * 置顶标记 (插件 Sticky 把配置里的 HTML 原样放在 sticky_html 字段)
+ *
+ * 内容来自后台插件配置, 与主题文件同一权限级别, 所以原样输出; 标题里不含标记,
+ * 标记只在这里出现一次。
+ *
+ * @param \Widget\Base\Contents $content
+ * @return string
+ */
+function themeStickyBadge(\Widget\Base\Contents $content): string
+{
+    $html = trim((string) $content->sticky_html);
+
+    return $content->sticky && '' !== $html ? $html . ' ' : '';
+}
+
+/**
  * 标题的纯文本形式 (用于 JSON-LD 等非 HTML 场景)
  *
  * @param string $title

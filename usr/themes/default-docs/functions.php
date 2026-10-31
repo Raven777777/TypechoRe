@@ -4,6 +4,16 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 }
 
 /**
+ * 置顶标记 (插件 Sticky 把配置里的 HTML 原样放在 sticky_html 字段)
+ */
+function docswebStickyBadge(\Widget\Base\Contents $content): string
+{
+    $html = trim((string) $content->sticky_html);
+
+    return $content->sticky && '' !== $html ? $html . ' ' : '';
+}
+
+/**
  * docsweb 风格分页: Page 2 / 5 · Up · Down · Category · Archive
  */
 function docswebPager(\Widget\Archive $archive): void

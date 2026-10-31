@@ -88,10 +88,14 @@ function postMeta(
 )
 {
     $titleTag = $metaType == 'archive' ? 'h2' : 'h1';
+    // Sticky 插件: 置顶标记 HTML 原样输出 (插件已不再往标题里追加纯文本)
+    $stickyBadge = $archive->sticky && '' !== trim((string) $archive->sticky_html)
+        ? $archive->sticky_html . ' '
+        : '';
 ?>
     <<?php echo $titleTag ?> class="post-title" itemprop="name headline">
         <a itemprop="url"
-           href="<?php $archive->permalink() ?>"><?php $archive->title() ?></a>
+           href="<?php $archive->permalink() ?>"><?php echo $stickyBadge; ?><?php $archive->title() ?></a>
     </<?php echo $titleTag ?>>
     <?php if ($metaType != 'page'): ?>
         <ul class="post-meta">

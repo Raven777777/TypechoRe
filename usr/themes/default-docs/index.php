@@ -35,7 +35,7 @@ while ($pages->next()) {
 <?php if ($this->have()): ?>
 <p>
 <?php while ($this->next()): ?>
-<?php $this->date('Y-m-d'); ?> <a href="<?php $this->permalink(); ?>"><?php $this->title(); ?></a><?php if (!empty($this->categories)): ?> <?php $this->category(', ', false); ?><?php endif; ?><br>
+<?php $this->date('Y-m-d'); ?> <a href="<?php $this->permalink(); ?>"><?php echo docswebStickyBadge($this); ?><?php $this->title(); ?></a><?php if (!empty($this->categories)): ?> <?php $this->category(', ', false); ?><?php endif; ?><br>
 <?php endwhile; ?>
 </p>
 <?php endif; ?>
