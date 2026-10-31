@@ -10,7 +10,7 @@ function docswebStickyBadge(\Widget\Base\Contents $content): string
 {
     $html = trim((string) $content->sticky_html);
 
-    return $content->sticky && '' !== $html ? $html . ' ' : '';
+    return $content->sticky && '' !== $html ? ' ' . $html : '';
 }
 
 /**

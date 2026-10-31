@@ -298,7 +298,7 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
 
 **置顶标记 (Sticky 插件)**: 插件把配置里的 HTML 原样写进行数据的 `sticky_html` 字段
 (同时把该行标记为 `sticky = 1`), 标题本身**不**再追加纯文本后缀, 所以 RSS 与 `<title>` 是干净的。
-`post-card.php` 用 `themeStickyBadge()` 把这段 HTML 输出在标题链接里 —— 内容来自后台
+`post-card.php` 用 `themeStickyBadge()` 把这段 HTML 输出在标题链接的右侧 —— 内容来自后台
 插件配置 (与主题文件同一权限级别), 这里不再转义; 自定义模板若要显示置顶标记,
 需要自己读 `sticky_html`, 直接用 `themeTitle()` / `$this->title()` 只会拿到纯标题。
 

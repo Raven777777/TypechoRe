@@ -52,7 +52,7 @@ $listAside = themeListAsideKind();
 
     <div class="flex min-w-0 flex-1 flex-col gap-2.5 p-5 sm:gap-3 sm:p-6">
         <h2 class="card-title" itemprop="headline">
-            <a class="card-link" data-aside-target="<?php echo themeEsc($cardAside); ?>" href="<?php $this->permalink(); ?>" itemprop="url"><?php echo themeStickyBadge($this); ?><?php echo themeTitle(fn () => $this->title()); ?></a>
+            <a class="card-link" data-aside-target="<?php echo themeEsc($cardAside); ?>" href="<?php $this->permalink(); ?>" itemprop="url"><?php echo themeTitle(fn () => $this->title()); ?><?php echo themeStickyBadge($this); ?></a>
         </h2>
 
         <p class="card-excerpt" itemprop="description"><?php echo themeText(fn () => $this->excerpt(themeExcerptLength())); ?></p>

@@ -33,7 +33,7 @@ if ($this->is('date') && $year > 0) {
 <?php if ($this->have()): ?>
 <p>
 <?php while ($this->next()): ?>
-<?php $this->date('Y-m-d'); ?> <a href="<?php $this->permalink(); ?>"><?php echo docswebStickyBadge($this); ?><?php $this->title(); ?></a><br>
+<?php $this->date('Y-m-d'); ?> <a href="<?php $this->permalink(); ?>"><?php $this->title(); ?><?php echo docswebStickyBadge($this); ?></a><br>
 <?php endwhile; ?>
 </p>
 <?php endif; ?>

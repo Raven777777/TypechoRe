@@ -17,7 +17,7 @@
 - 修复草稿保存失败后无法重试、个人网址无法清空，以及 default-2026 评论刷新丢失分页的问题。
 - Sticky 置顶标记: `sticky_html` 里的 HTML 现在真的会显示 —— 插件不再往标题里追加纯文本
   后缀 (RSS 与 `<title>` 保持干净), 改由 default / default-2026 主题把 `sticky_html`
-  原样输出在置顶文章标题前, 所以 `<span style="color:red">[置顶]</span>` 是红色的。
+  原样输出在置顶文章标题右侧, 所以 `<span style="color:red">[置顶]</span>` 是红色的。
 - 新增双 SQLite 适配器故障回退、用户序列、CSRF 子目录和前端回归测试。
 
 ## 1.3.3（未发布）

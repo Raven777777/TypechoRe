@@ -1012,6 +1012,10 @@ assertTrue(
     str_contains($homeArticles[0], '<span style="color:red">[置顶]</span>'),
     'sticky html was flattened to plain text'
 );
+assertTrue(
+    strpos($homeArticles[0], 'Sticky Test 1') < strpos($homeArticles[0], '<span style="color:red">[置顶]</span>'),
+    'sticky badge should sit to the right of the title'
+);
 
 $secondPage = assertResponse($site->get('/index.php/page/2/'), [200], 'GET /page/2/ with Sticky enabled');
 $secondArticles = $articlesOf($secondPage);

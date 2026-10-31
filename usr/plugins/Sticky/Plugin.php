@@ -84,7 +84,7 @@ class Plugin implements PluginInterface
             null,
             "<span style='color:red'>[置顶]</span>",
             '置顶标题的 html',
-            '原样保存在 sticky_html 字段, 由主题显示在置顶文章标题前 (标题本身保持干净, RSS 不带标记)'
+            '原样保存在 sticky_html 字段, 由主题显示在置顶文章标题右侧 (标题本身保持干净, RSS 不带标记)'
         );
         $stickyHtml->input->setAttribute('rows', '7')->setAttribute('cols', '80');
         $form->addInput($stickyHtml);
