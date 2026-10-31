@@ -8,6 +8,13 @@ declare(strict_types=1);
 
 const ROOT = __DIR__ . '/..';
 define('__TYPECHO_ROOT_DIR__', ROOT);
+define('__TYPECHO_PAGE_CACHE_DIR__', sys_get_temp_dir() . '/typechore-page-cache-smoke-' . getmypid());
+register_shutdown_function(static function (): void {
+    foreach (glob(__TYPECHO_PAGE_CACHE_DIR__ . '/*') ?: [] as $file) {
+        @unlink($file);
+    }
+    @rmdir(__TYPECHO_PAGE_CACHE_DIR__);
+});
 
 spl_autoload_register(static function (string $class): void {
     foreach (['Typecho\\' => ROOT . '/var/Typecho/', 'Widget\\' => ROOT . '/var/Widget/', 'Utils\\' => ROOT . '/var/Utils/', 'IXR\\' => ROOT . '/var/IXR/'] as $prefix => $base) {
@@ -29,6 +36,41 @@ function check(bool $condition, string $message): void
 }
 
 require_once ROOT . '/var/Typecho/Common.php';
+$cacheKey = hash('sha256', 'smoke-page-cache');
+$cacheFile = __TYPECHO_PAGE_CACHE_DIR__ . '/' . $cacheKey;
+@unlink($cacheFile);
+check(\Typecho\PageCache::get($cacheKey) === null, 'page cache miss returned a body');
+check(\Typecho\PageCache::put($cacheKey, '<html>cached</html>'), 'page cache could not store a body');
+check(\Typecho\PageCache::get($cacheKey) === '<html>cached</html>', 'page cache did not return its stored body');
+$generation = \Typecho\PageCache::generation();
+\Typecho\PageCache::invalidate();
+check(\Typecho\PageCache::generation() !== $generation, 'page cache generation did not advance');
+$server = $_SERVER;
+$get = $_GET;
+$cookie = $_COOKIE;
+\Typecho\Plugin::init([]);
+$_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/'];
+$_GET = [];
+$_COOKIE = [];
+check(\Typecho\PageCache::eligible(), 'page cache rejected an anonymous public GET');
+$_SERVER = ['REQUEST_METHOD' => 'POST', 'REQUEST_URI' => '/'];
+check(!\Typecho\PageCache::eligible(), 'page cache accepted a non-GET request');
+$_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/?x=1', 'QUERY_STRING' => 'x=1'];
+check(!\Typecho\PageCache::eligible(), 'page cache accepted a query string');
+$_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/admin/'];
+check(!\Typecho\PageCache::eligible(), 'page cache accepted an admin path');
+$_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_COOKIE' => ''];
+check(!\Typecho\PageCache::eligible(), 'page cache accepted a Cookie header');
+$_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_AUTHORIZATION' => ''];
+check(!\Typecho\PageCache::eligible(), 'page cache accepted an Authorization header');
+\Typecho\Plugin::init(['activated' => ['test' => []]]);
+$_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/'];
+check(!\Typecho\PageCache::eligible(), 'page cache accepted an active plugin');
+\Typecho\Plugin::init([]);
+$_SERVER = $server;
+$_GET = $get;
+$_COOKIE = $cookie;
+@unlink($cacheFile);
 check(class_exists(\Widget\Comments\Ping::class), 'Ping class failed to load');
 check(\Typecho\Common::isSameOrigin('https://example.test/admin/login.php', 'https://example.test'), 'same-origin check failed');
 check(\Typecho\Common::isSameOrigin('https://example.test:443/', 'https://example.test'), 'default HTTPS port check failed');

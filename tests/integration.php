@@ -23,6 +23,13 @@ declare(strict_types=1);
 
 const ROOT = __DIR__ . '/..';
 define('__TYPECHO_ROOT_DIR__', ROOT);
+define('__TYPECHO_PAGE_CACHE_DIR__', sys_get_temp_dir() . '/typechore-page-cache-integration-' . getmypid());
+register_shutdown_function(static function (): void {
+    foreach (glob(__TYPECHO_PAGE_CACHE_DIR__ . '/*') ?: [] as $file) {
+        @unlink($file);
+    }
+    @rmdir(__TYPECHO_PAGE_CACHE_DIR__);
+});
 
 spl_autoload_register(static function (string $class): void {
     foreach (['Typecho\\' => ROOT . '/var/Typecho/', 'Widget\\' => ROOT . '/var/Widget/', 'Utils\\' => ROOT . '/var/Utils/', 'IXR\\' => ROOT . '/var/IXR/'] as $prefix => $base) {
@@ -180,6 +187,7 @@ function runAdapter(string $adapter): void
         check('' !== $version, 'getVersion() returned an empty string');
 
         // --- insert (query() 对 INSERT 返回自增主键) ---
+        $generationBeforeInsert = \Typecho\PageCache::generation();
         $rows = [
             'name' => 'integration_option',
             'user' => 0,
@@ -187,6 +195,7 @@ function runAdapter(string $adapter): void
         ];
         $optionId = $db->query($db->insert('table.options')->rows($rows));
         check(is_int($optionId) && $optionId > 0, 'INSERT did not return a positive id');
+        check(\Typecho\PageCache::generation() !== $generationBeforeInsert, 'write outside transaction did not invalidate page cache');
 
         // --- fetchRow ---
         $row = $db->fetchRow($db->select()->from('table.options')->where('name = ?', 'integration_option'));
@@ -255,6 +264,7 @@ function runAdapter(string $adapter): void
         check(null === $row, 'deleted row is still readable');
 
         // --- transaction rollback and transaction-local reads ---
+        $generationBeforeRollback = \Typecho\PageCache::generation();
         try {
             $db->transaction(function () use ($db): void {
                 $db->query($db->insert('table.options')->rows([
@@ -269,9 +279,18 @@ function runAdapter(string $adapter): void
         }
         check(null === $db->fetchRow($db->select()->from('table.options')
             ->where('name = ?', 'rolled_back_option')), 'transaction rollback kept its write');
+        check(\Typecho\PageCache::generation() === $generationBeforeRollback, 'rolled-back write invalidated page cache');
+        $db->transaction(function () use ($db): void {
+            $db->query($db->insert('table.options')->rows([
+                'name' => 'committed_option', 'user' => 0, 'value' => 'committed',
+            ]));
+        });
+        check(\Typecho\PageCache::generation() !== $generationBeforeRollback, 'committed write did not invalidate page cache');
 
         // --- truncate + 表清空 ---
+        $generationBeforeTruncate = \Typecho\PageCache::generation();
         $db->truncate('table.relationships');
+        check(\Typecho\PageCache::generation() !== $generationBeforeTruncate, 'truncate did not invalidate page cache');
         $remaining = $db->fetchObject($db->select(['COUNT(*)' => 'num'])->from('table.relationships'));
         check($remaining !== null && (int) $remaining->num === 0, 'truncate() did not empty the table');
 

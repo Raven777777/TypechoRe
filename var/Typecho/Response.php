@@ -136,6 +136,11 @@ class Response
         return self::$instance;
     }
 
+    public function cacheState(): array
+    {
+        return [$this->status, $this->headers, $this->cookies, $this->contentType, $this->responders];
+    }
+
     /**
      * @return $this
      */

@@ -19,8 +19,38 @@ if (!defined('__TYPECHO_ROOT_DIR__') && !@include_once 'config.inc.php') {
 /** 注册一个初始化插件 */
 \Typecho\Plugin::factory('index.php')->call('begin');
 
-/** 开始路由分发 */
-\Typecho\Router::dispatch();
+$response = \Typecho\Response::getInstance();
+$cacheableRequest = \Typecho\PageCache::eligible();
+$cacheGeneration = $cacheableRequest ? \Typecho\PageCache::generation() : '';
+$options = \Widget\Options::alloc();
+$cacheKey = $cacheableRequest
+    ? \Typecho\PageCache::key($cacheGeneration, $options->theme, $options->lang)
+    : '';
+$cachedBody = $cacheableRequest ? \Typecho\PageCache::get($cacheKey) : null;
+
+if ($cachedBody !== null && \Typecho\PageCache::generation() === $cacheGeneration) {
+    $response->setHeader('X-Typecho-Page-Cache', 'HIT');
+    echo $cachedBody;
+} else {
+    $responseState = $response->cacheState();
+    $headersBefore = headers_list();
+    ob_start();
+    \Typecho\Router::dispatch();
+    $body = ob_get_clean();
+    $cacheStored = false;
+    if (
+        $cacheableRequest
+        && \Typecho\PageCache::generation() === $cacheGeneration
+        && $response->cacheState() === $responseState
+        && headers_list() === $headersBefore
+        && ($responseState[0] ?? null) === 200
+        && str_starts_with(strtolower($responseState[3] ?? ''), 'text/html')
+    ) {
+        $cacheStored = \Typecho\PageCache::put($cacheKey, $body);
+    }
+    $response->setHeader('X-Typecho-Page-Cache', $cacheStored ? 'MISS' : 'BYPASS');
+    echo $body;
+}
 
 /** 注册一个结束插件 */
 \Typecho\Plugin::factory('index.php')->call('end');

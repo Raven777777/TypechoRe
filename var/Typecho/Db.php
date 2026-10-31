@@ -90,6 +90,8 @@ class Db
 
     private bool $inTransaction = false;
 
+    private bool $transactionWrites = false;
+
     /**
      * 实例化的数据库对象
      * @var Db
@@ -362,6 +364,11 @@ class Db
     {
         $table = preg_replace("/^table\./", $this->prefix, $table);
         $this->adapter->truncate($table, $this->selectDb(self::WRITE));
+        if ($this->inTransaction) {
+            $this->transactionWrites = true;
+        } else {
+            PageCache::invalidate();
+        }
     }
 
     /**
@@ -386,10 +393,15 @@ class Db
             $result = $callback();
             $this->query('COMMIT', self::WRITE, '');
             $this->inTransaction = false;
+            if ($this->transactionWrites) {
+                PageCache::invalidate();
+                $this->transactionWrites = false;
+            }
             return $result;
         } catch (\Throwable $e) {
             $this->query('ROLLBACK', self::WRITE, '');
             $this->inTransaction = false;
+            $this->transactionWrites = false;
             throw $e;
         }
     }
@@ -435,6 +447,17 @@ class Db
 
         /** 提交查询 */
         $resource = $this->adapter->query($sql, $handle, $op, $action, $table);
+        $rawSql = is_string($sql) ? $sql : '';
+        $isWrite = in_array($action, [self::UPDATE, self::DELETE, self::INSERT], true)
+            || (is_string($query) && !(bool) preg_match('/^\s*(?:SELECT|PRAGMA|EXPLAIN|BEGIN|COMMIT|ROLLBACK)\b/i', $query))
+            || (bool) preg_match('/^\s*(?:--[^\n]*\n|\/\*.*?\*\/\s*)*(?:INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE)\b/is', $rawSql);
+        if ($isWrite) {
+            if ($this->inTransaction) {
+                $this->transactionWrites = true;
+            } else {
+                PageCache::invalidate();
+            }
+        }
 
         if ($action) {
             //根据查询动作返回相应资源
