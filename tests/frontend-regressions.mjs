@@ -86,11 +86,15 @@ console.log('PASS: frontend audit regressions (editor, profile URL, comment refr
   assert.match(functions, /default_docs_indexes/, 'creation must be guarded by a one-time marker');
   assert.doesNotMatch(functions, /\$i\+\+/, 'slugs must not be suffixed into duplicate pages');
   const comments = read('usr/themes/default-docs/comments.php');
+  // 身份写在 textarea 前三行 (Name:/Email:/Website:), 真正的 input 隐藏, 提交时再拆回去
   for (const field of ['author', 'mail', 'url']) {
     assert.match(comments, new RegExp(`<input[^>]+name="${field}"[^>]+id="${field}"`), `${field} must be a normal input`);
-    assert.match(comments, new RegExp(`<label for="${field}">`), `${field} needs a label`);
+    assert.match(comments, new RegExp(`\\$this->remember\\('${field}'`), `${field} must be prefilled from the remember cookie`);
   }
   assert.match(comments, /<label for="textarea">/);
-  assert.doesNotMatch(comments, /textarea\.value\s*=|querySelector\('#author'\)/, 'comment text must not be parsed for identity');
+  assert.doesNotMatch(comments, /<label for="(author|mail|url)">/, 'identity fields are hidden, they need no labels');
+  assert.match(comments, /foreach \(\['Name' => 'author', 'Email' => 'mail', 'Website' => 'url'\]/, 'textarea must be prefilled with the identity lines');
+  assert.match(comments, /form\[fields\[key\]\]\.value = map\[key\]/, 'identity lines must be split into the hidden inputs on submit');
+  assert.match(comments, /lines\.slice\(i\)\.join/, 'identity lines must be stripped from the comment text');
 }
-console.log('PASS: default-docs regressions (one-time PHP pages, labelled comment fields)');
+console.log('PASS: default-docs regressions (one-time PHP pages, identity lines in comment text)');
