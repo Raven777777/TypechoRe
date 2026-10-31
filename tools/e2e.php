@@ -240,7 +240,7 @@ final class Site
     /**
      * @param array<string, mixed> $fields
      * @param array<string, string> $files field => local path
-     * @return array{status: int, headers: array<string, string>, body: string, url: string}
+     * @return array{status: int, headers: array<string, string>, rawHeaders: string, body: string, url: string}
      */
     public function request(
         string $method,
@@ -328,16 +328,19 @@ final class Site
         ];
     }
 
+    /** @return array{status: int, headers: array<string, string>, rawHeaders: string, body: string, url: string} */
     public function get(string $path, array $headers = []): array
     {
         return $this->request('GET', $path, [], [], $headers);
     }
 
+    /** @return array{status: int, headers: array<string, string>, rawHeaders: string, body: string, url: string} */
     public function post(string $path, array $fields = [], array $headers = []): array
     {
         return $this->request('POST', $path, $fields, [], $headers);
     }
 
+    /** @return array{status: int, headers: array<string, string>, rawHeaders: string, body: string, url: string} */
     public function postRaw(string $path, string $body, array $headers = []): array
     {
         $url = str_starts_with($path, 'http') ? $path : $this->base . $this->path($path);
@@ -392,6 +395,7 @@ final class Site
 
     /**
      * @param array<string, string> $files
+     * @return array{status: int, headers: array<string, string>, rawHeaders: string, body: string, url: string}
      */
     public function postMultipart(string $path, array $fields, array $files, array $headers = []): array
     {
