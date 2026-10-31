@@ -21,16 +21,31 @@ if (!defined('__TYPECHO_ROOT_DIR__') && !@include_once 'config.inc.php') {
 
 $response = \Typecho\Response::getInstance();
 $options = \Widget\Options::alloc();
-$cacheEnabled = (string) ($options->pageCacheEnabled ?? '1') === '1';
-$cacheTtl = max(1, min(86400, (int) ($options->pageCacheTtl ?? 60)));
-$cacheableRequest = $cacheEnabled && \Typecho\PageCache::eligible();
-$cacheGeneration = $cacheableRequest ? \Typecho\PageCache::generation() : '';
-$cacheKey = $cacheableRequest
-    ? \Typecho\PageCache::key($cacheGeneration, $options->theme, $options->lang)
-    : '';
-$cachedBody = $cacheableRequest ? \Typecho\PageCache::get($cacheKey) : null;
+$cacheableRequest = false;
+$cacheTtl = 60;
+$cacheGeneration = '';
+$cacheKey = '';
+$cachedBody = null;
+try {
+    $cacheEnabled = (string) ($options->pageCacheEnabled ?? '1') === '1';
+    $cacheTtl = max(1, min(86400, (int) ($options->pageCacheTtl ?? 60)));
+    $cacheableRequest = $cacheEnabled && \Typecho\PageCache::eligible();
+    if ($cacheableRequest) {
+        $cacheGeneration = \Typecho\PageCache::generation();
+        $cacheKey = \Typecho\PageCache::key($cacheGeneration, $options->theme, $options->lang);
+        $cachedBody = \Typecho\PageCache::get($cacheKey);
+        if ($cachedBody !== null && \Typecho\PageCache::generation() !== $cacheGeneration) {
+            $cachedBody = null;
+        }
+    }
+} catch (\Throwable $error) {
+    // Page-cache errors must fail open; public rendering still needs to run.
+    error_log('Typecho page cache preflight failed: ' . $error->getMessage());
+    $cacheableRequest = false;
+    $cachedBody = null;
+}
 
-if ($cachedBody !== null && \Typecho\PageCache::generation() === $cacheGeneration) {
+if ($cachedBody !== null) {
     $response->setHeader('X-Typecho-Page-Cache', 'HIT');
     echo $cachedBody;
 } else {
@@ -40,15 +55,20 @@ if ($cachedBody !== null && \Typecho\PageCache::generation() === $cacheGeneratio
     \Typecho\Router::dispatch();
     $body = ob_get_clean();
     $cacheStored = false;
-    if (
-        $cacheableRequest
-        && \Typecho\PageCache::generation() === $cacheGeneration
-        && $response->cacheState() === $responseState
-        && headers_list() === $headersBefore
-        && ($responseState[0] ?? null) === 200
-        && str_starts_with(strtolower($responseState[3] ?? ''), 'text/html')
-    ) {
-        $cacheStored = \Typecho\PageCache::put($cacheKey, $body, $cacheTtl);
+    try {
+        if (
+            $cacheableRequest
+            && \Typecho\PageCache::generation() === $cacheGeneration
+            && $response->cacheState() === $responseState
+            && headers_list() === $headersBefore
+            && ($responseState[0] ?? null) === 200
+            && str_starts_with(strtolower($responseState[3] ?? ''), 'text/html')
+        ) {
+            $cacheStored = \Typecho\PageCache::put($cacheKey, $body, $cacheTtl);
+        }
+    } catch (\Throwable $error) {
+        error_log('Typecho page cache store failed: ' . $error->getMessage());
+        $cacheStored = false;
     }
     $response->setHeader('X-Typecho-Page-Cache', $cacheStored ? 'MISS' : 'BYPASS');
     echo $body;
