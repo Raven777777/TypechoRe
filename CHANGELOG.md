@@ -5,6 +5,11 @@
 
 ## 未发布
 
+### 缓存: 匿名全页缓存
+
+- 后台基本设置提供缓存开关、TTL 与手动清空；匿名无 Cookie 的普通 GET HTML 页面使用短时全页缓存。
+- Typecho 数据库写入在事务提交后使缓存失效；修复 FastCGI 空 Cookie 参数、无 POSIX 扩展及空语言选项导致的缓存绕过。
+
 ### 后台: 上传文件类型只由站点设置决定
 
 - 移除 `Widget\Upload::checkFileType()` 里写死的危险后缀黑名单 (`php`/`phtml`/`phar`/

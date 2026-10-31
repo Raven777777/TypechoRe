@@ -94,6 +94,18 @@ Ed25519 公钥签名验证；部分 OpenSSL 构建（例如 Windows 发行包）
 
 `opcache.validate_timestamps=0` 只适用于通过发布包整包覆盖部署的场景；若直接在服务器上改代码，请保持默认值 `1`。
 
+### 匿名全页缓存
+
+后台「设置 → 基本设置」提供全页缓存开关、TTL 和清空按钮：默认开启，TTL 默认 60 秒，可设为 1–86400 秒。清空按钮会立即使所有旧缓存失效；Typecho 通过数据库写入的文章、评论、设置等变更在事务提交后也会使缓存失效，事务回滚不会误清缓存。直接用外部 SQL 修改数据库不会触发该机制，需等待 TTL 到期或手动清空。
+
+缓存仅用于匿名、无 Cookie 的普通 GET HTML 页面。登录用户、带 Cookie 或 Authorization 的请求、带查询参数的请求、后台/动作/feed/Sitemap/XML-RPC 路径，以及任何启用了插件的站点都会绕过缓存；响应不是 HTTP 200 HTML，或响应期间状态、响应头、Cookie 有变化，也不会存入缓存。因而 `BYPASS` 不一定是故障。
+
+响应包含 `X-Typecho-Page-Cache` 诊断头：`MISS` 表示本次渲染并写入缓存，`HIT` 表示直接返回缓存，`BYPASS` 表示本次不符合条件或缓存不可用。无 Cookie 的访客对同一页面首次通常为 `MISS`，之后在 TTL 内为 `HIT`。
+
+缓存文件默认写入 PHP `sys_get_temp_dir()`（常见为 `/tmp`），目录权限设为 `0700`、文件为 `0600`。PHP-FPM 必须能读写该临时目录；如配置了 `open_basedir`，其允许路径需包含 `sys_get_temp_dir()`。也可在 `config.inc.php` 中定义 `__TYPECHO_PAGE_CACHE_DIR__`，指定一个 PHP-FPM 可写、位于 Web 根目录之外且权限受保护的目录。若没有 POSIX 扩展，同一路径应只由一个 FPM 用户使用。
+
+缓存键包含 Host、请求 URI、站点根 URL、主题、语言和失效代数；若自定义主题还按 `User-Agent`、`Accept-Language` 等请求头改变匿名页面内容，应先调整缓存键或避免对该主题启用缓存。常见故障可先检查后台缓存开关、插件状态、`X-Typecho-Page-Cache` 和 PHP-FPM 错误日志；`Typecho page cache preflight failed` 表示缓存预检失败但页面会继续正常渲染。若日志出现 `PageCache::key(): Argument #3 ($language) must be of type string, null given`，请部署包含空语言选项修复的最新版。
+
 ### Nginx 认证接口限速
 
 应用不使用阻塞休眠拖慢失败请求。若使用 Nginx，在 `http {}` 中配置按客户端 IP 共享计数的 zone，覆盖密码登录、Passkey 与 XML-RPC：
