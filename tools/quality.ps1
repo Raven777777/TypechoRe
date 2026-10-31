@@ -83,7 +83,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'PHPStan failed.' }
 
     # 真实站点端到端回归: 用发布包 + PHP 内置服务器跑安装向导/后台/发文/评论/上传/升级
-    & $php tools/e2e.php
+    & $php tools/e2e.php --verbose
     if ($LASTEXITCODE -ne 0) { throw 'End-to-end site test failed.' }
 
     $semgrepArgs = @(

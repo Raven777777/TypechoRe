@@ -218,6 +218,14 @@ final class Site
         return implode('; ', $pairs);
     }
 
+    private function cookieNames(string $header): string
+    {
+        return implode(', ', array_map(
+            static fn(string $cookie): string => trim(explode('=', $cookie, 2)[0]),
+            explode(';', $header)
+        ));
+    }
+
     public function path(string $url): string
     {
         if (str_starts_with($url, $this->base)) {
@@ -304,7 +312,7 @@ final class Site
         if ($this->verbose) {
             out(sprintf('    %s %s -> %d', $method, $url, $status));
             if ($cookieHeader !== '') {
-                out('        cookie: ' . substr($cookieHeader, 0, 160));
+                out('        cookie names: ' . $this->cookieNames($cookieHeader));
             }
             if (preg_match_all('/^Set-Cookie:\s*([^=;]+)=/mi', $rawHeaders, $setCookies)) {
                 out('        set-cookie names: ' . implode(', ', $setCookies[1]));
@@ -368,6 +376,9 @@ final class Site
 
         if ($this->verbose) {
             out(sprintf('    POST(raw) %s -> %d', $url, $status));
+            if ('' !== $cookieHeader) {
+                out('        cookie names: ' . $this->cookieNames($cookieHeader));
+            }
         }
 
         return [
