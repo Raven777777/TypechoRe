@@ -152,7 +152,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
     public function wpGetPage(int $blogId, int $pageId, string $userName, string $password): array
     {
         /** 获取页面 */
-        $page = PageEdit::alloc(null, ['cid' => $pageId], false);
+        $page = PageEdit::alloc(null, ['cid' => $pageId], false)->prepare();
 
         /** 对文章内容做截取处理，以获得description和text_more*/
         [$excerpt, $more] = $this->getPostExtended($page);
@@ -282,7 +282,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
         $fail['count'] = (int) ($fail['count'] ?? 0) + 1;
         $_SESSION['__typecho_xmlrpc_fail'] = $fail;
 
-        sleep(1);
+
     }
 
     /**
@@ -1260,7 +1260,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
      */
     public function wpGetMediaItem(int $blogId, string $userName, string $password, int $attachmentId): array
     {
-        $attachment = AttachmentEdit::alloc(null, ['cid' => $attachmentId]);
+        $attachment = AttachmentEdit::alloc(null, ['cid' => $attachmentId])->prepare();
 
         return [
             'attachment_id'    => $attachment->cid,
@@ -1288,7 +1288,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
      */
     public function mwGetPost(int $postId, string $userName, string $password): array
     {
-        $post = PostEdit::alloc(null, ['cid' => $postId], false);
+        $post = PostEdit::alloc(null, ['cid' => $postId], false)->prepare();
 
         /** 对文章内容做截取处理，以获得description和text_more*/
         [$excerpt, $more] = $this->getPostExtended($post);
@@ -1516,7 +1516,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
      */
     public function mtGetPostCategories(int $postId, string $userName, string $password): array
     {
-        $post = PostEdit::alloc(null, ['cid' => $postId], false);
+        $post = PostEdit::alloc(null, ['cid' => $postId], false)->prepare();
 
         /** 格式化categories*/
         $categories = [];
@@ -1619,7 +1619,7 @@ class XmlRpc extends Contents implements ActionInterface, Hook
      */
     public function bloggerGetPost(int $blogId, int $postId, string $userName, string $password): array
     {
-        $post = PostEdit::alloc(null, ['cid' => $postId]);
+        $post = PostEdit::alloc(null, ['cid' => $postId])->prepare();
         $categories = array_column($post->categories, 'name');
 
         $content = '<title>' . $post->title . '</title>';

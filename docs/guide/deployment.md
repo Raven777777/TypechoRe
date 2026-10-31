@@ -94,14 +94,14 @@ Ed25519 公钥签名验证；部分 OpenSSL 构建（例如 Windows 发行包）
 
 `opcache.validate_timestamps=0` 只适用于通过发布包整包覆盖部署的场景；若直接在服务器上改代码，请保持默认值 `1`。
 
-### Nginx 登录限速
+### Nginx 认证接口限速
 
-登录失败的延迟只是补充措施，不能替代限速。若使用 Nginx，在 `http {}` 中配置按客户端 IP 计数的 zone：
+应用不使用阻塞休眠拖慢失败请求。若使用 Nginx，在 `http {}` 中配置按客户端 IP 共享计数的 zone，覆盖密码登录、Passkey 与 XML-RPC：
 
 ```nginx
 map $request_uri $typechore_login_key {
     default "";
-    ~*(?:/index\.php)?/action/login(?:\?|$) $binary_remote_addr;
+    ~*(?:/index\.php)?/action/(?:login|passkey|xmlrpc)(?:\?|$) $binary_remote_addr;
 }
 limit_req_zone $typechore_login_key zone=typechore_login:10m rate=10r/m;
 ```

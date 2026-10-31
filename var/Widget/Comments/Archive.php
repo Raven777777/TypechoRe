@@ -106,7 +106,11 @@ class Archive extends Comments
             return;
         }
 
-        $unapprovedCommentId = intval(Cookie::get('__typecho_unapproved_comment', '0'));
+        $unapprovedComment = explode(':', (string) Cookie::get('__typecho_unapproved_comment', ''), 2);
+        $unapprovedCommentId = count($unapprovedComment) === 2
+            && ctype_digit($unapprovedComment[0])
+            && hash_equals(hash_hmac('sha256', $unapprovedComment[0], $this->options->secret), $unapprovedComment[1])
+                ? (int) $unapprovedComment[0] : 0;
         $select = $this->select()->where('cid = ?', $this->parameter->parentId)
             ->where(
                 'status = ? OR (coid = ? AND status <> ?)',
@@ -120,7 +124,44 @@ class Archive extends Comments
         }
 
         $select->order('table.comments.coid', 'ASC');
-        $this->db->fetchAll($select, [$this, 'push']);
+        $pagedComments = (bool) $this->options->commentsPageBreak;
+        if (!$pagedComments) {
+            // shortcut: non-paginated comment lists cap at 1000 rows; enable comment pagination for larger threads.
+            $select->limit(1000);
+        }
+        $pagedRoots = $pagedComments && $this->options->commentsThreaded;
+        if ($pagedComments) {
+            $countQuery = clone $select;
+            $countQuery->cleanAttribute('order')->select(['COUNT(*)' => 'num']);
+            if ($pagedRoots) {
+                $countQuery->where('table.comments.parent = ?', 0);
+            }
+            $total = (int) $this->db->fetchObject($countQuery)->num;
+            $this->total = $total;
+            $pageSize = max(1, (int) $this->options->commentsPageSize);
+            $this->currentPage = 'last' === $this->options->commentsPageDisplay && !$this->parameter->commentPage
+                ? max(1, (int) ceil($total / $pageSize))
+                : max(1, (int) ($this->parameter->commentPage ?: 1));
+            $offset = ('DESC' === $this->options->commentsOrder)
+                ? max(0, $total - $this->currentPage * $pageSize)
+                : ($this->currentPage - 1) * $pageSize;
+            $page = clone $select;
+            if ($pagedRoots) {
+                $page->where('table.comments.parent = ?', 0);
+            }
+            $page->limit($pageSize)->offset($offset);
+            $this->db->fetchAll($page, [$this, 'push']);
+
+            $parents = $pagedRoots ? array_keys($this->stack) : [];
+            while ($parents) {
+                $before = array_fill_keys(array_keys($this->stack), true);
+                $children = clone $select;
+                $this->db->fetchAll($children->where('table.comments.parent IN ?', $parents), [$this, 'push']);
+                $parents = array_values(array_diff(array_keys($this->stack), array_keys($before)));
+            }
+        } else {
+            $this->db->fetchAll($select, [$this, 'push']);
+        }
 
         /** 需要输出的评论列表 */
         $outputComments = [];
@@ -165,23 +206,8 @@ class Archive extends Comments
         }
 
         /** 评论总数 */
-        $this->total = count($this->stack);
-
-        /** 对评论进行分页 */
-        if ($this->options->commentsPageBreak) {
-            if ('last' == $this->options->commentsPageDisplay && !$this->parameter->commentPage) {
-                $pageSize = (int) $this->options->commentsPageSize;
-                $this->currentPage = intdiv($this->total + $pageSize - 1, $pageSize);
-            } else {
-                $this->currentPage = $this->parameter->commentPage ? $this->parameter->commentPage : 1;
-            }
-
-            /** 截取评论 */
-            $this->stack = array_slice(
-                $this->stack,
-                ($this->currentPage - 1) * $this->options->commentsPageSize,
-                $this->options->commentsPageSize
-            );
+        if (!$pagedComments) {
+            $this->total = count($this->stack);
         }
 
         /** 评论置位 */

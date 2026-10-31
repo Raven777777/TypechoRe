@@ -254,6 +254,22 @@ function runAdapter(string $adapter): void
         $row = $db->fetchRow($db->select()->from('table.options')->where('name = ?', 'integration_option'));
         check(null === $row, 'deleted row is still readable');
 
+        // --- transaction rollback and transaction-local reads ---
+        try {
+            $db->transaction(function () use ($db): void {
+                $db->query($db->insert('table.options')->rows([
+                    'name' => 'rolled_back_option', 'user' => 0, 'value' => 'temporary',
+                ]));
+                check(null !== $db->fetchRow($db->select()->from('table.options')
+                    ->where('name = ?', 'rolled_back_option')), 'transaction read did not see its write');
+                throw new RuntimeException('rollback test');
+            });
+        } catch (RuntimeException $e) {
+            check($e->getMessage() === 'rollback test', 'unexpected transaction exception');
+        }
+        check(null === $db->fetchRow($db->select()->from('table.options')
+            ->where('name = ?', 'rolled_back_option')), 'transaction rollback kept its write');
+
         // --- truncate + 表清空 ---
         $db->truncate('table.relationships');
         $remaining = $db->fetchObject($db->select(['COUNT(*)' => 'num'])->from('table.relationships'));

@@ -262,8 +262,7 @@ class Passkey extends BaseOptions implements ActionInterface
         $fail['count'] = (int) ($fail['count'] ?? 0) + 1;
         $_SESSION[self::THROTTLE_KEY] = $fail;
 
-        /** 与密码登录一致, 每次失败至少拖慢 1 秒 */
-        sleep(1);
+
     }
 
     private function resetThrottle(): void

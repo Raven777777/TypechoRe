@@ -145,6 +145,11 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
     #[\Override]
     public function insert(array $rows): int
     {
+        return $this->db->transaction(fn (): int => $this->insertContent($rows));
+    }
+
+    private function insertContent(array $rows): int
+    {
         /** 构建插入结构 */
         $insertStruct = [
             'title'        => !isset($rows['title']) || strlen($rows['title']) === 0
@@ -154,7 +159,8 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
             'text'         => Common::strBy($rows['text'] ?? null),
             'order'        => empty($rows['order']) ? 0 : intval($rows['order']),
             'authorId'     => $rows['authorId'] ?? $this->user->uid,
-            'template'     => Common::strBy($rows['template'] ?? null),
+            'template'     => in_array(Common::strBy($rows['template'] ?? null), array_keys($this->getTemplates()), true)
+                ? Common::strBy($rows['template']) : null,
             'type'         => Common::strBy($rows['type'] ?? null, 'post'),
             'status'       => Common::strBy($rows['status'] ?? null, 'publish'),
             'password'     => Common::strBy($rows['password'] ?? null),
@@ -174,7 +180,7 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
 
         /** 更新缩略名 */
         if ($insertId > 0) {
-            $this->applySlug(Common::strBy($rows['slug'] ?? null), $insertId, $insertStruct['title']);
+            $this->applySlug(Common::strBy($rows['slug'] ?? null), $insertId, Common::strBy($rows['title'] ?? null));
         }
 
         return $insertId;
@@ -192,8 +198,10 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
     public function applySlug(?string $slug, $cid, string $title = ''): string
     {
         if ($cid instanceof Query) {
-            $cid = $this->db->fetchObject($cid->select('cid')
-                ->from('table.contents')->limit(1))->cid;
+            $content = $this->db->fetchObject($cid->select('cid', 'title')
+                ->from('table.contents')->limit(1));
+            $cid = $content->cid;
+            $title = html_entity_decode((string) $content->title, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         }
 
         /** 生成一个非空的缩略名 */
@@ -252,6 +260,11 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
     #[\Override]
     public function update(array $rows, Query $condition): int
     {
+        return $this->db->transaction(fn (): int => $this->updateContent($rows, $condition));
+    }
+
+    private function updateContent(array $rows, Query $condition): int
+    {
         /** 首先验证写入权限 */
         if (!$this->isWriteable(clone $condition)) {
             return 0;
@@ -263,7 +276,8 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
                 ? null : htmlspecialchars($rows['title']),
             'order'        => empty($rows['order']) ? 0 : intval($rows['order']),
             'text'         => Common::strBy($rows['text'] ?? null),
-            'template'     => Common::strBy($rows['template'] ?? null),
+            'template'     => in_array(Common::strBy($rows['template'] ?? null), array_keys($this->getTemplates()), true)
+                ? Common::strBy($rows['template']) : null,
             'type'         => Common::strBy($rows['type'] ?? null, 'post'),
             'status'       => Common::strBy($rows['status'] ?? null, 'publish'),
             'password'     => Common::strBy($rows['password'] ?? null),

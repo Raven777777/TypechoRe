@@ -427,15 +427,17 @@ class Upload extends Contents implements ActionInterface
     /**
      * 检查文件类型是否被允许
      *
-     * 这里不做硬编码拦截: 后台「允许上传的文件类型」是唯一判定依据,
-     * 包括 svg/php 这类有风险的后缀 —— 要不要放行由站长自己决定。
-     *
      * @param string $ext 扩展名
      * @return boolean
      */
     public static function checkFileType(string $ext): bool
     {
+        $ext = strtolower($ext);
+        if (in_array($ext, ['php', 'php3', 'php4', 'php5', 'php7', 'php8', 'pht', 'phtml', 'phtm', 'phar', 'phps', 'html', 'htm', 'xhtml', 'shtml', 'svg', 'svgz', 'xml', 'xsl', 'xslt'], true)) {
+            return false;
+        }
+
         $options = Options::alloc();
-        return in_array(strtolower($ext), $options->allowedAttachmentTypes, true);
+        return in_array($ext, $options->allowedAttachmentTypes, true);
     }
 }

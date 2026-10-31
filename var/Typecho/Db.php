@@ -88,6 +88,8 @@ class Db
      */
     private string $adapterName;
 
+    private bool $inTransaction = false;
+
     /**
      * 实例化的数据库对象
      * @var Db
@@ -213,6 +215,10 @@ class Db
      */
     public function selectDb(int $op)
     {
+        if ($this->inTransaction && self::READ === $op) {
+            $op = self::WRITE;
+        }
+
         if (!isset($this->connectedPool[$op])) {
             $selectConnectionConfig = $this->getConfig($op);
             $selectConnectionHandle = $this->adapter->connect($selectConnectionConfig);
@@ -359,6 +365,36 @@ class Db
     }
 
     /**
+     * 在同一数据库连接内执行事务
+     *
+     * @template TResult
+     * @param callable(): TResult $callback
+     * @return TResult
+     * @throws \Throwable
+     */
+    public function transaction(callable $callback)
+    {
+        if ($this->inTransaction) {
+            return $callback();
+        }
+
+        $begin = str_contains(strtolower($this->adapterName), 'sqlite') ? 'BEGIN IMMEDIATE' : 'BEGIN';
+        $this->query($begin, self::WRITE, '');
+        $this->inTransaction = true;
+
+        try {
+            $result = $callback();
+            $this->query('COMMIT', self::WRITE, '');
+            $this->inTransaction = false;
+            return $result;
+        } catch (\Throwable $e) {
+            $this->query('ROLLBACK', self::WRITE, '');
+            $this->inTransaction = false;
+            throw $e;
+        }
+    }
+
+    /**
      * 执行查询语句
      *
      * @param mixed $query 查询语句或者查询对象
@@ -370,6 +406,10 @@ class Db
      */
     public function query($query, int $op = self::READ, string $action = self::SELECT)
     {
+        if ($this->inTransaction && self::READ === $op) {
+            $op = self::WRITE;
+        }
+
         $table = null;
 
         /** 在适配器中执行查询 */
@@ -381,6 +421,10 @@ class Db
         } elseif (!is_string($query)) {
             /** 如果query不是对象也不是字符串,那么将其判断为查询资源句柄,直接返回 */
             return $query;
+        }
+
+        if ($this->inTransaction && self::READ === $op) {
+            $op = self::WRITE;
         }
 
         /** 选择连接池 */

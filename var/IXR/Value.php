@@ -48,7 +48,7 @@ class Value
             case 'double':
                 return '<double>' . $this->data . '</double>';
             case 'string':
-                return '<string>' . htmlspecialchars($this->data) . '</string>';
+                return '<string>' . htmlspecialchars((string) $this->data, ENT_QUOTES | ENT_XML1, 'UTF-8') . '</string>';
             case 'array':
                 $return = '<array><data>' . "\n";
                 foreach ($this->data as $item) {

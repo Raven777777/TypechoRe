@@ -282,7 +282,8 @@ class Feedback extends Comments implements ActionInterface
         self::pluginHandle()->call('finishComment', $this);
 
         if ($this->status !== 'approved') {
-            Cookie::set('__typecho_unapproved_comment', $commentId);
+            Cookie::set('__typecho_unapproved_comment', $commentId . ':'
+                . hash_hmac('sha256', (string) $commentId, $this->options->secret));
         }
 
         $this->response->redirect($this->permalink);

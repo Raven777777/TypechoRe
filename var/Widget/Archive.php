@@ -1697,7 +1697,7 @@ EOF;
         }
 
         /** 设置模板 */
-        if ($this->template) {
+        if ($this->template && array_key_exists($this->template, $this->getTemplates())) {
             /** 应用自定义模板 */
             $this->themeFile = $this->template;
         }

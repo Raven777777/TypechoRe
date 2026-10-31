@@ -584,6 +584,11 @@ trait EditTrait
      */
     protected function publish(array $contents, bool $hasMetas = true)
     {
+        $this->db->transaction(fn () => $this->publishContent($contents, $hasMetas));
+    }
+
+    private function publishContent(array $contents, bool $hasMetas): void
+    {
         /** 发布内容, 检查是否具有直接发布的权限 */
         $this->checkStatus($contents);
 
@@ -656,6 +661,11 @@ trait EditTrait
      * @throws DbException|Exception
      */
     protected function save(array $contents, bool $hasMetas = true): int
+    {
+        return $this->db->transaction(fn (): int => $this->saveContent($contents, $hasMetas));
+    }
+
+    private function saveContent(array $contents, bool $hasMetas): int
     {
         /** 发布内容, 检查是否具有直接发布的权限 */
         $this->checkStatus($contents);

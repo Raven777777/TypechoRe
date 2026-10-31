@@ -43,6 +43,7 @@ $authCodeHash = \Typecho\Common::hashAuthCode('auth-token');
 check(\Typecho\Common::validateAuthCode('auth-token', $authCodeHash), 'auth code validation failed');
 check(!\Typecho\Common::validateAuthCode('wrong-token', $authCodeHash), 'invalid auth code accepted');
 check(\Typecho\Common::escape('<script>') === '&lt;script&gt;', 'HTML escaping failed');
+check(\Typecho\Common::escape('&amp;') === '&amp;', 'HTML escaping double-encoded an existing entity');
 check(\Typecho\Common::slugName('中文 测试') === '中文-测试', 'UTF-8 slug generation failed');
 check(\Typecho\Common::checkSafeHost('127.0.0.1') === false, 'private IPv4 host accepted');
 check(\Typecho\Common::checkSafeHost('localhost') === false, 'localhost accepted');

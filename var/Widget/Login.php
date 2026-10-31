@@ -78,9 +78,6 @@ class Login extends Users implements ActionInterface
 
         /** 比对密码 */
         if (!$valid) {
-            /** 防止穷举,休眠3秒 */
-            sleep(3);
-
             self::pluginHandle()->call(
                 'loginFailure',
                 $this->user,

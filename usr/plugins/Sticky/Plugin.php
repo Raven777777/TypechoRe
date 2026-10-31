@@ -159,8 +159,8 @@ class Plugin implements PluginInterface
 
         $query = clone $select;
 
-        /** 置顶文章由插件自己排在最前, 普通文章里要把它们排除掉, 免得重复 */
-        foreach ($visible as $row) {
+        /** 只有本页实际显示的置顶文章才从普通查询排除, 其余置顶文章仍按时间正常分页 */
+        foreach (array_slice($visible, 0, $slots) as $row) {
             $query->where('table.contents.cid <> ?', (int) $row['cid']);
         }
 

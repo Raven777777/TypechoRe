@@ -374,7 +374,7 @@ function themeEsc($value): string
         return '';
     }
 
-    return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    return \Typecho\Common::escape($value, ENT_QUOTES | ENT_SUBSTITUTE);
 }
 
 /**

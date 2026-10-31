@@ -848,11 +848,11 @@ assertResponse(
 );
 /**
  * 插件配置要在**激活之后**写: 激活时会用表单默认值重新保存 plugin:Sticky。
- * 置顶配置里最早的两篇, 它们必须跳到最前面, 不能靠原有的时间排序。
+ * 置顶数量多于每页数量时, 仅本页前 5 篇占位, 其余置顶文章仍必须出现在后续页。
  */
 sitePhp($php, $siteDir, str_replace(
     'CIDS',
-    $stickyCids[0] . ',' . $stickyCids[1],
+    implode(',', $stickyCids),
     <<<'SITE_PHP'
 $config = json_encode([
     'sticky_cids' => 'CIDS',
@@ -1363,6 +1363,21 @@ $xmlrpcBody = '<?xml version="1.0"?>'
 $response = $site->postRaw('/index.php/action/xmlrpc', $xmlrpcBody, ['Content-Type' => 'text/xml']);
 $body = assertResponse($response, [200], 'xmlrpc system.listMethods');
 assertTrue(str_contains($body, 'system.listMethods'), 'xmlrpc response does not list system.listMethods: ' . substr($body, 0, 300));
+
+$postId = (int) sitePhp($php, $siteDir, "echo (int) \$db->fetchObject(\$db->select('cid')->from('table.contents')->where('slug = ?', 'e2e-regression-post'))->cid;");
+$getPost = '<?xml version="1.0"?>'
+    . '<methodCall><methodName>metaWeblog.getPost</methodName><params>'
+    . '<param><value><int>' . $postId . '</int></value></param>'
+    . '<param><value><string>' . htmlspecialchars($adminUser, ENT_XML1) . '</string></value></param>'
+    . '<param><value><string>' . htmlspecialchars($adminPassword, ENT_XML1) . '</string></value></param>'
+    . '</params></methodCall>';
+$body = assertResponse(
+    $site->postRaw('/index.php/action/xmlrpc', $getPost, ['Content-Type' => 'text/xml']),
+    [200],
+    'xmlrpc metaWeblog.getPost'
+);
+assertTrue(str_contains($body, 'E2E 回归文章') && str_contains($body, '<int>' . $postId . '</int>'),
+    'metaWeblog.getPost did not return the real post title and id: ' . substr($body, 0, 500));
 
 /** 密码错误必须被拒绝 (并且计入失败限流) */
 $badLogin = '<?xml version="1.0"?>'
