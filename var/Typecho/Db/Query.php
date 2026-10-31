@@ -22,7 +22,8 @@ use Typecho\Db\Exception;
 class Query
 {
     /** 数据库关键字 */
-    private const KEYWORDS = '*PRIMARY|AND|OR|LIKE|ILIKE|BINARY|BY|DISTINCT|AS|IN|NOT|IS|NULL';
+    // 搜索用 LIKE ? ESCAPE '!' 时必须认识 ESCAPE, 否则会被当成字段名加上引号 (SQL 语法错误)
+    private const KEYWORDS = '*PRIMARY|AND|OR|LIKE|ILIKE|ESCAPE|BINARY|BY|DISTINCT|AS|IN|NOT|IS|NULL';
 
     /**
      * 默认字段

@@ -742,6 +742,103 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
     }
 
     /**
+     * 给当前列表批量预取分类和标签
+     *
+     * 列表页里每篇文章都会各自查一次分类和标签 (N+1)。这里一次性查完写进行内的
+     * #categories / #tags, 模板上的魔术属性会直接命中缓存。作者不在这里预取:
+     * 那需要构造 widget, 省下的查询不多, 却多一条失败路径。
+     * 单条内容也不预取: 两次批量查询换两次单条查询没有意义。
+     *
+     * @throws Exception
+     */
+    public function prefetchRelated(): void
+    {
+        if (count($this->stack) < 2) {
+            return;
+        }
+
+        $cids = [];
+        foreach ($this->stack as $row) {
+            $cids[] = (int) $row['cid'];
+        }
+        $cids = array_values(array_unique($cids));
+
+        // 分类要拼出层级路径 (permalink 里的 directory), 所以整棵分类树都要拿到
+        $tree = [];
+        foreach ($this->db->fetchAll($this->db->select('mid', 'slug', 'parent')
+            ->from('table.metas')->where('table.metas.type = ?', 'category')) as $meta) {
+            $tree[(int) $meta['mid']] = $meta;
+        }
+
+        $directoryOf = function (int $mid) use ($tree): string {
+            $path = [];
+            $seen = [];
+            while (isset($tree[$mid]) && !isset($seen[$mid])) {
+                $seen[$mid] = true;
+                array_unshift($path, $tree[$mid]['slug']);
+                $mid = (int) $tree[$mid]['parent'];
+            }
+
+            return implode('/', array_map('urlencode', $path));
+        };
+
+        $categories = [];
+        $tags = [];
+        $rows = $this->db->fetchAll($this->db->select(
+            'table.relationships.cid',
+            'table.metas.mid',
+            'table.metas.name',
+            'table.metas.slug',
+            'table.metas.description',
+            'table.metas.type',
+            'table.metas.count',
+            'table.metas.order',
+            'table.metas.parent'
+        )->from('table.relationships')
+            ->join('table.metas', 'table.relationships.mid = table.metas.mid')
+            ->where('table.relationships.cid IN ?', $cids)
+            ->where('table.metas.type IN ?', ['category', 'tag'])
+            ->order('table.metas.order', 'ASC'));
+
+        foreach ($rows as $row) {
+            $cid = (int) $row['cid'];
+
+            if ('category' === $row['type']) {
+                $categories[$cid][] = [
+                    'mid' => $row['mid'],
+                    'name' => $row['name'],
+                    'slug' => $row['slug'],
+                    'description' => $row['description'],
+                    'order' => $row['order'],
+                    'parent' => $row['parent'],
+                    'count' => $row['count'],
+                    'permalink' => Router::url('category', [
+                        'mid' => $row['mid'],
+                        'slug' => $row['slug'],
+                        'directory' => $directoryOf((int) $row['mid'])
+                    ], $this->options->index),
+                ];
+            } else {
+                $tags[$cid][] = [
+                    'mid' => $row['mid'],
+                    'name' => $row['name'],
+                    'slug' => $row['slug'],
+                    'description' => $row['description'],
+                    'count' => $row['count'],
+                    'permalink' => Router::url('tag', ['slug' => $row['slug']], $this->options->index),
+                ];
+            }
+        }
+
+        foreach ($this->stack as $key => $row) {
+            $cid = (int) $row['cid'];
+            $row['#categories'] = $categories[$cid] ?? [];
+            $row['#tags'] = $tags[$cid] ?? [];
+            $this->stack[$key] = $row;
+        }
+    }
+
+    /**
      * 文章作者
      *
      * @return Users

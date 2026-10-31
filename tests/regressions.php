@@ -51,10 +51,20 @@ class RegressionAttachmentEdit extends Widget\Contents\Attachment\Edit
     }
 }
 
+/** 预取 permalink 需要站点的 index 地址, 测试里没有真实请求, 直接给定 */
+class RegressionOptions extends Widget\Options
+{
+    #[\Override]
+    protected function ___index(): string
+    {
+        return '/index.php';
+    }
+}
+
 function checkRegressions(Db $db, string $sqliteFile): void
 {
     Typecho\Plugin::init([]);
-    $options = (new ReflectionClass(Widget\Options::class))->newInstanceWithoutConstructor();
+    $options = (new ReflectionClass(RegressionOptions::class))->newInstanceWithoutConstructor();
     $settings = [
         'secret' => 'regression-secret', 'commentsPageBreak' => 1, 'commentsThreaded' => 1,
         'commentsOrder' => 'ASC', 'commentsPageSize' => 2, 'commentsPageDisplay' => 'first',
@@ -75,6 +85,12 @@ function checkRegressions(Db $db, string $sqliteFile): void
             'UPDATE rewrote marker-looking data');
         $db->query($db->delete('table.options')->where('name = ?', 'marker'));
     }
+    // ESCAPE 是 LIKE 的语法关键字, 不能被当成字段名加引号 (搜索接口依赖它)
+    $likeSql = $db->select('cid')->from('table.contents')
+        ->where("title LIKE ? ESCAPE '!' OR text LIKE ? ESCAPE '!'", '%a%', '%a%');
+    check(str_contains((string) $likeSql, 'ESCAPE'), 'query builder mangled the LIKE ESCAPE clause');
+    $db->fetchAll($likeSql);
+
     regressionThrows(fn() => @$db->query('SELECT FROM broken syntax'), 'invalid SQL did not throw a database exception');
     regressionThrows(fn() => $db->query($db->insert('table.options')->rows([
         'name' => 'nul', 'user' => 0, 'value' => "a\0b",
@@ -255,7 +271,60 @@ function checkRegressions(Db $db, string $sqliteFile): void
 
     $db->query($db->insert('table.fields')->rows(['cid' => 1, 'name' => 'old', 'type' => 'str', 'str_value' => 'old']));
     $db->query($db->insert('table.relationships')->rows(['cid' => 1, 'mid' => 1]));
+    checkPrefetchRegressions($db, $options);
     checkBackupRegressions($db, $sqliteFile, $options);
+}
+
+/**
+ * 列表页预取: 每行的分类/标签必须和逐行查询时一致, 且不影响没有关联的行
+ */
+function checkPrefetchRegressions(Db $db, Widget\Options $options): void
+{
+    Typecho\Router::setRoutes([
+        'index' => ['url' => '/', 'widget' => '\Widget\Archive'],
+        'category' => ['url' => '/category/[directory]/', 'widget' => '\Widget\Archive'],
+        'tag' => ['url' => '/tag/[slug]/', 'widget' => '\Widget\Archive'],
+    ]);
+
+    $db->query($db->insert('table.metas')->rows([
+        'mid' => 11, 'name' => 'Root', 'slug' => 'root', 'type' => 'category', 'parent' => 0, 'order' => 1, 'count' => 1,
+    ]));
+    $db->query($db->insert('table.metas')->rows([
+        'mid' => 12, 'name' => 'Child', 'slug' => 'child', 'type' => 'category', 'parent' => 11, 'order' => 2, 'count' => 1,
+    ]));
+    $db->query($db->insert('table.metas')->rows([
+        'mid' => 13, 'name' => 'Tag', 'slug' => 'tag-one', 'type' => 'tag', 'parent' => 0, 'order' => 0, 'count' => 1,
+    ]));
+    // 用没被前面用例碰过的 cid, 否则默认分类的关联会混进来
+    $db->query($db->insert('table.relationships')->rows(['cid' => 21, 'mid' => 12]));
+    $db->query($db->insert('table.relationships')->rows(['cid' => 22, 'mid' => 13]));
+
+    $archive = regressionWidget(Widget\Archive::class, $db, $options);
+    $stack = [
+        ['cid' => 21, 'authorId' => 1, 'title' => 'first'],
+        ['cid' => 22, 'authorId' => 1, 'title' => 'second'],
+        ['cid' => 23, 'authorId' => 1, 'title' => 'third'],
+    ];
+    (new ReflectionProperty(Typecho\Widget::class, 'stack'))->setValue($archive, $stack);
+    $archive->prefetchRelated();
+    $rows = (new ReflectionProperty(Typecho\Widget::class, 'stack'))->getValue($archive);
+
+    check($rows[0]['title'] === 'first', 'prefetch dropped unrelated row data');
+    check(array_column($rows[0]['#categories'], 'name') === ['Child'], 'prefetch attached the wrong category');
+    check($rows[0]['#categories'][0]['permalink'] === '/index.php/category/root/child/', 'prefetch built the wrong hierarchical category permalink');
+    check($rows[0]['#categories'][0]['order'] === 2 && $rows[0]['#categories'][0]['parent'] === 11,
+        'prefetch dropped category fields the templates use');
+    check($rows[0]['#tags'] === [], 'prefetch attached a tag to a post without tags');
+    check($rows[1]['#tags'][0]['permalink'] === '/index.php/tag/tag-one/', 'prefetch built the wrong tag permalink');
+    check($rows[1]['#categories'] === [], 'prefetch attached a category to a post without categories');
+    check($rows[2]['#categories'] === [] && $rows[2]['#tags'] === [], 'prefetch invented relations for a bare post');
+
+    // 单条内容不预取: 不能为了省一次查询反而多查两次
+    $single = regressionWidget(Widget\Archive::class, $db, $options);
+    (new ReflectionProperty(Typecho\Widget::class, 'stack'))->setValue($single, [['cid' => 21, 'title' => 'only']]);
+    $single->prefetchRelated();
+    $singleRow = (new ReflectionProperty(Typecho\Widget::class, 'stack'))->getValue($single)[0];
+    check(!array_key_exists('#categories', $singleRow), 'prefetch ran for a single item');
 }
 
 function checkBackupRegressions(Db $db, string $sqliteFile, Widget\Options $options): void
@@ -297,6 +366,13 @@ function checkBackupRegressions(Db $db, string $sqliteFile, Widget\Options $opti
         $stored = $db->fetchRow($db->select()->from('table.users'));
         check(Common::validateAuthCode(Cookie::get('__typecho_authCode'), $stored['authCode']), 'restored login cookie does not match committed user');
         check($snapshot()['options'] === $before['options'], 'restore changed site options');
+        // 备份里只有普通用户: 清空后没人能进后台, 必须整体回滚
+        $subscriber = $build->invoke($backup, 5, ['uid' => '2', 'name' => 'plain', 'group' => 'subscriber']);
+        $before = $snapshot();
+        file_put_contents($file, $header . $subscriber . $record . $header);
+        regressionThrows(fn() => @$restore->invoke($backup, $file), 'backup without an administrator was restored');
+        check($snapshot() === $before, 'restore without an administrator changed existing tables');
+
         file_put_contents($file, $header . $header);
         $restore->invoke($backup, $file);
         check($db->fetchAll($db->select()->from('table.contents')) === [], 'empty backup retained old rows');

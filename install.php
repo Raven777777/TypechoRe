@@ -451,7 +451,17 @@ require_once __TYPECHO_ROOT_DIR__ . '/var/Typecho/Common.php';
     $configWritten = false;
 
     if (!$return) {
-        $configWritten = @file_put_contents(__TYPECHO_ROOT_DIR__ . '/config.inc.php', $code) !== false;
+        // 先写临时文件再改名: 中途失败不会留下半个 config.inc.php
+        $configFile = __TYPECHO_ROOT_DIR__ . '/config.inc.php';
+        $tempFile = $configFile . '.' . bin2hex(random_bytes(6)) . '.tmp';
+        $configWritten = @file_put_contents($tempFile, $code) !== false;
+        if ($configWritten) {
+            @chmod($tempFile, 0644);
+            $configWritten = @rename($tempFile, $configFile);
+        }
+        if (!$configWritten) {
+            @unlink($tempFile);
+        }
     }
 
     return $code;
@@ -498,8 +508,10 @@ function install_check(string $type): bool
                 }
             } catch (\Typecho\Db\Adapter\ConnectionException $e) {
                 return true;
-            } catch (\Typecho\Db\Adapter\SQLException $e) {
-                return false;
+            } catch (\Throwable $e) {
+                // 连上了但查询报错 (表坏了/被锁/权限不对): 当成"已安装", 绝不能再走一遍建表流程
+                // 否则 install.php 会 DROP TABLE, 把现有数据删掉. 要重装请先手动删 config.inc.php
+                return true;
             }
 
             return true;

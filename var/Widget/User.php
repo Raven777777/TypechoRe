@@ -22,6 +22,9 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  */
 class User extends Users
 {
+    /** 只用于空跑一次 bcrypt, 抹平"用户不存在"的响应时间差 */
+    private const DUMMY_PASSWORD_HASH = '$2y$12$wrpWjcvCL7Y5Cqsiq.6APOUeKuEaaVhs6DANU1D8u3s3sI1XPL9py';
+
     /**
      * 用户组
      *
@@ -187,6 +190,8 @@ class User extends Users
         }
 
         if (empty($user)) {
+            // 用户不存在时也跑一次 bcrypt, 否则响应时间会泄露"用户名是否存在"
+            Common::hashValidate($password, self::DUMMY_PASSWORD_HASH);
             return false;
         }
 

@@ -162,6 +162,55 @@
 - 回归测试: `tools/e2e.php` 按新约定从页面里取各端点专属 token, 并新增三条断言 ——
   含下划线的 slug 去重、跨端点重放 token 被拒、XML-RPC 错误密码被拒
 
+### 第二轮审计修复 (正确性 / 数据 / 性能)
+
+- Atom 输出不转义: `var/Typecho/Feed.php` 的 `<author><name>/<uri>` 与
+  `<category scheme= term=>` 原来直接拼 DB 字段, 评论作者写「Tom & Jerry」就让
+  `/feed/atom/` 不再是合法 XML, 所有订阅器报错; RSS1/RSS2 的 `<title>` 取值已转过一次义
+  (标题入库时 `Base/Contents` 就 `htmlspecialchars` 过), 现在用 `plainText()`
+  (先解再转) 输出, 不再出现 `R&amp;D`
+- 主题标题双重转义: 新增 `themeTitle()`/`themePlainTitle()` (`usr/themes/default-2026/functions.php`),
+  8 处模板与 JSON-LD、上下篇标题改用它们, `R&D` 不再显示成 `R&amp;D`
+- 搜索接口: `Widget\Archive::searchHandle()` 不再用 `filter('url')` 洗关键词
+  (`React: hooks` 会被洗成 `/`, `C++ 教程` 变 `C++教程`), 关键词为空或只剩 `%`/`_`
+  时直接 404 (以前 `LIKE '%%'` 匹配全部文章), 搜索页的 RSS 链接也修成 RSS 而不是 Atom
+- `Typecho\Db\Query::KEYWORDS` 补上 `ESCAPE`: 搜索用 `LIKE ? ESCAPE '!'`, 而
+  `filterColumn()` 不认识 `ESCAPE`, 会把它当字段名加引号成 `"ESCAPE"` → SQL 语法错误,
+  搜索页 500
+- 登录限速的实际效果: `Typecho\Throttle::hit()` 把计数放在 `flock` 里自增, 登录与
+  Passkey 都改成「先记账再验证」。原来的 `tooMany()` 先查后记, 并发打进来的一批请求
+  都能通过检查, 把 10 次/15 分钟变成一次能试几百个密码
+- Passkey 挑战值读取即销毁 (`Widget\Passkey::processGet()`): 以前只在验证成功时清
+  session, 失败后同一个断言可以在 300 秒内重放 (authenticator 报 `signCount = 0` 时甚至不限时)
+- 用户名枚举: `Widget\User::login()` 用户不存在时也跑一次 `Common::hashValidate()`
+  (固定假哈希), 响应时间不再区分「没这个人」和「密码错」
+- 注册流程 (`Widget\Register`): 用户填的密码会真正使用 (以前丢掉用户输入, 随机生成 7 位
+  并写进 `__typecho_notice` cookie, 而该 cookie 是 `httponly=false`, 任何页面脚本都能读到);
+  `admin/register.php` 补上密码与确认输入框
+- 评论刷屏: 设置→讨论里 `commentsUniqueIpInterval` 现在有输入框也真正生效 (全站按 IP,
+  独立于原有的「同一文章间隔」); 该选项此前只在 `from()` 列表里出现, 从未被读取
+- 开放重定向: `Typecho\Widget\Response::goBack()` 只跳回同站 Referer
+  (以前 `Security::protect()` 失败时会被 `Referer: https://evil` 带去站外)
+- 评论作者名 `Widget\Base\Comments::author()` 转义 (编辑角色的后台编辑框可以用
+  `removeXSS` 黑名单绕过写进去一个全屏覆盖层)
+- 数据库: `Typecho\Db::transaction()` 的 `COMMIT` 移出 `try`, COMMIT 失败时不再被
+  `ROLLBACK` 的报错盖住原因; `Typecho\Db\Adapter\Pdo::query()` 补上 3 次 busy 重试
+  (原来只有原生 `SQLite` 适配器有, 而 PDO 才是在用的那个)
+- `install.php`: DB 抛任何异常都不再落到「DROP TABLE 重建」分支 (原来只挡住了连接异常),
+  `config.inc.php` 改成临时文件 + `rename` 原子写入
+- 备份: 导出改 keyset 分页 (`rowid > ?`, 每页 500), 不再 `LIMIT 20 OFFSET n` 做 O(n²);
+  恢复时如果备份里一个管理员都没有就中止 (以前先清空 6 张表再发现没有管理员, 站点直接登不进去)
+- 前台 N+1: `Widget\Base\Contents::prefetchRelated()` 一次 join 取全列表的分类/标签,
+  父级路径在内存里拼, `Widget\Archive` 列表查询后调用。后台的 `AdminTrait` 早有预取,
+  前台一直是每篇 4 条查询
+- `Typecho\PageCache::cleanup()` 改成 1/50 概率触发, 且只在文件数超过 2×LIMIT 时清理
+  (以前每次写入都 glob 整个缓存目录再删到 200 个)
+- 文档与配置: `docs/guide/deployment.md` 与 `web.config` 补上 `usr/backups/` 与 `.dat`
+  的拒绝规则 (nginx 需要显式 `location ^~ /usr/backups/`), Apache 侧由 `.htaccess` 负责
+- 回归测试: `tests/smoke.php` 增加 `Throttle::hit` 原子计数与 Feed 转义断言;
+  `tests/regressions.php` 增加关联数据预取 (层级分类 permalink、标签、单行早退)、
+  无管理员的备份拒绝恢复、以及 `LIKE ... ESCAPE` 不被改写的断言
+
 ### 仓库与文档整理
 
 - 新增 [`tools/README.md`](tools/README.md): 逐个说明构建/打包/质量检查脚本的用途、常用命令与调用关系,

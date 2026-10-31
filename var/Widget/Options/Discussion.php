@@ -99,7 +99,8 @@ class Discussion extends Options implements ActionInterface
         );
 
         $settings['commentsPostTimeout'] = intval($settings['commentsPostTimeout']) * 24 * 3600;
-        $settings['commentsPostInterval'] = round($settings['commentsPostInterval'], 1) * 60;
+        $settings['commentsPostInterval'] = round((float) $settings['commentsPostInterval'], 1) * 60;
+        $settings['commentsUniqueIpInterval'] = max(0, (int) round((float) $settings['commentsUniqueIpInterval'], 1) * 60);
 
         unset($settings['commentsShow']);
         unset($settings['commentsPost']);
@@ -265,6 +266,17 @@ class Discussion extends Options implements ActionInterface
             _t('评论提交')
         );
         $form->addInput($commentsPost->multiMode());
+
+        /** 同一 IP 的全站评论间隔 */
+        $commentsUniqueIpInterval = new Form\Element\Number(
+            'commentsUniqueIpInterval',
+            null,
+            round(((int) $this->options->commentsUniqueIpInterval) / 60, 1),
+            _t('同一 IP 的评论间隔 (分钟)'),
+            _t('所有文章合计, 填 0 表示不限制. 用来挡住一个 IP 在所有文章下连续灌评论.')
+        );
+        $commentsUniqueIpInterval->input->setAttribute('class', 'w-20');
+        $form->addInput($commentsUniqueIpInterval);
 
         /** 允许使用的HTML标签和属性 */
         $commentsHTMLTagAllowed = new Form\Element\Textarea(

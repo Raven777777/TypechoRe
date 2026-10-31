@@ -216,7 +216,7 @@ xmlns:dc="http://purl.org/dc/elements/1.1/">' . self::EOL;
 
             foreach ($this->items as $item) {
                 $content .= '<item rdf:about="' . $item['link'] . '">' . self::EOL;
-                $content .= '<title>' . htmlspecialchars($item['title']) . '</title>' . self::EOL;
+                $content .= '<title>' . self::plainText($item['title']) . '</title>' . self::EOL;
                 $content .= '<link>' . $item['link'] . '</link>' . self::EOL;
                 $content .= '<dc:date>' . $this->dateFormat($item['date']) . '</dc:date>' . self::EOL;
                 $content .= '<description>' . strip_tags($item['content']) . '</description>' . self::EOL;
@@ -261,7 +261,7 @@ xmlns:atom="http://www.w3.org/2005/Atom">
 
             foreach ($this->items as $item) {
                 $content .= '<item>' . self::EOL;
-                $content .= '<title>' . htmlspecialchars($item['title']) . '</title>' . self::EOL;
+                $content .= '<title>' . self::plainText($item['title']) . '</title>' . self::EOL;
                 $content .= '<link>' . $item['link'] . '</link>' . self::EOL;
                 $content .= '<guid>' . $item['link'] . '</guid>' . self::EOL;
                 $content .= '<pubDate>' . $this->dateFormat($item['date']) . '</pubDate>' . self::EOL;
@@ -331,14 +331,14 @@ xml:base="' . $this->baseUrl . '"
                 $content .= '<updated>' . $this->dateFormat($item['date']) . '</updated>' . self::EOL;
                 $content .= '<published>' . $this->dateFormat($item['date']) . '</published>' . self::EOL;
                 $content .= '<author>
-    <name>' . $item['author']->screenName . '</name>
-    <uri>' . $item['author']->url . '</uri>
+    <name>' . htmlspecialchars((string) $item['author']->screenName) . '</name>
+    <uri>' . htmlspecialchars((string) $item['author']->url) . '</uri>
 </author>' . self::EOL;
 
                 if (!empty($item['category']) && is_array($item['category'])) {
                     foreach ($item['category'] as $category) {
-                        $content .= '<category scheme="' . $category['permalink'] . '" term="'
-                            . $category['name'] . '" />' . self::EOL;
+                        $content .= '<category scheme="' . htmlspecialchars((string) $category['permalink'])
+                            . '" term="' . htmlspecialchars((string) $category['name']) . '" />' . self::EOL;
                     }
                 }
 
@@ -405,6 +405,14 @@ xml:base="' . $this->baseUrl . '"
         }
 
         return '';
+    }
+
+    /**
+     * 标题入库时已经过 htmlspecialchars, RSS 的 <title> 是纯文本, 再转义一次会二次编码
+     */
+    private static function plainText(string $value): string
+    {
+        return htmlspecialchars(html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
     }
 
     /**

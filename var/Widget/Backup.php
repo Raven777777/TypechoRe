@@ -22,6 +22,9 @@ class Backup extends BaseOptions implements ActionInterface
     public const HEADER = '%TYPECHO_BACKUP_XXXX%';
     public const HEADER_VERSION = '0002';
 
+    /** 导出时每批读取的行数 */
+    private const PAGE_SIZE = 500;
+
     /**
      * @var array
      */
@@ -60,6 +63,7 @@ class Backup extends BaseOptions implements ActionInterface
     ];
 
     private ?array $login = null;
+
 
     /**
      * 列出已有备份文件
@@ -126,13 +130,23 @@ class Backup extends BaseOptions implements ActionInterface
         $db->query('BEGIN', Db::READ, '');
         try {
             foreach ($this->types as $type => $val) {
-                $page = 1;
+                // 按 rowid 增量翻页: OFFSET 在十万行级别是二次复杂度, 也会让每个进程各扫一遍.
+                // rowid 取别名 rid: SQLite 会把它报告成 INTEGER PRIMARY KEY 列的名字, 别名才稳定.
+                $last = 0;
                 do {
-                    $rows = $db->fetchAll($db->select()->from('table.' . $type)->page($page++, 20));
+                    $rows = $db->fetchAll(
+                        $db->select(['rowid' => 'rid'], ...$this->fields[$type])
+                            ->from('table.' . $type)
+                            ->where('rowid > ?', $last)
+                            ->order('rowid', Db::SORT_ASC)
+                            ->limit(self::PAGE_SIZE)
+                    );
+
                     foreach ($rows as $row) {
+                        $last = (int) $row['rid'];
                         $this->writeBuffer($fp, $this->buildBuffer($val, $this->applyFields($type, $row)));
                     }
-                } while (count($rows) === 20);
+                } while (count($rows) === self::PAGE_SIZE);
             }
             $db->query('COMMIT', Db::READ, '');
         } catch (\Throwable $e) {
@@ -288,6 +302,11 @@ class Backup extends BaseOptions implements ActionInterface
                 if ($offset !== $end) {
                     throw new Exception(_t('备份文件格式错误'));
                 }
+                // 表已经被清空: 备份里明明有用户却没有管理员, 恢复后谁也进不了后台,
+                // 所以整体回滚, 现有数据保持不动 (完全不含用户的空备份仍然允许恢复)
+                if (null === $this->login && $this->countRows('users') > 0) {
+                    throw new Exception(_t('备份文件里的用户都不是管理员, 已取消恢复'));
+                }
                 return $this->login;
             });
         } catch (\Throwable $e) {
@@ -303,6 +322,23 @@ class Backup extends BaseOptions implements ActionInterface
             Cookie::delete('__typecho_uid');
             Cookie::delete('__typecho_authCode');
         }
+    }
+
+    /**
+     * @param $str
+     * @param $version
+     * @return bool
+     */
+    /**
+     * @param string $table
+     * @return int
+     * @throws Exception
+     */
+    private function countRows(string $table): int
+    {
+        return (int) $this->db->fetchObject(
+            $this->db->select(['COUNT(*)' => 'num'])->from('table.' . $table)
+        )->num;
     }
 
     /**

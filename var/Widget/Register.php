@@ -53,13 +53,12 @@ class Register extends Users implements ActionInterface
         $validator->addRule('mail', 'email', _t('电子邮箱格式错误'));
         $validator->addRule('mail', 'maxLength', _t('电子邮箱最多包含64个字符'), 64);
 
-        /** 如果请求中有password */
-        if (array_key_exists('password', $_REQUEST)) {
-            $validator->addRule('password', 'required', _t('必须填写密码'));
-            $validator->addRule('password', 'minLength', _t('为了保证账户安全, 请输入至少六位的密码'), 6);
-            $validator->addRule('password', 'maxLength', _t('为了便于记忆, 密码长度请不要超过十八位'), 18);
-            $validator->addRule('confirm', 'confirm', _t('两次输入的密码不一致'), 'password');
-        }
+        /** 密码由注册者自己设置: 之前这里生成随机密码并通过 notice 展示,
+         *  notice 存在可被 JS 读取的 cookie 里, 等于把密码写进了前端 */
+        $validator->addRule('password', 'required', _t('必须填写密码'));
+        $validator->addRule('password', 'minLength', _t('为了保证账户安全, 请输入至少六位的密码'), 6);
+        $validator->addRule('password', 'maxLength', _t('为了便于记忆, 密码长度请不要超过十八位'), 18);
+        $validator->addRule('confirm', 'confirm', _t('两次输入的密码不一致'), 'password');
 
         /** 截获验证异常 */
         if ($error = $validator->run($this->request->from('name', 'password', 'mail', 'confirm'))) {
@@ -71,13 +70,13 @@ class Register extends Users implements ActionInterface
             $this->response->goBack();
         }
 
-        $generatedPassword = Common::randString(7);
+        $password = (string) $this->request->get('password');
 
         $dataStruct = [
             'name' => $this->request->get('name'),
             'mail' => $this->request->get('mail'),
             'screenName' => $this->request->get('name'),
-            'password' => Common::hashPassword($generatedPassword),
+            'password' => Common::hashPassword($password),
             'created' => $this->options->time,
             'group' => 'subscriber'
         ];
@@ -90,7 +89,7 @@ class Register extends Users implements ActionInterface
 
         self::pluginHandle()->call('finishRegister', $this);
 
-        $this->user->login($this->request->get('name'), $generatedPassword);
+        $this->user->login($this->request->get('name'), $password);
 
         Cookie::delete('__typecho_first_run');
         Cookie::delete('__typecho_remember_name');
@@ -98,9 +97,8 @@ class Register extends Users implements ActionInterface
 
         Notice::alloc()->set(
             _t(
-                '用户 <strong>%s</strong> 已经成功注册, 密码为 <strong>%s</strong>',
-                $this->screenName,
-                $generatedPassword
+                '用户 <strong>%s</strong> 已经成功注册',
+                $this->screenName
             ),
             'success'
         );

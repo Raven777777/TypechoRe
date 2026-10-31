@@ -191,8 +191,14 @@ final class PageCache
 
     private static function cleanup(string $dir): void
     {
+        // 每次写缓存都 glob 一遍目录是纯浪费; 2% 概率触发, 超出上限时按最旧删除
+        if (1 !== random_int(1, 50)) {
+            return;
+        }
+
         $files = glob($dir . '/[a-f0-9]*') ?: [];
-        if (count($files) <= self::LIMIT * 2) {
+        $overflow = count($files) - self::LIMIT * 2;
+        if ($overflow <= 0) {
             return;
         }
 
@@ -202,7 +208,7 @@ final class PageCache
         }
         asort($ages);
 
-        foreach (array_slice(array_keys($ages), 0, count($ages) - self::LIMIT) as $file) {
+        foreach (array_slice(array_keys($ages), 0, $overflow) as $file) {
             @unlink($file);
         }
     }

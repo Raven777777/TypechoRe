@@ -35,7 +35,7 @@ $this->need('header.php');
             <ul class="archive-list">
                 <?php while ($recent->next()): ?>
                     <li>
-                        <a href="<?php $recent->permalink(); ?>"><?php echo themeText(fn () => $recent->title()); ?></a>
+                        <a href="<?php $recent->permalink(); ?>"><?php echo themeTitle(fn () => $recent->title()); ?></a>
                         <time datetime="<?php $recent->date('c'); ?>"><?php $recent->date('Y-m-d'); ?></time>
                     </li>
                 <?php endwhile; ?>

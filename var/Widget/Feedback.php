@@ -275,12 +275,26 @@ class Feedback extends Comments implements ActionInterface
     private function insertComment(array $comment): int
     {
         return $this->db->transaction(function () use ($comment): int {
-            if (!$this->user->pass('editor', true) && $this->content->authorId != $this->user->uid
+            $isEditor = $this->user->pass('editor', true);
+
+            if (!$isEditor && $this->content->authorId != $this->user->uid
                 && $this->options->commentsPostIntervalEnable) {
                 $latest = $this->db->fetchRow($this->db->select('created')->from('table.comments')
                     ->where('cid = ? AND ip = ?', $comment['cid'], $comment['ip'])
                     ->order('created', Db::SORT_DESC)->limit(1));
                 if ($latest && $comment['created'] - $latest['created'] < $this->options->commentsPostInterval) {
+                    throw new Exception(_t('对不起, 您的发言过于频繁, 请稍候再次发布.'), 403);
+                }
+            }
+
+            // commentsPostInterval 只管单篇文章, 换个文章就不受限; 这一条按 IP 全站合计
+            $uniqueInterval = (int) ($this->options->commentsUniqueIpInterval ?? 0);
+            if (!$isEditor && $uniqueInterval > 0) {
+                $latest = $this->db->fetchRow($this->db->select('created')->from('table.comments')
+                    ->where('ip = ?', $comment['ip'])
+                    ->where('status <> ?', 'spam')
+                    ->order('created', Db::SORT_DESC)->limit(1));
+                if ($latest && $comment['created'] - $latest['created'] < $uniqueInterval) {
                     throw new Exception(_t('对不起, 您的发言过于频繁, 请稍候再次发布.'), 403);
                 }
             }

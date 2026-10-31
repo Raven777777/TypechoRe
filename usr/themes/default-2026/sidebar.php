@@ -37,7 +37,7 @@ if (!$hasBlock) {
                 <ul class="widget-list">
                     <?php while ($recent->next()): ?>
                         <li class="truncate">
-                            <a href="<?php $recent->permalink(); ?>" title="<?php echo themeText(fn () => $recent->title()); ?>"><?php echo themeText(fn () => $recent->title()); ?></a>
+                            <a href="<?php $recent->permalink(); ?>" title="<?php echo themeTitle(fn () => $recent->title()); ?>"><?php echo themeTitle(fn () => $recent->title()); ?></a>
                         </li>
                     <?php endwhile; ?>
                 </ul>

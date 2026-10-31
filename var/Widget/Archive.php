@@ -699,6 +699,7 @@ class Archive extends Contents
         $select->order('table.contents.created', Db::SORT_DESC)
             ->page($this->currentPage, $this->parameter->pageSize);
         $this->query($select);
+        $this->prefetchRelated();
 
         /** 处理超出分页的情况 */
         if ($this->currentPage > 1 && !$this->have()) {
@@ -2081,7 +2082,14 @@ EOF;
     {
         /** 增加自定义搜索引擎接口 */
         //~ fix issue 40
-        $keywords = $this->request->filter('url', 'search')->get('keywords');
+        // 只做文本过滤: filter('url') 会把 "React: hooks" 洗成 "/", 让搜索永远空结果
+        $rawKeywords = $this->request->get('keywords');
+        $keywords = is_string($rawKeywords) ? trim(Common::filterSearchQuery($rawKeywords)) : '';
+
+        // 空关键词会拼出 LIKE '%%', 匹配全部文章; 只剩通配符 (% _) 也一样
+        if ('' === str_replace(['%', '_'], '', $keywords)) {
+            throw new WidgetException(_t('请求的地址不存在'), 404);
+        }
 
         // 用局部变量接收插件信号, 避免把 $hasPushed 直接以引用交给 trigger()
         $searchPlugged = false;
@@ -2137,7 +2145,7 @@ EOF;
         $this->archiveFeedUrl = Router::url('search', $this->pageRow, $this->options->feedUrl);
 
         /** RSS 1.0 */
-        $this->archiveFeedRssUrl = Router::url('search', $this->pageRow, $this->options->feedAtomUrl);
+        $this->archiveFeedRssUrl = Router::url('search', $this->pageRow, $this->options->feedRssUrl);
 
         /** ATOM 1.0 */
         $this->archiveFeedAtomUrl = Router::url('search', $this->pageRow, $this->options->feedAtomUrl);

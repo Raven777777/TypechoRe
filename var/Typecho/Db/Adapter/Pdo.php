@@ -106,16 +106,31 @@ abstract class Pdo implements Adapter
         ?string $action = null,
         ?string $table = null
     ): \PDOStatement {
-        try {
-            $this->lastTable = $table;
-            $resource = $handle->prepare($query);
-            $resource->execute();
-        } catch (\PDOException $e) {
-            /** 数据库异常 */
-            throw new SQLException($e->getMessage(), $e->getCode());
+        // SQLITE_BUSY (5) 时短暂重试, 应对 busy_timeout 之外的瞬时锁 (与原生 SQLite 适配器一致)
+        $busy = null;
+
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            if ($attempt > 0) {
+                usleep(50000);
+            }
+
+            try {
+                $this->lastTable = $table;
+                $resource = $handle->prepare($query);
+                $resource->execute();
+                return $resource;
+            } catch (\PDOException $e) {
+                if (5 !== (int) $e->getCode()) {
+                    /** 数据库异常 */
+                    throw new SQLException($e->getMessage(), $e->getCode());
+                }
+
+                $busy = $e;
+            }
         }
 
-        return $resource;
+        /** 数据库异常 */
+        throw new SQLException($busy->getMessage(), 5);
     }
 
     /**

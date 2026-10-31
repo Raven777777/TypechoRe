@@ -204,6 +204,44 @@ check(!\Typecho\Throttle::tooMany('smoke', 'subject'), 'expired throttle remaine
 check(str_ends_with(file_get_contents($throttleFile), '|1'), 'expired throttle did not reset before next failure');
 \Typecho\Throttle::clear('smoke', 'subject');
 check(!\Typecho\Throttle::tooMany('smoke', 'subject'), 'throttle did not clear');
+
+\Typecho\Throttle::clear('smoke-hit', 'subject');
+for ($i = 1; $i <= \Typecho\Throttle::LIMIT; $i++) {
+    check(!\Typecho\Throttle::hit('smoke-hit', 'subject'), 'atomic throttle blocked attempt ' . $i);
+}
+check(\Typecho\Throttle::hit('smoke-hit', 'subject'), 'atomic throttle did not trip after ' . \Typecho\Throttle::LIMIT);
+\Typecho\Throttle::clear('smoke-hit', 'subject');
+check(!\Typecho\Throttle::hit('smoke-hit', 'subject'), 'atomic throttle did not clear');
+
+/** 标题入库时已经转义过一次, 聚合输出只能再转义一次, 否则 R&D 会变成 R&amp;D */
+$feedItem = [
+    'title' => 'R&amp;D',
+    'link' => 'https://example.test/post',
+    'content' => '<p>body</p>',
+    'date' => time(),
+    'author' => (object) ['screenName' => 'Tom & Jerry', 'url' => 'https://example.test/u?a=1&b=2'],
+    'category' => [[ 'name' => 'A&B', 'permalink' => 'https://example.test/c?a=1&b=2']],
+];
+
+$build = static function (string $type) use ($feedItem): string {
+    $feed = new \Typecho\Feed('typechore', $type);
+    $feed->setTitle('title');
+    $feed->setSubTitle('sub');
+    $feed->setFeedUrl('https://example.test/feed');
+    $feed->setBaseUrl('https://example.test');
+    $feed->addItem($feedItem);
+    return (string) $feed;
+};
+
+$rss = $build(\Typecho\Feed::RSS2);
+check(str_contains($rss, '<title>R&amp;D</title>'), 'RSS title was not escaped exactly once: ' . $rss);
+check(!str_contains($rss, 'R&amp;amp;D'), 'RSS title was double escaped');
+
+$atom = $build(\Typecho\Feed::ATOM1);
+check(str_contains($atom, '<name>Tom &amp; Jerry</name>'), 'Atom author name was not escaped');
+check(str_contains($atom, '<uri>https://example.test/u?a=1&amp;b=2</uri>'), 'Atom author uri was not escaped');
+check(str_contains($atom, 'term="A&amp;B"'), 'Atom category term was not escaped');
+check(str_contains($atom, 'scheme="https://example.test/c?a=1&amp;b=2"'), 'Atom category scheme was not escaped');
 foreach (['$T$' . str_repeat('x', 40), '$P$' . str_repeat('x', 31), md5('password')] as $legacyPasswordHash) {
     check(!\Typecho\Common::hashValidate('password', $legacyPasswordHash), 'unsupported legacy password hash was accepted');
 }

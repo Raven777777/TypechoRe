@@ -165,6 +165,8 @@ class Passkey extends BaseOptions implements ActionInterface
     private function processGet(): void
     {
         $state = $this->getState('get');
+        // 挑战值一次性使用: 验证失败也要作废, 否则同一个断言可以在 300 秒内反复重放
+        unset($_SESSION[self::SESSION_KEY]);
         $this->ensureTable();
         $this->assertNotThrottled();
 
@@ -174,11 +176,9 @@ class Passkey extends BaseOptions implements ActionInterface
             if (429 === $e->getCode()) {
                 throw $e;
             }
-            $this->recordFailure();
             /** 统一错误信息: 不区分「凭证不存在」与「签名无效」, 避免被用来枚举有效凭证 */
             throw new WidgetException(_t('Passkey 验证失败'), 401);
         } catch (\Throwable $e) {
-            $this->recordFailure();
             throw new WidgetException(_t('Passkey 验证失败'), 401);
         }
     }
@@ -227,7 +227,6 @@ class Passkey extends BaseOptions implements ActionInterface
             'last_used' => time()
         ])->where('id = ?', $row['id']));
 
-        unset($_SESSION[self::SESSION_KEY]);
         $this->resetThrottle();
 
         // 与密码登录行为对齐: 勾选「下次自动登录」时写入持久化 Cookie (30 天),
@@ -244,14 +243,10 @@ class Passkey extends BaseOptions implements ActionInterface
      */
     private function assertNotThrottled(): void
     {
-        if (\Typecho\Throttle::tooMany('passkey', $this->request->getIp())) {
+        // 先记账再验证: 否则并发请求会在任何一次失败写入之前全部通过检查
+        if (\Typecho\Throttle::hit('passkey', $this->request->getIp())) {
             throw new WidgetException(_t('尝试次数过多, 请稍后再试'), 429);
         }
-    }
-
-    private function recordFailure(): void
-    {
-        \Typecho\Throttle::fail('passkey', $this->request->getIp());
     }
 
     private function resetThrottle(): void

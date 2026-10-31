@@ -248,20 +248,25 @@ authCode 摘要为 128 位十六进制（SHA-512），旧安装的 `users.authCo
 location = /config.inc.php { deny all; }
 location ~* \.(?:db|sqlite|sqlite3)(?:-(?:wal|shm|journal))?$ { deny all; }
 location ~* \.sql$ { deny all; }
+# 后台「备份」导出的 .dat 含全部文章、评论和用户密码摘要, 同样不能直接下载
+location ^~ /usr/backups/ { deny all; }
 ```
 
 ### Apache
 
 ```apache
 # .htaccess 或 vhost 配置
-<FilesMatch "(?i)(config\.inc\.php|\.(db|sqlite|sqlite3)(-(wal|shm|journal))?|\.sql)$">
+<FilesMatch "(?i)(config\.inc\.php|\.(db|sqlite|sqlite3)(-(wal|shm|journal))?|\.sql|\.dat)$">
     Require all denied
 </FilesMatch>
+
+# 备份目录整体拒绝
+RedirectMatch 403 (?i)^/usr/backups/
 ```
 
 ### IIS
 
-发布包自带的 `.htaccess` / `web.config` 会拒绝 `.db`、`.sqlite`、`.sqlite3` 主文件、对应的 `-wal` / `-shm` / `-journal` 辅助文件及 `.sql` 文件，并阻止访问 `config.inc.php`。Apache 需允许 `.htaccess` 中的访问控制规则生效；若 `AllowOverride` 禁用，请在 VirtualHost 中配置等效规则。
+发布包自带的 `.htaccess` / `web.config` 会拒绝 `.db`、`.sqlite`、`.sqlite3` 主文件、对应的 `-wal` / `-shm` / `-journal` 辅助文件、`.sql` 与备份 `.dat` 文件，阻止访问 `config.inc.php` 和整个 `usr/backups/` 目录。Apache 需允许 `.htaccess` 中的访问控制规则生效；若 `AllowOverride` 禁用，请在 VirtualHost 中配置等效规则。
 
 ### 根治方案
 

@@ -101,7 +101,7 @@ $themePreload = themePreloadLinks();
             <a class="rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-surface-2<?php echo $this->is('index') ? ' font-medium text-accent-ink' : ' text-ink-2'; ?>" href="<?php $this->options->siteUrl(); ?>"<?php if ($this->is('index')): ?> aria-current="page"<?php endif; ?>><?php _e('首页'); ?></a>
             <?php \Widget\Contents\Page\Rows::alloc()->to($pages); ?>
             <?php while ($pages->next()): ?>
-                <a class="rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-surface-2<?php echo $this->is('page', $pages->slug) ? ' font-medium text-accent-ink' : ' text-ink-2'; ?>" href="<?php $pages->permalink(); ?>"<?php if ($this->is('page', $pages->slug)): ?> aria-current="page"<?php endif; ?>><?php echo themeText(fn () => $pages->title()); ?></a>
+                <a class="rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-surface-2<?php echo $this->is('page', $pages->slug) ? ' font-medium text-accent-ink' : ' text-ink-2'; ?>" href="<?php $pages->permalink(); ?>"<?php if ($this->is('page', $pages->slug)): ?> aria-current="page"<?php endif; ?>><?php echo themeTitle(fn () => $pages->title()); ?></a>
             <?php endwhile; ?>
             <a class="icon-btn" href="<?php $this->options->feedUrl(); ?>" title="<?php echo themeEsc(_t('订阅文章 RSS')); ?>" aria-label="<?php echo themeEsc(_t('订阅文章 RSS')); ?>"><?php echo themeIcon('rss', 'size-4'); ?></a>
         </nav>
@@ -142,7 +142,7 @@ $themePreload = themePreloadLinks();
                     <?php \Widget\Contents\Page\Rows::alloc()->to($mobilePages); ?>
                     <?php while ($mobilePages->next()): ?>
                         <li>
-                            <a class="block rounded-lg px-3 py-2 text-sm transition-colors hover:bg-surface-2<?php echo $this->is('page', $mobilePages->slug) ? ' font-medium text-accent-ink' : ' text-ink-2'; ?>" href="<?php $mobilePages->permalink(); ?>"<?php if ($this->is('page', $mobilePages->slug)): ?> aria-current="page"<?php endif; ?>><?php echo themeText(fn () => $mobilePages->title()); ?></a>
+                            <a class="block rounded-lg px-3 py-2 text-sm transition-colors hover:bg-surface-2<?php echo $this->is('page', $mobilePages->slug) ? ' font-medium text-accent-ink' : ' text-ink-2'; ?>" href="<?php $mobilePages->permalink(); ?>"<?php if ($this->is('page', $mobilePages->slug)): ?> aria-current="page"<?php endif; ?>><?php echo themeTitle(fn () => $mobilePages->title()); ?></a>
                         </li>
                     <?php endwhile; ?>
                     <li>

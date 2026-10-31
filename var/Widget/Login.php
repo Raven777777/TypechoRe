@@ -60,7 +60,8 @@ class Login extends Users implements ActionInterface
 
         /** 拦截暴力破解: session 计数可以被客户端丢 cookie 清零, 这里存到临时目录 */
         $throttleSubject = $credentials['name'] . '|' . $this->request->getIp();
-        if (Throttle::tooMany('login', $throttleSubject)) {
+        // 先记账再验证: 否则并发请求会在任何一次 fail() 写入之前全部通过检查
+        if (Throttle::hit('login', $throttleSubject)) {
             Notice::alloc()->set(_t('尝试次数过多, 请稍后再试'), 'error');
             $this->response->goBack();
         }
@@ -97,8 +98,6 @@ class Login extends Users implements ActionInterface
 
         /** 比对密码 */
         if (!$valid) {
-            Throttle::fail('login', $throttleSubject);
-
             self::pluginHandle()->call(
                 'loginFailure',
                 $this->user,

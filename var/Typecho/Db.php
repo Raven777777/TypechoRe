@@ -395,19 +395,43 @@ class Db
 
         try {
             $result = $callback();
-            $this->query('COMMIT', self::WRITE, '');
-            $this->inTransaction = false;
-            if ($this->transactionWrites) {
-                PageCache::invalidate();
-                $this->transactionWrites = false;
-            }
-            return $result;
         } catch (\Throwable $e) {
-            $this->query('ROLLBACK', self::WRITE, '');
-            $this->inTransaction = false;
-            $this->transactionWrites = false;
+            $this->rollback();
             throw $e;
         }
+
+        // COMMIT 自身也可能失败 (例如 SQLITE_BUSY), 此时只回滚, 不要用 ROLLBACK 的报错盖掉原始异常
+        try {
+            $this->query('COMMIT', self::WRITE, '');
+        } catch (\Throwable $e) {
+            $this->rollback();
+            throw $e;
+        }
+
+        $this->inTransaction = false;
+        if ($this->transactionWrites) {
+            PageCache::invalidate();
+            $this->transactionWrites = false;
+        }
+
+        return $result;
+    }
+
+    /**
+     * 回滚并复位事务状态
+     *
+     * SQLite 在 BUSY / IO 错误时会自行回滚, 这时再发 ROLLBACK 会报
+     * "cannot rollback - no transaction is active"; 让它静默, 原始异常才不会被掩盖.
+     */
+    private function rollback(): void
+    {
+        try {
+            $this->query('ROLLBACK', self::WRITE, '');
+        } catch (\Throwable $ignore) {
+        }
+
+        $this->inTransaction = false;
+        $this->transactionWrites = false;
     }
 
     /**
@@ -422,10 +446,6 @@ class Db
      */
     public function query($query, int $op = self::READ, string $action = self::SELECT)
     {
-        if ($this->inTransaction && self::READ === $op) {
-            $op = self::WRITE;
-        }
-
         $table = null;
 
         /** 在适配器中执行查询 */

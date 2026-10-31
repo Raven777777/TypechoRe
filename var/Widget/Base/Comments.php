@@ -325,11 +325,13 @@ class Comments extends Base implements QueryInterface, RowFilterInterface, Prima
         $autoLink = (null === $autoLink) ? $this->options->commentsShowUrl : $autoLink;
         $noFollow = (null === $noFollow) ? $this->options->commentsUrlNofollow : $noFollow;
 
+        $author = Common::escape($this->author);
+
         if ($this->url && $autoLink) {
             echo '<a href="' . Common::safeUrl($this->url) . '"'
-                . ($noFollow ? ' rel="external nofollow"' : null) . '>' . $this->author . '</a>';
+                . ($noFollow ? ' rel="external nofollow"' : null) . '>' . $author . '</a>';
         } else {
-            echo $this->author;
+            echo $author;
         }
     }
 

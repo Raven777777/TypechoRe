@@ -89,6 +89,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @property int $commentsMaxNestingLevels
  * @property int $commentsPostTimeout
  * @property int $commentsPostInterval
+ * @property int $commentsUniqueIpInterval
  * @property string $commentsHTMLTagAllowed
  * @property bool $allowRegister
  * @property int $postsListSize

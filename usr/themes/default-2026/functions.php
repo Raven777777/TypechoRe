@@ -422,7 +422,8 @@ function themeDefault(string $name, string $fallback = ''): string
  * 把一个「会 echo 的东西」(内核的 title() / author() / excerpt() 等) 转成安全字符串
  *
  * 内核这些方法直接把原始值打出来, 用户填的标题里带 `<` 就会破标记,
- * 模板里一律用 `<?php echo themeText(fn () => $this->title()); ?>` 代替裸 echo。
+ * 模板里一律用 `<?php echo themeText(fn () => $this->excerpt()); ?>` 代替裸 echo;
+ * 标题另有 themeTitle() (标题入库时已转过一次义, 不能再用 themeText)。
  *
  * @param callable $printer
  * @return string
@@ -433,6 +434,35 @@ function themeText(callable $printer): string
     $printer();
 
     return themeEsc((string) ob_get_clean());
+}
+
+/**
+ * 输出标题
+ *
+ * 标题和摘要正文入库时已经过 htmlspecialchars, themeText() 再转义一次就成了
+ * 二次编码 (R&D 显示成 R&amp;D)。这里先解码再按当前输出场景转义一次。
+ *
+ * @param callable $printer
+ * @return string
+ */
+function themeTitle(callable $printer): string
+{
+    ob_start();
+    $printer();
+
+    // 只转义一次: 先解掉入库时的转义, 再按 HTML 场景转义一遍
+    return themeEsc(html_entity_decode((string) ob_get_clean(), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+}
+
+/**
+ * 标题的纯文本形式 (用于 JSON-LD 等非 HTML 场景)
+ *
+ * @param string $title
+ * @return string
+ */
+function themePlainTitle(string $title): string
+{
+    return html_entity_decode($title, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
 
 /**
@@ -1364,7 +1394,7 @@ function themePostJsonLd(\Widget\Archive $archive, ?array $thumbnail = null): st
     $data = [
         '@context'         => 'https://schema.org',
         '@type'            => 'BlogPosting',
-        'headline'         => (string) $archive->title,
+        'headline'         => themePlainTitle((string) $archive->title),
         'url'              => (string) $archive->permalink,
         'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => (string) $archive->permalink],
         'datePublished'    => $archive->date->format('c'),
@@ -1690,7 +1720,7 @@ function themeAdjacentPost(\Widget\Archive $archive, string $direction): ?array
     }
 
     return [
-        'title'     => (string) $post->title,
+        'title'     => themePlainTitle((string) $post->title),
         'permalink' => (string) $post->permalink
     ];
 }

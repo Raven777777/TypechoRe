@@ -31,20 +31,29 @@ final class Throttle
         return time() - $since < self::WINDOW && $count >= self::LIMIT;
     }
 
-    public static function fail(string $scope, string $subject): void
+    /**
+     * 记一次尝试并返回是否已超限
+     *
+     * 在验证密码之前调用: 先计数再验证, 并发请求不会全部通过检查.
+     * 验证通过后用 clear() 归零, 所以正常登录不受影响.
+     */
+    public static function hit(string $scope, string $subject): bool
     {
         $file = self::file($scope, $subject);
 
+        // shortcut: 没有可写的临时目录时限速失效 (fail open)
         if ($file === null) {
-            return;
+            return false;
         }
 
         $fp = @fopen($file, 'c+');
         if (!$fp) {
-            return;
+            return false;
         }
 
         @chmod($file, 0600);
+        $count = 0;
+
         if (@flock($fp, LOCK_EX)) {
             [$since, $count] = self::parse((string) stream_get_contents($fp));
             $now = time();
@@ -54,9 +63,10 @@ final class Throttle
                 $count = 0;
             }
 
+            $count++;
             rewind($fp);
             ftruncate($fp, 0);
-            fwrite($fp, $since . '|' . ($count + 1));
+            fwrite($fp, $since . '|' . $count);
             fflush($fp);
             flock($fp, LOCK_UN);
         }
@@ -65,6 +75,13 @@ final class Throttle
         if (1 === random_int(1, 100)) {
             self::gc();
         }
+
+        return $count > self::LIMIT;
+    }
+
+    public static function fail(string $scope, string $subject): void
+    {
+        self::hit($scope, $subject);
     }
 
     public static function clear(string $scope, string $subject): void

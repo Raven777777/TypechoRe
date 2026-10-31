@@ -22,7 +22,7 @@ $this->need('header.php');
     <?php themeBrowseStrip(_t('浏览分类'), true); ?>
     <article class="card overflow-hidden" itemscope itemtype="http://schema.org/BlogPosting">
         <header class="border-b border-line p-5 sm:p-7">
-            <h1 class="page-title" itemprop="headline"><?php echo themeText(fn () => $this->title()); ?></h1>
+            <h1 class="page-title" itemprop="headline"><?php echo themeTitle(fn () => $this->title()); ?></h1>
         </header>
 
         <?php if ($hasToc): ?>

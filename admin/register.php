@@ -33,6 +33,14 @@ include 'header.php';
                 <label for="mail" class="sr-only"><?php _e('Email'); ?></label>
                 <input type="email" id="mail" name="mail" placeholder="<?php _e('Email'); ?>" value="<?php echo $rememberMail; ?>" class="text-l w-100" />
             </p>
+            <p>
+                <label for="password" class="sr-only"><?php _e('密码'); ?></label>
+                <input type="password" id="password" name="password" placeholder="<?php _e('密码'); ?>" class="text-l w-100" autocomplete="new-password" required />
+            </p>
+            <p>
+                <label for="confirm" class="sr-only"><?php _e('确认密码'); ?></label>
+                <input type="password" id="confirm" name="confirm" placeholder="<?php _e('确认密码'); ?>" class="text-l w-100" autocomplete="new-password" required />
+            </p>
             <p class="submit">
                 <button type="submit" class="btn btn-l w-100 primary"><?php _e('注册'); ?></button>
             </p>
