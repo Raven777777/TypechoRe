@@ -187,7 +187,7 @@ class Response
     public function goBack(?string $suffix = null, ?string $default = null)
     {
         //获取来源
-        $referer = $this->request->getReferer();
+        $referer = (string) $this->request->getReferer();
 
         // Referer 由客户端提供, 直接跳过去就是开放重定向; 只回到同站地址
         $host = strtolower((string) parse_url($referer, PHP_URL_HOST));

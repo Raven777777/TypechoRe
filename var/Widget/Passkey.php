@@ -165,8 +165,6 @@ class Passkey extends BaseOptions implements ActionInterface
     private function processGet(): void
     {
         $state = $this->getState('get');
-        // 挑战值一次性使用: 验证失败也要作废, 否则同一个断言可以在 300 秒内反复重放
-        unset($_SESSION[self::SESSION_KEY]);
         $this->ensureTable();
         $this->assertNotThrottled();
 
@@ -227,6 +225,8 @@ class Passkey extends BaseOptions implements ActionInterface
             'last_used' => time()
         ])->where('id = ?', $row['id']));
 
+        // 验证成功后作废挑战值; 失败时保留, 因为浏览器允许用同一个挑战值重试
+        unset($_SESSION[self::SESSION_KEY]);
         $this->resetThrottle();
 
         // 与密码登录行为对齐: 勾选「下次自动登录」时写入持久化 Cookie (30 天),

@@ -177,11 +177,13 @@
 - `Typecho\Db\Query::KEYWORDS` 补上 `ESCAPE`: 搜索用 `LIKE ? ESCAPE '!'`, 而
   `filterColumn()` 不认识 `ESCAPE`, 会把它当字段名加引号成 `"ESCAPE"` → SQL 语法错误,
   搜索页 500
-- 登录限速的实际效果: `Typecho\Throttle::hit()` 把计数放在 `flock` 里自增, 登录与
+- 登录限速的实际效果: 新增 `Typecho\Throttle::hit()`, 把计数放在 `flock` 里自增, 登录与
   Passkey 都改成「先记账再验证」。原来的 `tooMany()` 先查后记, 并发打进来的一批请求
   都能通过检查, 把 10 次/15 分钟变成一次能试几百个密码
-- Passkey 挑战值读取即销毁 (`Widget\Passkey::processGet()`): 以前只在验证成功时清
-  session, 失败后同一个断言可以在 300 秒内重放 (authenticator 报 `signCount = 0` 时甚至不限时)
+- `Typecho\Widget\Response::goBack()` 的 Referer 先转成字符串再 `parse_url()`
+  (PHP 8.5 下 `parse_url(null)` 会抛 Deprecated)
+- Passkey 的失败尝试也计入限速: `assertNotThrottled()` 改用 `Throttle::hit()`, 每次断言
+  都先记账, 不再只在失败分支 `recordFailure()` 里补记 (并发时能绕过, 且与登录限速口径不一致)
 - 用户名枚举: `Widget\User::login()` 用户不存在时也跑一次 `Common::hashValidate()`
   (固定假哈希), 响应时间不再区分「没这个人」和「密码错」
 - 注册流程 (`Widget\Register`): 用户填的密码会真正使用 (以前丢掉用户输入, 随机生成 7 位
