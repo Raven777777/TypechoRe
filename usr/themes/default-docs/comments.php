@@ -30,27 +30,25 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 <input type="hidden" name="url" id="url" value="<?php $this->remember('url'); ?>">
 <?php endif; ?>
 <p><label for="textarea">Comment</label>
-<?php
-$draft = [];
-if (!$this->user->hasLogin()) {
-    // 三个字段对应文本框前三行, 用 cookie 记忆值预填; 空值行保留, 用户直接在冒号后写
-    foreach (['Name' => 'author', 'Email' => 'mail', 'Website' => 'url'] as $label => $field) {
-        $draft[] = $label . ':' . $this->remember($field, true);
-    }
-}
-$draft[] = (string) \Typecho\Cookie::get('__typecho_remember_text');
-?>
-<textarea rows="8" name="text" id="textarea" required><?php echo htmlspecialchars(implode("\n", $draft)); ?></textarea></p>
+<?php $draft = (string) \Typecho\Cookie::get('__typecho_remember_text'); ?>
+<textarea rows="8" name="text" id="textarea" required><?php echo htmlspecialchars($draft); ?></textarea></p>
 <p><button type="submit">Submit</button></p>
 </form>
 <script>
 (function () {
     var form = document.getElementById('comment-form');
     if (!form || !form.author) return;
+    var textarea = form.querySelector('textarea[name=text]'),
+        fields = {name: 'author', email: 'mail', website: 'url'},
+        identity = [],
+        key;
+    // 身份行由脚本生成, 无 JS 时评论正文里不会混入姓名/邮箱
+    for (key in fields) {
+        identity.push(key.charAt(0).toUpperCase() + key.slice(1) + ':' + form[fields[key]].value);
+    }
+    textarea.value = identity.join('\n') + '\n' + textarea.value;
     form.addEventListener('submit', function () {
-        var textarea = form.querySelector('textarea[name=text]'),
-            lines = textarea.value.split('\n'),
-            fields = {name: 'author', email: 'mail', website: 'url'},
+        var lines = textarea.value.split('\n'),
             map = {},
             i = 0;
         // 只认前三行的 Name:/Email:/Website:，空值也算已填（不会吃掉下一行）
@@ -61,8 +59,8 @@ $draft[] = (string) \Typecho\Cookie::get('__typecho_remember_text');
         }
         if (!i) return;
         textarea.value = lines.slice(i).join('\n');
-        for (var key in map) {
-            form[fields[key]].value = map[key];
+        for (var field in map) {
+            form[fields[field]].value = map[field];
         }
     });
 })();

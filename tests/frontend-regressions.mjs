@@ -93,8 +93,10 @@ console.log('PASS: frontend audit regressions (editor, profile URL, comment refr
   }
   assert.match(comments, /<label for="textarea">/);
   assert.doesNotMatch(comments, /<label for="(author|mail|url)">/, 'identity fields are hidden, they need no labels');
-  assert.match(comments, /foreach \(\['Name' => 'author', 'Email' => 'mail', 'Website' => 'url'\]/, 'textarea must be prefilled with the identity lines');
-  assert.match(comments, /form\[fields\[key\]\]\.value = map\[key\]/, 'identity lines must be split into the hidden inputs on submit');
+  assert.doesNotMatch(comments, /Name' => 'author/, 'PHP must not print the identity lines into the comment text');
+  assert.match(comments, /identity\.push\(/, 'the script must build the identity lines');
+  assert.match(comments, /identity\.join\('\\n'\)/, 'identity lines must keep the Name:/Email:/Website: layout');
+  assert.match(comments, /form\[fields\[field\]\]\.value = map\[field\]/, 'identity lines must be split into the hidden inputs on submit');
   assert.match(comments, /lines\.slice\(i\)\.join/, 'identity lines must be stripped from the comment text');
 }
 console.log('PASS: default-docs regressions (one-time PHP pages, identity lines in comment text)');

@@ -17,9 +17,8 @@ $this->need('header.php');
 $archives = \Widget\Contents\Post\Date::alloc('format=Y-m&type=month');
 $rows = [];
 while ($archives->next()) {
-    $rows[] = '<a href="' . htmlspecialchars((string) $archives->permalink, ENT_QUOTES, 'UTF-8') . '">'
-        . htmlspecialchars((string) $archives->date, ENT_QUOTES, 'UTF-8') . '</a> ('
-        . (int) $archives->count . ')';
+    $rows[] = docswebLink((string) $archives->permalink, (string) $archives->date)
+        . ' (' . (int) $archives->count . ')';
 }
 ?>
 <h1><a href="<?php $this->options->siteUrl(); ?>">home</a>/archive</h1>

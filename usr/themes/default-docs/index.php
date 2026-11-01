@@ -22,11 +22,10 @@ $pages = \Widget\Contents\Page\Rows::alloc();
 $pageLinks = [];
 while ($pages->next()) {
     // 分类/归档索引页只作为导航，不重复列在独立页链接里
-    if (!empty($pages->template)) {
+    if (in_array($pages->template, ['page-categories.php', 'page-archives.php', 'page-tags.php'], true)) {
         continue;
     }
-    $pageLinks[] = '<a href="' . htmlspecialchars((string) $pages->permalink, ENT_QUOTES, 'UTF-8') . '">'
-        . htmlspecialchars((string) $pages->title, ENT_QUOTES, 'UTF-8') . '</a>';
+    $pageLinks[] = docswebLink((string) $pages->permalink, (string) $pages->title);
 }
 ?>
 <?php if ($pageLinks): ?>

@@ -17,9 +17,8 @@ $this->need('header.php');
 $categories = \Widget\Metas\Category\Rows::alloc();
 $rows = [];
 while ($categories->next()) {
-    $rows[] = '<a href="' . htmlspecialchars((string) $categories->permalink, ENT_QUOTES, 'UTF-8') . '">'
-        . htmlspecialchars((string) $categories->name, ENT_QUOTES, 'UTF-8') . '</a> ('
-        . (int) $categories->count . ')';
+    $rows[] = docswebLink((string) $categories->permalink, (string) $categories->name)
+        . ' (' . (int) $categories->count . ')';
 }
 ?>
 <h1><a href="<?php $this->options->siteUrl(); ?>">home</a>/category</h1>

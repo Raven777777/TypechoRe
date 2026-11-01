@@ -19,6 +19,15 @@ function docswebStickyBadge(\Widget\Base\Contents $content): string
 }
 
 /**
+ * 输出转义好的链接
+ */
+function docswebLink(string $url, string $text): string
+{
+    return '<a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">'
+        . htmlspecialchars($text, ENT_QUOTES, 'UTF-8') . '</a>';
+}
+
+/**
  * docsweb 风格分页: Page 2 / 5 · Up · Down · Category · Archive
  */
 function docswebPager(\Widget\Archive $archive): void

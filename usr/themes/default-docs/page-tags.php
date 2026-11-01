@@ -32,9 +32,9 @@ while ($tags->next()) {
 <h1><a href="<?php $this->options->siteUrl(); ?>">home</a>/tag</h1>
 <?php if ($items): ?>
 <p class="tag-cloud">
-<?php foreach ($items as $i => $item): ?>
+<?php foreach ($items as $item): ?>
 <?php $size = $max > $min ? 0.85 + 0.75 * ($item['count'] - $min) / ($max - $min) : 1; ?>
-<a href="<?php echo htmlspecialchars($item['permalink'], ENT_QUOTES, 'UTF-8'); ?>" style="font-size:<?php echo round($size, 2); ?>em"><?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?><small><?php echo $item['count']; ?></small></a><?php if ($i < count($items) - 1): ?> <?php endif; ?>
+<a href="<?php echo htmlspecialchars($item['permalink'], ENT_QUOTES, 'UTF-8'); ?>" style="font-size:<?php echo round($size, 2); ?>em"><?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?><small><?php echo $item['count']; ?></small></a> 
 <?php endforeach; ?>
 </p>
 <?php else: ?>

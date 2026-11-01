@@ -19,13 +19,11 @@ if ($this->is('date') && $year > 0) {
         . ($month > 0 ? '-' . str_pad((string) $month, 2, '0', STR_PAD_LEFT) : '')
         . ($day > 0 ? '-' . str_pad((string) $day, 2, '0', STR_PAD_LEFT) : '');
     $archiveUrl = docswebPageUrl('page-archives.php');
-    $archiveLink = $archiveUrl
-        ? '<a href="' . htmlspecialchars($archiveUrl, ENT_QUOTES, 'UTF-8') . '">archive</a>'
-        : 'archive';
-    $heading = '<a href="' . htmlspecialchars($this->options->siteUrl, ENT_QUOTES, 'UTF-8') . '">home</a>/' . $archiveLink . '/'
+    $archiveLink = $archiveUrl ? docswebLink($archiveUrl, 'archive') : 'archive';
+    $heading = docswebLink($this->options->siteUrl, 'home') . '/' . $archiveLink . '/'
         . htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
 } else {
-    $heading = '<a href="' . htmlspecialchars($this->options->siteUrl, ENT_QUOTES, 'UTF-8') . '">home</a>/'
+    $heading = docswebLink($this->options->siteUrl, 'home') . '/'
         . htmlspecialchars((string) $this->getArchiveTitle(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 ?>
