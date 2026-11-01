@@ -28,7 +28,8 @@ function themeConfig(\Typecho\Widget\Helper\Form $form): void
  */
 function docswebHljsCdn(): string
 {
-    $value = \Widget\Options::alloc()->hljsCdn;
+    // 主题选项是 Options::__get 的动态行数据, 无法用 @property 声明
+    $value = \Widget\Options::alloc()->__get('hljsCdn');
     $cdn = is_scalar($value) ? rtrim(trim((string) $value), '/') : '';
 
     return '' === $cdn ? DOCSWEB_HLJS_DEFAULT : $cdn;
@@ -83,9 +84,7 @@ function docswebPager(\Widget\Archive $archive): void
         $bits[] = '<a href="' . htmlspecialchars(docswebIndexUrl($slug), ENT_QUOTES, 'UTF-8') . '">' . $label . '</a>';
     }
 
-    if ($bits) {
-        echo '<nav>' . implode(' · ', $bits) . '</nav>';
-    }
+    echo '<nav>' . implode(' · ', $bits) . '</nav>';
 }
 
 /**
