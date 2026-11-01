@@ -24,10 +24,14 @@ $this->archiveTitle([
     'author'   => '%s'
 ], '', ' · ');
 echo htmlspecialchars((string) ob_get_clean(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?><?php $this->options->title(); ?></title>
+<?php /* 代码高亮: highlight.js 从 CDN 加载 (defer 保证在本页脚本之前就绪), 地址可在主题设置里换;
+   样式表先加载, 主题样式在后, 代码块的底色与内边距仍由 style.css 决定 */ ?>
+<?php $hljsCdn = docswebHljsCdn(); ?>
+<link rel="stylesheet" href="<?php echo htmlspecialchars($hljsCdn . '/styles/github-dark.min.css', ENT_QUOTES, 'UTF-8'); ?>">
+<script defer src="<?php echo htmlspecialchars($hljsCdn . '/highlight.min.js', ENT_QUOTES, 'UTF-8'); ?>"></script>
 <link rel="stylesheet" href="<?php $this->options->themeUrl('style.css'); ?>">
-<script src="<?php $this->options->themeUrl('prism.js'); ?>" data-manual></script>
 <script>
-// Typecho 输出 class="lang-xxx"，Prism 认 language-xxx；顺便给代码块加语言名和复制按钮
+// 顺便给代码块加语言名和复制按钮 (着色交给 highlight.js)
 addEventListener('DOMContentLoaded', function () {
     function copyText(text, done) {
         var box = document.createElement('textarea');
@@ -42,10 +46,10 @@ addEventListener('DOMContentLoaded', function () {
 
     document.querySelectorAll('pre > code').forEach(function (code) {
         var name = (code.className.match(/(?:lang-|language-)([a-z0-9+#-]+)/i) || [])[1];
-        // 作者手写的 class="php" 也要认，只接受 Prism 注册过的语言
+        // 作者手写的 class="php" 也要认，只接受 highlight.js 注册过的语言
         if (!name) {
             var bare = code.className.trim().split(/\s+/)[0];
-            if (bare && Prism.languages[bare]) name = bare;
+            if (bare && window.hljs && hljs.getLanguage(bare)) name = bare;
         }
         name = ({'c++': 'cpp', 'c#': 'csharp'})[name] || name;
         if (name) code.className += ' language-' + name;
@@ -87,7 +91,7 @@ addEventListener('DOMContentLoaded', function () {
         tools.appendChild(btn);
         wrap.appendChild(tools);
     });
-    Prism.highlightAll();
+    if (window.hljs) hljs.highlightAll();
 });
 </script>
 <?php $this->header('generator=&template='); ?>

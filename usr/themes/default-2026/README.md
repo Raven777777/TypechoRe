@@ -7,8 +7,8 @@
 TypechoRe 的默认主题: 现代、优雅、以性能为先。
 
 - **服务端渲染优先**: 所有内容都是 PHP 渲染的普通 HTML, 关掉 JavaScript 依然可以完整阅读、评论与翻页。
-- **渐进增强**: 有 JavaScript 时启用无刷新切页 (Swup)、切页骨架屏与卡片上浮入场、链接预取、目录高亮、代码块高亮 (lite-hl)、代码复制、阅读进度。
-- **零外部请求**: 不加载任何第三方 CDN、字体或图标文件; 图标以内联 SVG 输出, 字体使用系统字体栈。
+- **渐进增强**: 有 JavaScript 时启用无刷新切页 (Swup)、切页骨架屏与卡片上浮入场、链接预取、目录高亮、代码块高亮 (highlight.js)、代码复制、阅读进度。
+- **几乎零外部请求**: 唯一的外部文件是代码高亮用的 highlight.js (地址可在主题设置里换, 也可以指向站内自建镜像); 除此之外不加载任何第三方 CDN、字体或图标文件, 图标以内联 SVG 输出, 字体使用系统字体栈。
 - **宽阅读栏**: 桌面端正文可读宽度约 930px (单栏布局约 830px), 内容图片不做圆角与描边。
 - **卡片整块可点**: 列表卡片与上下篇导航都是整张卡片可点击 (标题链接用伪元素铺满卡片)。
 - **只把图片当图片**: 卡片缩略图只认自定义字段、正文里的图片和图片附件, 压缩包 / PDF 等非图片附件不会出现在卡片上。
@@ -87,14 +87,14 @@ npm run test:php     # 主题纯函数: 目录渲染/折叠 + 动效档位表 (�
 
 技术栈: [Tailwind CSS v4](https://tailwindcss.com) + [@tailwindcss/typography](https://github.com/tailwindlabs/tailwindcss-typography)
 + [Swup](https://swup.js.org) (head / preload / progress / scroll 插件)
-+ [lite-hl](https://github.com/docmd-io/lite-hl) (代码高亮, 见「开源组件与来源」)。
++ [highlight.js](https://highlightjs.org) 11 (代码高亮, 由访客浏览器从 CDN 加载, 见「开源组件与来源」)。
 轻交互 (主题切换 / 阅读进度 / 返回顶部 / 折叠) 一律用原生 DOM 实现, 不引声明式框架。
 
 构建产物文件名固定, PHP 侧通过 `themeAsset()` 追加 `?v=<filemtime>` 做缓存失效,
 因此部署时不需要读取 manifest, 也不会有额外文件 IO。
 
-**首屏只下载 `dist/style.css` 与 `dist/app.js`**: swup 及它的四个插件被拆进
-`dist/chunks/`, 在页面就绪后按需加载 (文件名带内容 hash)。首屏渲染用不到切页逻辑,
+**首屏的前端资源是 `dist/style.css`、`dist/app.js` 与 highlight.js 的两个 CDN 文件**:
+swup 及它的四个插件被拆进 `dist/chunks/`, 在页面就绪后按需加载 (文件名带内容 hash)。首屏渲染用不到切页逻辑,
 不需要为它付费; 模块到位之前的点击走原生跳转, 功能不丢。
 
 > Tailwind 的内容探测以本目录 (`package.json`) 为项目根自动扫描, `node_modules/` 与
@@ -113,6 +113,7 @@ npm run test:php     # 主题纯函数: 目录渲染/折叠 + 动效档位表 (�
 | 动效强度 | 关闭 / 轻盈 / 标准 / 明显, 控制切页上浮的距离、时长与卡片错峰 |
 | 切页骨架屏 | 等待新内容时是否显示占位骨架 (与动效强度相互独立) |
 | 链接预取 | 鼠标悬停在链接上时是否在后台提前取回目标页面; 关掉可省流量与服务器请求, 代价是首次点击变慢 |
+| highlight.js 地址 | 代码高亮的 CDN 目录, 默认 `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0`; 可换成自建镜像或站内相对路径 (留空恢复默认) |
 | 文章目录 | 自动为二至三级标题生成目录 (四级标题仍生成锚点), 可见条目少于两个时不显示; 单栏布局下改为正文上方的折叠块 |
 | 预计阅读时间 | 中英文混排估算 |
 | 列表摘要字数 | 列表页卡片的摘要长度 |
@@ -135,32 +136,31 @@ npm run test:php     # 主题纯函数: 目录渲染/折叠 + 动效档位表 (�
 整张包在链接里的图片 (`a:has(img)`) 会被排除, 不会出现下划线和高亮块。
 
 **改配色**: 绝大多数颜色来自 Tailwind 调色板 (`zinc`) 与 `--color-accent`,
-在 `src/css/main.css` 的 `@theme` 中调整后重新构建即可。代码令牌的颜色是
-`--lite-hl-*` 一组变量 (见上文的「代码高亮的配色」)。
+在 `src/css/main.css` 的 `@theme` 中调整后重新构建即可。代码令牌的配色由 highlight.js
+的样式表提供 (见上文的「代码高亮的配色」)。
 
 **改代码块圆角**: `src/css/main.css` 的 `@theme` 里的 `--radius-code` (默认 `10px`),
 只作用于代码块, 不影响引用块、图片与卡片。
 
-**代码高亮**: 主题内置 [lite-hl](https://github.com/docmd-io/lite-hl) 做客户端高亮 ——
-它是启发式的通用分词器, 不猜语言、也不需要按语言注册语法, 整包不到 10KB (gzip 后约 4KB,
-已随 `dist/app.js` 打包, 不额外请求任何 CDN)。**服务端不需要装任何插件**: 只要 Typecho 照常
-输出 `<pre><code>`, 浏览器里就会自动着色; 源码里的 `<` `&` 由 lite-hl 负责转义, 分词只包
-`<span>`, 所以 `textContent` 逐字符不变, 复制按钮拿到的仍是原始代码, 关掉 JavaScript 也只是
-回到没有颜色的纯文本。实现与约定:
+**代码高亮**: 主题用 [highlight.js](https://highlightjs.org) 11 在浏览器里给代码块着色 ——
+`header.php` 用 `<script defer>` 和 `<link>` 从 CDN 加载 `highlight.min.js` 与
+`styles/github-dark.min.css`, 服务端不装任何插件, 构建时也不打包任何高亮代码。
+地址在主题设置「highlight.js 地址」里配置, 默认是
+`https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0`, 可以换成自建镜像或站内相对路径
+(该目录下需要有 `highlight.min.js` 与 `styles/github-dark.min.css`)。只要 Typecho 照常输出
+`<pre><code>`, 浏览器里就会自动着色; 关掉 JavaScript 也只是回到没有颜色的纯文本。实现与约定:
 
 - 高亮范围是正文 (`.prose-theme`) 与评论 (`.comment-content`) 里的 `pre > code`, 行内 `code` 不动。
-- 每次切页 (`enhancePage()`) 与评论就地刷新后都会重新执行, 用 `data-highlighted` 标记保证幂等,
-  不会把已经分好词的代码再分一次。
+- 语言标记: Typecho 输出的 `class="lang-php"` 与手写的 `class="language-php"` 都认; 没有标记时由
+  highlight.js 自动检测 (不一定准, 重要的代码块建议在 Markdown 里显式标注语言)。
+- 每次切页 (`enhancePage()`) 与评论就地刷新后都会重新执行; highlight.js 自己写 `data-highlighted`
+  标记, 已经处理过的块不会重复分词。
 - 想让某个代码块保持原样, 在 `<pre>` 或 `<code>` 上写 `data-no-highlight` 即可。
-- 分词失败时静默退回纯文本 (不影响阅读与复制), 不做任何破坏性替换。
-- 输出的类名沿用 highlight.js 的 `hljs-*` 约定 (`mimicHljs`), 因此也能直接套用现成的
-  highlight.js 主题 CSS。
+- CDN 取不到 (`window.hljs` 不存在) 时静默退回纯文本, 不影响阅读与复制, 也不报错。
 
-**代码高亮的配色**: 令牌颜色定义在 `src/css/main.css` 的 `--lite-hl-*` 变量里 (与 lite-hl
-自带主题同名, 改单个令牌只需覆盖一个变量)。这里**没有**直接引 lite-hl 的 `theme.css`:
-那套主题用 `prefers-color-scheme` 切换明暗两套配色, 而本主题的深色模式是 `html.dark` 类驱动的,
-两者会错位; 加上代码块在浅色与深色模式下都是深色底, 它那份「白底」配色放上去根本看不清。
-所以主题只取了它的暗色一套值, 并按变量名重新写了一遍。
+**代码高亮的配色**: 用 highlight.js 官方的 `github-dark` 主题 —— 代码块在浅色与深色模式下
+都是深色底, 亮色主题上去看不清。想换配色, 改 `header.php` 里引用的样式文件名即可
+(如 `styles/default.min.css`、`styles/atom-one-dark.min.css`); 自定义配色直接覆盖 `.hljs-*` 类。
 
 **代码块圆角与滚动**: 代码块的圆角由 `@theme` 里的 `--radius-code` (默认 `10px`) 统一控制,
 正文与评论共用这一个值。开启增强后, 横向滚动交给 `<code class="code-scroll">`,
@@ -399,24 +399,25 @@ blockquote / ul / ol / li / h2–h6 / hr / a), 并对 `href` / `src` 的值做�
 
 ## 开源组件与来源
 
-主题把运行时要用的第三方库都在构建期打进 `dist/`, 页面**不请求任何 CDN / 外部文件**:
+主题把运行时要用的第三方库 (代码高亮除外) 都在构建期打进 `dist/`; 页面运行时不请求
+其它 CDN / 外部文件 (唯一例外是 highlight.js, 可由主题设置换成站内镜像):
 
 | 组件 | 版本 | 许可 | 来源 | 用在哪 |
 | --- | --- | --- | --- | --- |
-| lite-hl | `^0.2.1` | MIT | <https://github.com/docmd-io/lite-hl> (docmd 生态, 作者 Ghazi / mgks.dev) | 代码块语法高亮, `src/js/app.js` 的 `highlightCodeBlocks()` |
+| highlight.js | `11.12.0` (CDN) | BSD-3-Clause | <https://highlightjs.org> | 代码块语法高亮, 由访客浏览器从 CDN 加载, 不打包进 `dist/` |
 | Swup (+ head / preload / progress / scroll 插件) | `^4.10.0` | MIT | <https://github.com/swup/swup> | 无刷新切页 (按需加载, 见 `loadPageTransitions()`) |
 | Tailwind CSS + @tailwindcss/typography | `^4.3.3` / `^0.5.20` | MIT | <https://tailwindcss.com> | 只在构建期生成 `dist/style.css` |
 
-### lite-hl
+### highlight.js
 
-- 安装与引入: `npm install lite-hl` (见 `package.json` 的 `dependencies`),
-  代码里 `import { highlight } from 'lite-hl'`, 由 Vite 打包进 `dist/app.js`。
-- 只调用它的公共 API (`highlight(code, { language, mimicHljs: true })`),
-  **没有修改、也没有单独重新分发**它的源码。
-- 主题只自行编写了令牌配色 (变量名 `--lite-hl-*` 与上游保持一致, 见「代码高亮的配色」):
-  这部分是主题原创, 不是从上游复制的样式表。
-- 上游许可是 MIT, 主题整体是 GPL-2.0-or-later: 打包后的 `dist/app.js` 里同时包含两种许可的
-  代码, 二次分发时请一并保留上游的许可声明, 并在你 fork 的 README 里保留本节的来源说明。
+- 不随主题打包: `header.php` 输出 `<script defer src="{CDN}/highlight.min.js">` 与
+  `{CDN}/styles/github-dark.min.css`, 目录地址由主题设置 `hljsCdn` 决定
+  (默认 cdnjs 上的 `11.12.0`)。
+- 主题只调用它的公共 API (`hljs.highlightElement(el)`), **没有修改、也没有重新分发**它的源码。
+- 上游许可是 BSD-3-Clause, 主题整体是 GPL-2.0-or-later。CDN 上的文件由访客浏览器直接加载,
+  不进入 `dist/`, 二次分发时无需在仓库里附带其源码。
+- 不想依赖 CDN: 把设置填成站内相对路径, 并自行把 `highlight.min.js` 与
+  `styles/github-dark.min.css` 放到该目录下即可。
 
 ## 兼容性
 

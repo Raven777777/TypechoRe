@@ -4,6 +4,37 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 }
 
 /**
+ * highlight.js 的默认目录 (cdnjs 上的 11.x)
+ */
+const DOCSWEB_HLJS_DEFAULT = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0';
+
+/**
+ * 主题设置
+ */
+function themeConfig(\Typecho\Widget\Helper\Form $form): void
+{
+    $hljsCdn = new \Typecho\Widget\Helper\Form\Element\Text(
+        'hljsCdn',
+        null,
+        DOCSWEB_HLJS_DEFAULT,
+        _t('highlight.js 地址'),
+        _t('highlight.js 11 的目录地址, 例如 https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0; 主题从这里加载 highlight.min.js 与 styles/github-dark.min.css, 可以换成自建镜像或站内相对路径, 留空恢复默认')
+    );
+    $form->addInput($hljsCdn);
+}
+
+/**
+ * highlight.js 目录 (去掉结尾斜杠, 留空用默认值)
+ */
+function docswebHljsCdn(): string
+{
+    $value = \Widget\Options::alloc()->hljsCdn;
+    $cdn = is_scalar($value) ? rtrim(trim((string) $value), '/') : '';
+
+    return '' === $cdn ? DOCSWEB_HLJS_DEFAULT : $cdn;
+}
+
+/**
  * 置顶标记 (插件 Sticky 把配置里的 HTML 原样放在 sticky_html 字段)
  */
 function docswebStickyBadge(\Widget\Base\Contents $content): string
@@ -48,11 +79,8 @@ function docswebPager(\Widget\Archive $archive): void
         }
     }
 
-    foreach (['Category' => 'page-categories.php', 'Archive' => 'page-archives.php', 'Tags' => 'page-tags.php'] as $label => $template) {
-        $url = docswebPageUrl($template);
-        if ($url) {
-            $bits[] = '<a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . $label . '</a>';
-        }
+    foreach (['Category' => 'categories', 'Archive' => 'archives', 'Tags' => 'tags'] as $label => $slug) {
+        $bits[] = '<a href="' . htmlspecialchars(docswebIndexUrl($slug), ENT_QUOTES, 'UTF-8') . '">' . $label . '</a>';
     }
 
     if ($bits) {
@@ -61,117 +89,29 @@ function docswebPager(\Widget\Archive $archive): void
 }
 
 /**
- * 按自定义模板查找分类/归档索引页的地址（索引页由 themeInit 首次启用时创建）
+ * 分类/归档/标签索引页的地址（主题认领这些地址，不建独立页面）
  */
-function docswebPageUrl(string $template): ?string
+function docswebIndexUrl(string $slug): string
 {
-    static $urls = null;
-
-    if (null === $urls) {
-        $urls = [];
-        $db = \Typecho\Db::get();
-        $rows = $db->fetchAll($db->select('slug', 'template')->from('table.contents')
-            ->where('type = ?', 'page')
-            ->where('status = ?', 'publish')
-            ->where('template IN ?', ['page-categories.php', 'page-archives.php', 'page-tags.php']));
-        $index = \Widget\Options::alloc()->index;
-        foreach ($rows as $row) {
-            $urls[$row['template']] ??= \Typecho\Router::url('page', ['slug' => $row['slug']], $index);
-        }
-    }
-
-    return $urls[$template] ?? null;
+    return \Typecho\Router::url('page', ['slug' => $slug], \Widget\Options::alloc()->index);
 }
 
 /**
- * 首次启用时用 PHP 建好分类/归档/标签索引页，只运行一次。
- * 撤销的页面保持现状，删除后不会自动重建，并发请求也只建一份。
+ * 认领 /categories.html、/archives.html、/tags.html：
+ * Typecho 只给已存内容路由，未知地址会落到 404 分支，这里改成 200 再渲染索引模板。
  */
-function themeInit($archive): void
+function themeInit(\Widget\Archive $archive): void
 {
-    static $done = false;
-    // 标记项在引导阶段已随 options 载入, 这里读到就说明建过了, 不必再开写事务
-    if ($done || \Widget\Options::alloc()->default_docs_indexes) {
+    $slug = preg_replace('/\.html$/i', '', basename(trim((string) $archive->request->getPathInfo(), '/')));
+    $titles = ['categories' => 'Categories', 'archives' => 'Archives', 'tags' => 'Tags'];
+
+    if (!isset($titles[$slug]) || !is_file(__DIR__ . '/page-' . $slug . '.php')) {
         return;
     }
-    $done = true;
 
-    try {
-        docswebCreateIndexPages();
-    } catch (\Throwable $e) {
-        // 只读数据库等初始化失败时不影响页面输出，下次请求会重试
-    }
+    $archive->response->setStatus(200);
+    $archive->setArchiveTitle($titles[$slug]);
+    $archive->need('page-' . $slug . '.php');
+    exit;
 }
 
-/**
- * 在事务内补建索引页
- */
-function docswebCreateIndexPages(): void
-{
-    $db = \Typecho\Db::get();
-    $db->transaction(static function () use ($db): void {
-        docswebInsertIndexPages($db);
-    });
-}
-
-/**
- * 事务内的建页逻辑；已初始化过（含并发请求先到者）则跳过
- */
-function docswebInsertIndexPages(\Typecho\Db $db): void
-{
-    $key = 'default_docs_indexes';
-    if ($db->fetchRow($db->select('name')->from('table.options')
-        ->where('name = ?', $key)->limit(1))) {
-        return;
-    }
-    $db->query($db->insert('table.options')->rows([
-        'name'  => $key,
-        'user'  => 0,
-        'value' => '1',
-    ]));
-
-    $author = $db->fetchRow($db->select('uid')->from('table.users')->limit(1));
-    $authorId = $author ? (int) $author['uid'] : 1;
-    $now = time();
-    // created 必须早于本次请求的 options->time，否则 Typecho 归档查询会过滤掉新页面
-    $created = $now - 1;
-
-    foreach ([
-        ['Categories', 'categories', 'page-categories.php'],
-        ['Archives', 'archives', 'page-archives.php'],
-        ['Tags', 'tags', 'page-tags.php'],
-    ] as [$title, $slug, $template]) {
-        // 草稿、私密等任何状态都算已存在，避免重新发布被撤下的页面
-        $exists = $db->fetchRow($db->select('cid')->from('table.contents')
-            ->where('type = ?', 'page')
-            ->where('template = ?', $template)
-            ->limit(1));
-        if ($exists) {
-            continue;
-        }
-        // 地址已被其他内容占用时跳过，不生成 categories-2 之类的重复页
-        if ($db->fetchRow($db->select('cid')->from('table.contents')
-            ->where('slug = ?', $slug)->limit(1))) {
-            continue;
-        }
-
-        $db->query($db->insert('table.contents')->rows([
-            'title'        => $title,
-            'slug'         => $slug,
-            'created'      => $created,
-            'modified'     => $now,
-            'text'         => '',
-            'order'        => 0,
-            'authorId'     => $authorId,
-            'template'     => $template,
-            'type'         => 'page',
-            'status'       => 'publish',
-            'password'     => null,
-            'commentsNum'  => 0,
-            'allowComment' => '0',
-            'allowPing'    => '0',
-            'allowFeed'    => '0',
-            'parent'       => 0,
-        ]));
-    }
-}

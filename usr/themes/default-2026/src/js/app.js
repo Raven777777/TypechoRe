@@ -2,7 +2,7 @@
  * TypechoRe · Default 2026 主题前端入口
  *
  * - Swup       : 无刷新切页 (优先使用原生 View Transitions API)
- * - lite-hl    : 代码块语法高亮 (启发式分词, 不需要按语言注册语法)
+ * - highlight.js : 代码块语法高亮 (从 CDN 加载, 见 themeHljsCdn())
  * - 渐进增强   : 主题切换、阅读进度、返回顶部、代码块复制、目录高亮、导航收起
  *
  * 全部脚本都以「无 JavaScript 也能正常阅读」为前提编写:
@@ -11,7 +11,6 @@
  * 让每个访客多下载几十 KB 的运行时。
  */
 
-import { highlight } from 'lite-hl';
 import { hydrateThumbs } from './thumb-placeholder.js';
 
 /* swup 与它的四个插件走动态 import, 不进首屏包。
@@ -263,54 +262,42 @@ async function copyText(text) {
 }
 
 /* -----------------------------------------------------------------------------
- * 代码高亮 (lite-hl)
+ * 代码高亮 (highlight.js)
  *
- * lite-hl 是启发式的「通用分词器」: 不猜语言、也不需要注册任何语法, 只认注释 /
- * 字符串 / 数字 / 关键字 / 函数调用这些跨语言共有的形态, 整包不到 10KB。
- * 它按 highlight.js 的类名输出 (hljs-*), 配色在 main.css 里给出 —— 代码块在
- * 浅色与深色模式下都是深色底, 所以那边只有一套暗色令牌配色, 不走 lite-hl 自带的
- * theme.css (它跟随 prefers-color-scheme, 与本主题的 class 驱动深色模式对不上)。
+ * highlight.js 以 <script defer> 从 CDN 加载 (目录地址由 themeHljsCdn() 输出),
+ * 在 app.js 之前就绪。它认得 Typecho 输出的 class="lang-php" (同样支持
+ * language-php), 没有语言标记的代码块由它自动检测。
  *
  * 只做增强, 不改变语义:
- *   - 失败就保持服务端输出的纯文本, 不抛错、不留半个 span;
- *   - 分词只包 <span>, textContent 与分词前逐字符相同, 复制按钮拿到的仍是原始代码;
+ *   - CDN 没取到 (window.hljs 不存在) 就保持纯文本, 不抛错;
+ *   - 高亮只改 <code> 的 innerHTML, 文本内容不变, 复制按钮拿到的仍是原始代码;
  *   - 需要保持原样的代码块, 在 <pre> 或 <code> 上标 data-no-highlight 即可跳过。
  * -------------------------------------------------------------------------- */
 
 /** 需要高亮的代码块: 正文 (prose-theme) 与评论 (comment-content) */
 const HIGHLIGHT_SELECTOR = '#main .prose-theme pre > code, #comments .comment-content pre > code';
 
-/** 用 lite-hl 给尚未处理的代码块着色 (每次切页后重新执行) */
+/** 用 highlight.js 给尚未处理的代码块着色 (每次切页后重新执行) */
 function highlightCodeBlocks() {
+  const hljs = window.hljs;
+
+  /* CDN 挂了就安静地退回纯文本 (站点本来无 JS 也能读) */
+  if (!hljs) {
+    return;
+  }
+
   document.querySelectorAll(HIGHLIGHT_SELECTOR).forEach((code) => {
-    /* 同一块可能被重复扫描 (切页 / 评论就地刷新), 处理过的不再动;
-       data-no-highlight 是留给「这段代码不想被分词」的出口。 */
-    if ('true' === code.dataset.highlighted || code.closest('[data-no-highlight]')) {
+    /* 同一块可能被重复扫描 (切页 / 评论就地刷新): highlight.js 自己会写
+       data-highlighted, 这里先跳过, 免得它在控制台打重复高亮的警告。 */
+    if (code.dataset.highlighted || code.closest('[data-no-highlight]')) {
       return;
     }
 
-    const source = code.textContent || '';
-
-    if ('' === source.trim()) {
+    if ('' === (code.textContent || '').trim()) {
       return;
     }
 
-    /* 语言名只作 class 归属, 不参与分词 (lite-hl 对所有语言一视同仁);
-       Typecho 输出 class="lang-php", 部分插件/高亮库用 class="language-php"。 */
-    const match = /(?:language|lang)-([\w+#-]+)/.exec(code.className);
-
-    try {
-      const { value } = highlight(source, {
-        language: match ? match[1] : undefined,
-        mimicHljs: true
-      });
-
-      code.innerHTML = value;
-      code.classList.add('hljs');
-      code.dataset.highlighted = 'true';
-    } catch (error) {
-      /* 高亮失败不影响阅读与复制: 保持原始纯文本 */
-    }
+    hljs.highlightElement(code);
   });
 }
 

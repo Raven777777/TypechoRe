@@ -59,6 +59,11 @@ $themePreload = themePreloadLinks();
 
     <link rel="stylesheet" href="<?php echo themeAsset('dist/style.css'); ?>">
 
+    <?php /* 代码高亮: highlight.js 从 CDN 加载 (defer 保证在 dist/app.js 之前就绪), 地址可在主题设置里换 */ ?>
+    <?php $themeHljsCdn = themeHljsCdn(); ?>
+    <link rel="stylesheet" href="<?php echo themeEsc($themeHljsCdn . '/styles/github-dark.min.css'); ?>">
+    <script defer src="<?php echo themeEsc($themeHljsCdn . '/highlight.min.js'); ?>"></script>
+
     <?php if (themePlaceholderEnabled()): ?>
         <?php /* 无图文章的占位缩略图由 dist/app.js 在浏览器里生成: JS 不可用时卡片上会剩下
            一块空的灰底媒体列。这里整列藏掉, 回到主题原本的「无图卡通栏」形态。 */ ?>

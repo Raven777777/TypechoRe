@@ -76,15 +76,15 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 
 console.log('PASS: frontend audit regressions (editor, profile URL, comment refresh)');
 
-// default-docs: index pages are created by PHP once, never re-published or duplicated.
+// default-docs: the theme claims /categories.html, /archives.html, /tags.html itself; it writes nothing.
 {
   const functions = read('usr/themes/default-docs/functions.php');
-  assert.match(functions, /function themeInit/, 'theme must create index pages in PHP');
-  assert.match(functions, /transaction\(/, 'index page creation must be atomic');
-  assert.doesNotMatch(functions, /transaction\(\s*static function\s*\([^)]*[\w$]/,
-    'transaction callback is invoked without arguments, it must not require one');
-  assert.match(functions, /default_docs_indexes/, 'creation must be guarded by a one-time marker');
-  assert.doesNotMatch(functions, /\$i\+\+/, 'slugs must not be suffixed into duplicate pages');
+  assert.match(functions, /function themeInit\(\\Widget\\Archive \$archive\): void/, 'index pages must be served by themeInit');
+  assert.match(functions, /\$archive->need\('page-' \. \$slug \. '\.php'\)/, 'themeInit must render the existing index templates');
+  assert.match(functions, /\$archive->response->setStatus\(200\)/, 'a claimed index page must not answer 404');
+  assert.match(functions, /function docswebIndexUrl\(string \$slug\): string/, 'index links must be built, not read from the database');
+  assert.doesNotMatch(functions, /insert\('table\.(contents|options)'\)/, 'theme must not write pages or settings');
+  assert.doesNotMatch(functions, /table\.contents/, 'theme must not look up index pages in the database');
   const comments = read('usr/themes/default-docs/comments.php');
   // 身份写在 textarea 前三行 (Name:/Email:/Website:), 真正的 input 隐藏, 提交时再拆回去
   for (const field of ['author', 'mail', 'url']) {
@@ -99,4 +99,4 @@ console.log('PASS: frontend audit regressions (editor, profile URL, comment refr
   assert.match(comments, /form\[fields\[field\]\]\.value = map\[field\]/, 'identity lines must be split into the hidden inputs on submit');
   assert.match(comments, /lines\.slice\(i\)\.join/, 'identity lines must be stripped from the comment text');
 }
-console.log('PASS: default-docs regressions (one-time PHP pages, identity lines in comment text)');
+console.log('PASS: default-docs regressions (claimed index pages, identity lines in comment text)');

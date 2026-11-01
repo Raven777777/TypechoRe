@@ -275,51 +275,8 @@ function checkRegressions(Db $db, string $sqliteFile): void
     checkBackupRegressions($db, $sqliteFile, $options);
     require_once __DIR__ . '/audit-regressions.php';
     checkAuditRegressions($db);
-    checkDefaultDocsTheme($db);
 }
 
-/**
- * default-docs: 首次启用由 PHP 建索引页 (走真实的事务入口), 撤下/删除的页面不重建, 不产生 -2 重复页
- */
-function checkDefaultDocsTheme(Db $db): void
-{
-    require_once ROOT . '/usr/themes/default-docs/functions.php';
-    foreach (['contents', 'options', 'users'] as $table) {
-        $db->truncate('table.' . $table);
-    }
-    $db->query($db->insert('table.users')->rows(['uid' => 7, 'name' => 'theme', 'mail' => 'theme@example.test']));
-    // 管理员已撤下的标签页
-    $db->query($db->insert('table.contents')->rows([
-        'cid' => 1, 'title' => 'Tags', 'slug' => 'tags', 'type' => 'page',
-        'status' => 'draft', 'template' => 'page-tags.php', 'created' => 1,
-    ]));
-    // 分类地址被其他内容占用
-    $db->query($db->insert('table.contents')->rows([
-        'cid' => 2, 'title' => 'Other', 'slug' => 'categories', 'type' => 'post',
-        'status' => 'publish', 'created' => 1,
-    ]));
-
-    docswebCreateIndexPages();
-
-    $page = static fn(string $template): ?array => $db->fetchRow($db->select()->from('table.contents')
-        ->where('type = ?', 'page')->where('template = ?', $template)->limit(1));
-    $archives = $page('page-archives.php');
-    check($archives !== null && $archives['status'] === 'publish' && (int) $archives['authorId'] === 7,
-        'index page was not created by PHP');
-    check($page('page-categories.php') === null, 'index page reused a slug taken by other content');
-    $tags = $page('page-tags.php');
-    check($tags !== null && $tags['status'] === 'draft', 'a withdrawn index page was republished');
-    check($db->fetchRow($db->select('cid')->from('table.contents')->where('slug = ?', 'tags-2')) === null
-        && $db->fetchRow($db->select('cid')->from('table.contents')->where('slug = ?', 'categories-2')) === null,
-        'duplicate suffixed index pages were created');
-    check($db->fetchRow($db->select('name')->from('table.options')->where('name = ?', 'default_docs_indexes')) !== null,
-        'index page setup was not marked as done');
-
-    // 删除后再次运行不会重建
-    $db->query($db->delete('table.contents')->where('template = ?', 'page-archives.php'));
-    docswebCreateIndexPages();
-    check($page('page-archives.php') === null, 'a deleted index page was recreated');
-}
 
 /**
  * 列表页预取: 每行的分类/标签必须和逐行查询时一致, 且不影响没有关联的行

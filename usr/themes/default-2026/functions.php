@@ -174,6 +174,16 @@ function themeConfig(\Typecho\Widget\Helper\Form $form): void
     );
     $form->addInput($sidebarBlock->multiMode());
 
+    /* ------------------------------------------------------------ 代码高亮 */
+    $hljsCdn = new \Typecho\Widget\Helper\Form\Element\Text(
+        'hljsCdn',
+        null,
+        themeDefault('hljsCdn'),
+        _t('highlight.js 地址'),
+        _t('highlight.js 11 的目录地址, 例如 https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0; 主题从这里加载 highlight.min.js 与 styles/github-dark.min.css, 可以换成自建镜像或站内相对路径, 留空恢复默认')
+    );
+    $form->addInput($hljsCdn);
+
     /* ------------------------------------------------------------ 性能 */
     $preloadLinks = new \Typecho\Widget\Helper\Form\Element\Radio(
         'preloadLinks',
@@ -388,6 +398,7 @@ function themeEsc($value): string
 function themeDefaults(): array
 {
     return [
+        'hljsCdn'          => 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0',
         'accentColor'      => '#4f6bf5',
         'colorScheme'      => 'auto',
         'fontStyle'        => 'sans',
@@ -903,6 +914,18 @@ function themeAsset(string $file): string
     $mtime = is_file($path) ? filemtime($path) : false;
 
     return themeEsc(false === $mtime ? $url : $url . '?v=' . $mtime);
+}
+
+/**
+ * highlight.js 的目录地址 (不带结尾斜杠, 留空时用默认值)
+ *
+ * @return string
+ */
+function themeHljsCdn(): string
+{
+    $cdn = rtrim(trim(themeOption('hljsCdn', themeDefault('hljsCdn'))), '/');
+
+    return '' === $cdn ? themeDefault('hljsCdn') : $cdn;
 }
 
 /**

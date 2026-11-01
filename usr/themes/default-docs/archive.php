@@ -18,9 +18,8 @@ if ($this->is('date') && $year > 0) {
     $label = (string) $year
         . ($month > 0 ? '-' . str_pad((string) $month, 2, '0', STR_PAD_LEFT) : '')
         . ($day > 0 ? '-' . str_pad((string) $day, 2, '0', STR_PAD_LEFT) : '');
-    $archiveUrl = docswebPageUrl('page-archives.php');
-    $archiveLink = $archiveUrl ? docswebLink($archiveUrl, 'archive') : 'archive';
-    $heading = docswebLink($this->options->siteUrl, 'home') . '/' . $archiveLink . '/'
+    $archiveUrl = docswebIndexUrl('archives');
+    $heading = docswebLink($this->options->siteUrl, 'home') . '/' . docswebLink($archiveUrl, 'archive') . '/'
         . htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
 } else {
     $heading = docswebLink($this->options->siteUrl, 'home') . '/'
