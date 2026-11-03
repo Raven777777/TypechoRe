@@ -5,6 +5,7 @@
  *
  * @var Widget\Options $options
  * @var Widget\Security $security
+ * @var Widget\User $user
  */
 include 'common.php';
 

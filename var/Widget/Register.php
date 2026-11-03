@@ -41,7 +41,8 @@ class Register extends Users implements ActionInterface
             && !Common::isSameOrigin($origin, $this->options->adminUrl)) {
             throw new \Typecho\Widget\Exception(_t('注册请求来源无效'), 403);
         }
-        $this->security->protect();
+        // 注册只读 POST, 查询串中的同名参数必须被忽略而不是让 token 失效
+        $this->security->protect((string) parse_url($this->request->getRequestUri() ?? '/', PHP_URL_PATH));
         $credentials = [];
         foreach (['name', 'mail', 'password', 'confirm'] as $name) {
             $credentials[$name] = is_string($_POST[$name] ?? null) ? $_POST[$name] : '';

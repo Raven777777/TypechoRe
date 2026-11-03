@@ -54,7 +54,7 @@ love4z.cn
 1. 使用原密码登录后台
 2. 打开个人资料页面
 3. 找到「Passkey 登录」区域
-4. 点击「注册 Passkey」
+4. 点击「注册 Passkey」，输入当前密码确认身份
 5. 输入设备名称
 6. 按浏览器提示完成 Windows Hello、手机确认或安全密钥确认
 7. 退出后台
@@ -101,7 +101,7 @@ TypechoRe 会校验：
 - 公钥签名
 - 签名计数器
 
-注册和删除 Passkey 需要管理员权限以及 CSRF Token。
+注册和删除 Passkey 需要管理员权限、当前密码以及 CSRF Token。
 
 当前实现使用隐私友好的 `none` Attestation，不保存厂商认证证书，也不尝试识别具体硬件品牌。
 

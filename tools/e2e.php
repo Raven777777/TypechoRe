@@ -1352,8 +1352,7 @@ for ($i = 0; $i < 201; $i++) {
 echo implode(',', $ids);
 SITE_PHP);
 $mediaPage = assertResponse($site->get('/admin/manage-medias.php'), [200], 'GET media cleanup page');
-$clearUrl = str_replace('do=delete', 'do=clear',
-    endpointUrl($mediaPage, 'action/contents-attachment-edit', 'manage-medias.php'));
+$clearUrl = endpointUrl($mediaPage, 'action/contents-attachment-edit?do=clear', 'manage-medias.php');
 assertResponse($site->post($clearUrl, ['do' => 'clear']), [302], 'clear unused attachments');
 assertTrue(sitePhp($php, $siteDir, "echo (int) \$db->fetchObject(\$db->select(['COUNT(*)' => 'num'])"
     . "->from('table.contents')->where('cid IN ?', [" . $cleanupIds . "]))->num;") === '0',
@@ -1365,12 +1364,17 @@ step('passkey registration and assertion');
 $profile = assertResponse($site->get('/admin/profile.php'), [200], 'GET profile (passkey section)');
 assertTrue(str_contains($profile, 'passkey-management'), 'passkey management section missing in profile');
 assertTrue(
-    (bool) preg_match('/var token = "([0-9a-f]{64})"/', $profile, $passkeyTokenMatch),
-    'profile page did not expose the passkey CSRF token'
+    (bool) preg_match('/"create-options":"([0-9a-f]{64})"/', $profile, $createOptionsTokenMatch),
+    'profile page did not expose the passkey create-options token'
 );
-$passkeyToken = $passkeyTokenMatch[1];
+assertTrue(
+    (bool) preg_match('/"process-create":"([0-9a-f]{64})"/', $profile, $processCreateTokenMatch),
+    'profile page did not expose the passkey process-create token'
+);
+$createOptionsToken = $createOptionsTokenMatch[1];
+$processCreateToken = $processCreateTokenMatch[1];
 $passkeyJson = assertResponse(
-    $site->get('/index.php/action/passkey?do=create-options&_=' . urlencode($passkeyToken)),
+    $site->get('/index.php/action/passkey?do=create-options&_=' . urlencode($createOptionsToken)),
     [200],
     'GET passkey create-options'
 );
@@ -1397,10 +1401,11 @@ $createPayload = json_encode([
     'clientDataJSON' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($createClientData),
     'attestationObject' => \TypechoRe\Tests\WebAuthnTestFixture::base64UrlEncode($testAttestation),
     'name' => 'E2E synthetic passkey',
+    'password' => $adminPassword,
 ], JSON_THROW_ON_ERROR);
 $createResultBody = assertResponse(
     $site->postRaw(
-        '/index.php/action/passkey?do=process-create&_=' . urlencode($passkeyToken),
+        '/index.php/action/passkey?do=process-create&_=' . urlencode($processCreateToken),
         $createPayload,
         ['Content-Type' => 'application/json', 'X-Forwarded-Proto' => 'https']
     ),
@@ -1566,7 +1571,7 @@ assertTrue(
 
 $passkeyProfileAfterUpgrade = assertResponse($site->get('/admin/profile.php'), [200], 'GET profile after upgrade');
 assertTrue(
-    (bool) preg_match('/var token = "([0-9a-f]{64})"/', $passkeyProfileAfterUpgrade, $afterUpgradeToken),
+    (bool) preg_match('/"create-options":"([0-9a-f]{64})"/', $passkeyProfileAfterUpgrade, $afterUpgradeToken),
     'profile page did not expose the passkey CSRF token after the upgrade'
 );
 

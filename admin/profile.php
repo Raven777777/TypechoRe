@@ -4,6 +4,7 @@
  * PHPStan 无法跨 include 传播局部变量, 这里按实际作用域显式声明。
  *
  * @var Widget\Options $options
+ * @var Widget\Security $security
  * @var Typecho\Widget\Request $request
  * @var Widget\User $user
  */

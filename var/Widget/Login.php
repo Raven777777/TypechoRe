@@ -44,7 +44,8 @@ class Login extends Users implements ActionInterface
             throw new \Typecho\Widget\Exception(_t('登录请求来源无效'), 403);
         }
 
-        $this->security->protect();
+        // 查询串不参与登录凭据, 不能让 ?name=... 之类的参数让合法 token 失效
+        $this->security->protect((string) parse_url($this->request->getRequestUri() ?? '/', PHP_URL_PATH));
 
         /** 如果已经登录 */
         if ($this->user->hasLogin()) {

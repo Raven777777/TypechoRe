@@ -64,12 +64,14 @@ class Security extends Base
 
     /**
      * 保护提交数据
+     *
+     * @param string|null $suffix 绑定的地址, null 表示当前请求 (含查询串)
      */
-    public function protect()
+    public function protect(?string $suffix = null)
     {
         $provided = $this->request->get('_');
 
-        if ($this->enabled && (!is_string($provided) || !$this->verifyToken($provided, $this->currentPath()))) {
+        if ($this->enabled && (!is_string($provided) || !$this->verifyToken($provided, $suffix ?? $this->currentPath()))) {
             $this->response->goBack();
         }
     }
@@ -129,7 +131,11 @@ class Security extends Base
         }
 
         $parts = parse_url($path);
-        $path = is_array($parts) && isset($parts['path']) ? $parts['path'] : '';
+        if (!is_array($parts)) {
+            return '/';
+        }
+
+        $path = $parts['path'] ?? '';
 
         if ('' === $path) {
             return '/';
@@ -149,7 +155,7 @@ class Security extends Base
         $path = preg_replace('#^/index\.php(?=/|$)#i', '', $path) ?? $path;
 
         $query = [];
-        if (is_array($parts) && !empty($parts['query'])) {
+        if (!empty($parts['query'])) {
             parse_str($parts['query'], $query);
         }
         unset($query['_']);
