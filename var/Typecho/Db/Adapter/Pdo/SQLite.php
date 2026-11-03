@@ -42,6 +42,7 @@ class SQLite extends Pdo
     public function init(Config $config): \PDO
     {
         $pdo = new \Pdo\Sqlite("sqlite:{$config->file}");
+        @chmod($config->file, 0600);
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 5);
 

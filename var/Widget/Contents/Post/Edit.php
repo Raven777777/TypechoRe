@@ -178,47 +178,56 @@ class Edit extends Contents implements ActionInterface
                 ->from('table.contents')->where('cid = ? AND (type = ? OR type = ?)', $post, 'post', 'post_draft'));
 
             if ($this->isWriteable(clone $condition) && count((array)$postObject)) {
+                $marked = $this->db->transaction(function () use ($condition, $postObject, $post, $status): bool {
+                    /** 只更新仍处于读取时状态的行, 两个管理员同时操作时只有一次会命中 */
+                    $updated = $this->db->query($condition->update('table.contents')->rows(['status' => $status])
+                        ->where('status = ?', $postObject->status));
 
-                /** 标记状态 */
-                $this->db->query($condition->update('table.contents')->rows(['status' => $status]));
-
-                // 刷新Metas
-                if ($postObject->type == 'post') {
-                    $op = null;
-
-                    if ($status == 'publish' && $postObject->status != 'publish') {
-                        $op = '+';
-                    } elseif ($status != 'publish' && $postObject->status == 'publish') {
-                        $op = '-';
+                    if ($updated < 1) {
+                        return false;
                     }
 
-                    if (!empty($op)) {
-                        $metas = $this->db->fetchAll(
-                            $this->db->select()->from('table.relationships')->where('cid = ?', $post)
-                        );
-                        foreach ($metas as $meta) {
-                            $this->db->query($this->db->update('table.metas')
-                                ->expression('count', 'count ' . $op . ' 1')
-                                ->where('mid = ? AND (type = ? OR type = ?)', $meta['mid'], 'category', 'tag'));
+                    // 刷新Metas
+                    if ($postObject->type == 'post') {
+                        $op = null;
+
+                        if ($status == 'publish' && $postObject->status != 'publish') {
+                            $op = '+';
+                        } elseif ($status != 'publish' && $postObject->status == 'publish') {
+                            $op = '-';
+                        }
+
+                        if (!empty($op)) {
+                            $metas = $this->db->fetchAll(
+                                $this->db->select()->from('table.relationships')->where('cid = ?', $post)
+                            );
+                            foreach ($metas as $meta) {
+                                $this->db->query($this->db->update('table.metas')
+                                    ->expression('count', 'count ' . $op . ' 1')
+                                    ->where('mid = ? AND (type = ? OR type = ?)', $meta['mid'], 'category', 'tag'));
+                            }
                         }
                     }
+
+                    // 处理草稿
+                    $draft = $this->db->fetchRow($this->db->select('cid')
+                        ->from('table.contents')
+                        ->where('table.contents.parent = ? AND table.contents.type = ?', $post, 'revision')
+                        ->limit(1));
+
+                    if (!empty($draft)) {
+                        $this->db->query($this->db->update('table.contents')->rows(['status' => $status])
+                            ->where('cid = ?', $draft['cid']));
+                    }
+
+                    return true;
+                });
+
+                if ($marked) {
+                    // 完成标记插件接口
+                    self::pluginHandle()->call('finishMark', $status, $post, $this);
+                    $markCount++;
                 }
-
-                // 处理草稿
-                $draft = $this->db->fetchRow($this->db->select('cid')
-                    ->from('table.contents')
-                    ->where('table.contents.parent = ? AND table.contents.type = ?', $post, 'revision')
-                    ->limit(1));
-
-                if (!empty($draft)) {
-                    $this->db->query($this->db->update('table.contents')->rows(['status' => $status])
-                        ->where('cid = ?', $draft['cid']));
-                }
-
-                // 完成标记插件接口
-                self::pluginHandle()->call('finishMark', $status, $post, $this);
-
-                $markCount++;
             }
 
             unset($condition);

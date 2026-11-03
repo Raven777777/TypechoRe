@@ -5,6 +5,7 @@ namespace Widget;
 use Typecho\Common;
 use Typecho\Cookie;
 use Typecho\Db\Exception;
+use Typecho\Throttle;
 use Typecho\Validate;
 use Widget\Base\Users;
 use Widget\Users\EditTrait;
@@ -50,6 +51,13 @@ class Register extends Users implements ActionInterface
         if ($this->user->hasLogin() || !$this->options->allowRegister) {
             /** 直接返回 */
             $this->response->redirect($this->options->index);
+        }
+
+        /** 注册同样要限流: 每次尝试都会跑一次 bcrypt, 否则可以被打成 CPU/数据库洪水 */
+        $throttleSubject = $this->request->getIp();
+        if (Throttle::hit('register', $throttleSubject)) {
+            Notice::alloc()->set(_t('注册尝试次数过多, 请稍后再试'), 'error');
+            $this->response->goBack();
         }
 
         /** 初始化验证类 */
@@ -99,6 +107,7 @@ class Register extends Users implements ActionInterface
             ->limit(1), [$this, 'push']);
 
         self::pluginHandle()->call('finishRegister', $this);
+        Throttle::clear('register', $throttleSubject);
 
         $this->user->login($credentials['name'], $password);
 

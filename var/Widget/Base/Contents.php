@@ -243,8 +243,19 @@ class Contents extends Base implements QueryInterface, RowFilterInterface, Prima
             $count++;
         }
 
-        $this->db->query($this->db->update('table.contents')->rows(['slug' => $result])
-            ->where('cid = ?', $cid));
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            try {
+                $this->db->query($this->db->update('table.contents')->rows(['slug' => $result])
+                    ->where('cid = ?', $cid));
+                return $result;
+            } catch (Exception $e) {
+                // 并发保存同一标题时唯一索引会撞车, 换一个后缀再试
+                if ($attempt === 4 || !str_contains($e->getMessage(), 'contents.slug')) {
+                    throw $e;
+                }
+                $result = $slug . '-' . bin2hex(random_bytes(3));
+            }
+        }
 
         return $result;
     }

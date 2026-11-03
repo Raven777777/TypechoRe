@@ -56,7 +56,7 @@ final class PageCache
     private static function rendersWholePage(): bool
     {
         foreach (array_keys(Plugin::export()['handles'] ?? []) as $handle) {
-            if (strtolower(ltrim((string) $handle, '\\')) === 'index.php') {
+            if (str_starts_with(strtolower(ltrim((string) $handle, '\\')), 'index.php:')) {
                 return true;
             }
         }
@@ -85,9 +85,14 @@ final class PageCache
             return null;
         }
         $file = $dir . '/' . $key;
+        $inode = @fileinode($file);
         $entry = @unserialize((string) @file_get_contents($file), ['allowed_classes' => false]);
         if (!is_array($entry) || ($entry['expires'] ?? 0) < time() || !is_string($entry['body'] ?? null)) {
-            @unlink($file);
+            // 别删掉另一个进程刚刚替换上的新条目
+            clearstatcache(true, $file);
+            if ($inode !== false && @fileinode($file) === $inode) {
+                @unlink($file);
+            }
             return null;
         }
         return $entry['body'];
@@ -107,8 +112,13 @@ final class PageCache
         $written = @file_put_contents($temp, serialize([
             'expires' => time() + max(1, min(86400, $ttl)),
             'body' => $body,
-        ]), LOCK_EX) !== false
-            && @rename($temp, $dir . '/' . $key);
+        ]), LOCK_EX) !== false;
+        $target = $dir . '/' . $key;
+        if ($written && !@rename($temp, $target)) {
+            // Windows 不能覆盖已有文件
+            @unlink($target);
+            $written = @rename($temp, $target);
+        }
         if (!$written) {
             @unlink($temp);
             return false;
@@ -146,29 +156,33 @@ final class PageCache
      */
     private static function refresh(string $file, bool $force): string
     {
-        $fp = @fopen($file, 'c+');
-        if (!$fp) {
+        $generation = trim((string) @file_get_contents($file));
+        if (!$force && $generation !== '') {
+            return $generation;
+        }
+
+        $generation = bin2hex(random_bytes(16));
+        $temp = @tempnam(dirname($file), '.generation-');
+        if ($temp === false) {
             return '';
         }
 
-        @chmod($file, 0600);
-        $generation = '';
-
-        if (@flock($fp, LOCK_EX)) {
-            $generation = trim((string) stream_get_contents($fp));
-
-            if ($force || $generation === '') {
-                $generation = bin2hex(random_bytes(16));
-                rewind($fp);
-                ftruncate($fp, 0);
-                fwrite($fp, $generation);
-                fflush($fp);
+        @chmod($temp, 0600);
+        $written = @file_put_contents($temp, $generation, LOCK_EX) !== false;
+        if ($written) {
+            $written = @rename($temp, $file);
+            if (!$written) {
+                // Windows 不能覆盖已有文件
+                @unlink($file);
+                $written = @rename($temp, $file);
             }
-
-            flock($fp, LOCK_UN);
         }
 
-        fclose($fp);
+        if (!$written) {
+            @unlink($temp);
+            return '';
+        }
+
         return $generation;
     }
 
@@ -196,7 +210,13 @@ final class PageCache
             return;
         }
 
-        $files = glob($dir . '/[a-f0-9]*') ?: [];
+        foreach (array_merge(glob($dir . '/.tmp-*') ?: [], glob($dir . '/.generation-*') ?: []) as $file) {
+            if ((@filemtime($file) ?: 0) < time() - self::TTL) {
+                @unlink($file);
+            }
+        }
+
+        $files = array_values(array_filter(glob($dir . '/[a-f0-9]*') ?: [], static fn(string $file): bool => basename($file) !== 'generation'));
         $overflow = count($files) - self::LIMIT * 2;
         if ($overflow <= 0) {
             return;

@@ -398,8 +398,18 @@ class Upload extends Contents implements ActionInterface
             }
         }
 
-        //获取文件名
-        $fileName = sprintf('%u', crc32(uniqid())) . '.' . $ext;
+        // 128 位随机名, 既不可预测, 也避免并发上传互相覆盖
+        $fileName = '';
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $candidate = bin2hex(random_bytes(16)) . '.' . $ext;
+            if (!file_exists($path . '/' . $candidate)) {
+                $fileName = $candidate;
+                break;
+            }
+        }
+        if ($fileName === '') {
+            return false;
+        }
         $path = $path . '/' . $fileName;
 
         if (isset($file['tmp_name'])) {
@@ -407,23 +417,23 @@ class Upload extends Contents implements ActionInterface
             if (!@move_uploaded_file($file['tmp_name'], $path)) {
                 return false;
             }
-        } elseif (isset($file['bytes'])) {
-            //直接写入文件
-            if (!file_put_contents($path, $file['bytes'])) {
+        } elseif (isset($file['bytes']) || isset($file['bits'])) {
+            $data = (string) ($file['bytes'] ?? $file['bits']);
+            $fp = @fopen($path, 'xb');
+            if (!$fp) {
                 return false;
             }
-        } elseif (isset($file['bits'])) {
-            //直接写入文件
-            if (!file_put_contents($path, $file['bits'])) {
+            $written = fwrite($fp, $data);
+            fclose($fp);
+            if ($written !== strlen($data)) {
+                @unlink($path);
                 return false;
             }
         } else {
             return false;
         }
 
-        if (!isset($file['size'])) {
-            $file['size'] = filesize($path);
-        }
+        $file['size'] = @filesize($path) ?: 0;
 
         //返回相对存储路径
         return [

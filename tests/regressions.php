@@ -376,9 +376,11 @@ function checkBackupRegressions(Db $db, string $sqliteFile, Widget\Options $opti
         regressionThrows(fn() => @$restore->invoke($backup, $file), 'backup without an administrator was restored');
         check($snapshot() === $before, 'restore without an administrator changed existing tables');
 
+        // 当前站点已有用户时, 空用户备份会把人锁在门外, 必须拒绝
+        $before = $snapshot();
         file_put_contents($file, $header . $header);
-        $restore->invoke($backup, $file);
-        check($db->fetchAll($db->select()->from('table.contents')) === [], 'empty backup retained old rows');
+        regressionThrows(fn() => @$restore->invoke($backup, $file), 'backup without users wiped accounts');
+        check($snapshot() === $before, 'backup without users changed existing tables');
     } finally {
         unlink($file);
         $_COOKIE = $cookies;
@@ -386,6 +388,8 @@ function checkBackupRegressions(Db $db, string $sqliteFile, Widget\Options $opti
 
     // Run a writer between export pages while SQLite is in WAL mode.
     $db->query('PRAGMA journal_mode=WAL', Db::READ);
+    $db->query($db->delete('table.contents'));
+    $db->query($db->delete('table.users'));
     for ($cid = 1; $cid <= 21; $cid++) {
         $db->query($db->insert('table.contents')->rows(['cid' => $cid, 'title' => 'snapshot-' . $cid]));
     }

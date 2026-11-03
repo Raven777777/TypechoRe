@@ -133,7 +133,7 @@ class General extends Options implements ActionInterface
 
         $attachmentTypesOther = $this->request->filter('trim', 'strtolower')->get('attachmentTypesOther');
         if ($this->isEnableByCheckbox($settings['attachmentTypes'], '@other@') && !empty($attachmentTypesOther)) {
-            /** 不再额外过滤"可执行"后缀, 想放开什么由站长自己决定 */
+            /** 自定义后缀在这里放行, 但 Upload::checkFileType() 的硬拒绝名单仍会拦截脚本/HTML/SVG */
             $types = implode(',', array_filter(array_map('trim', explode(',', $attachmentTypesOther))));
 
             if (!empty($types)) {
@@ -304,7 +304,7 @@ class General extends Options implements ActionInterface
             _t('允许上传的文件类型'),
             _t('用逗号 "," 将后缀名隔开, 例如: %s', '<code>cpp, h, mak</code>')
             . '<br />'
-            . _t('注意: 允许上传 svg/svgz、html/htm、js、xml、php 等可能存在安全风险。')
+            . _t('注意: php/phtml/phar、html/htm、svg/svgz、xml 等危险后缀在代码中固定拒绝, 写在这里也不会生效。')
         );
         $form->addInput($attachmentTypes->multiMode());
 

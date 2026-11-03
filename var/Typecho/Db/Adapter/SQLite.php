@@ -43,6 +43,7 @@ class SQLite implements Adapter
     {
         try {
             $dbHandle = new \SQLite3($config->file);
+            @chmod($config->file, 0600);
 
             /** 并发加固: 非零 busy_timeout + WAL 模式, 读写不再互斥, 消除 "database is locked" */
             $dbHandle->busyTimeout(5000);

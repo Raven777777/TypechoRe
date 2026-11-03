@@ -45,6 +45,7 @@ class Recent extends Comments
             ->where('table.contents.status = ?', 'publish')
             ->where('table.contents.type = ? OR table.contents.type = ?', 'post', 'page')
             ->where('table.contents.created <= ?', $this->options->time)
+            ->where("table.contents.password IS NULL OR table.contents.password = ''")
             ->where('table.comments.status = ?', 'approved')
             ->order('table.comments.coid', Db::SORT_DESC);
 

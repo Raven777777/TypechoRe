@@ -146,7 +146,7 @@ foreach ($cookieDefaults as $name => $value) {
 \Typecho\Plugin::init(['activated' => ['test' => []]]);
 $_SERVER = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/'];
 check(\Typecho\PageCache::eligible(), 'page cache rejected a plugin that does not hook the whole page');
-\Typecho\Plugin::init(['activated' => ['test' => []], 'handles' => ['index.php' => ['begin']]]);
+\Typecho\Plugin::init(['activated' => ['test' => []], 'handles' => ['index.php:begin' => ['begin']]]);
 check(!\Typecho\PageCache::eligible(), 'page cache accepted a plugin that hooks the whole page');
 \Typecho\Plugin::init([]);
 $_SERVER = $server;

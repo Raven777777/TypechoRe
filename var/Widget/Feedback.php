@@ -189,6 +189,7 @@ class Feedback extends Comments implements ActionInterface
         $validator->addRule('url', 'maxLength', _t('个人主页地址最多包含255个字符'), 255);
 
         $validator->addRule('text', 'required', _t('必须填写评论内容'));
+        $validator->addRule('text', 'maxLength', _t('评论内容过长'), 65536);
 
         $comment['text'] = $this->request->get('text');
 

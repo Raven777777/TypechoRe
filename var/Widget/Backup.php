@@ -283,7 +283,8 @@ class Backup extends BaseOptions implements ActionInterface
             fseek($fp, $headerSize);
             $offset = $headerSize;
             $end = $fileSize - $headerSize;
-            $login = $this->db->transaction(function () use ($fp, &$offset, $end, $version): ?array {
+            $hadUsers = $this->countRows('users') > 0;
+            $login = $this->db->transaction(function () use ($fp, &$offset, $end, $version, $hadUsers): ?array {
                 foreach (array_keys($this->types) as $table) {
                     $this->db->truncate('table.' . $table);
                 }
@@ -303,7 +304,10 @@ class Backup extends BaseOptions implements ActionInterface
                     throw new Exception(_t('备份文件格式错误'));
                 }
                 // 表已经被清空: 备份里明明有用户却没有管理员, 恢复后谁也进不了后台,
-                // 所以整体回滚, 现有数据保持不动 (完全不含用户的空备份仍然允许恢复)
+                // 当前站点本来有用户时, 空用户备份同样会把人锁在门外, 两者都整体回滚
+                if ($hadUsers && 0 === $this->countRows('users')) {
+                    throw new Exception(_t('备份文件不包含用户, 已取消恢复'));
+                }
                 if (null === $this->login && $this->countRows('users') > 0) {
                     throw new Exception(_t('备份文件里的用户都不是管理员, 已取消恢复'));
                 }

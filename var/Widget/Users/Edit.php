@@ -240,6 +240,20 @@ class Edit extends Users implements ActionInterface
         if (isset($user['group']) && !array_key_exists($user['group'], $this->user->groups)) {
             unset($user['group']);
         }
+
+        $targetUid = (int) $this->request->get('uid');
+        if (isset($user['group']) && 'administrator' !== $user['group']) {
+            $target = $this->db->fetchRow($this->db->select('group')->from('table.users')
+                ->where('uid = ?', $targetUid)->limit(1));
+            if (!empty($target) && 'administrator' === $target['group']) {
+                $admins = $this->db->fetchObject($this->db->select(['COUNT(uid)' => 'num'])
+                    ->from('table.users')->where('group = ?', 'administrator'));
+                if ($targetUid === (int) $this->user->uid || (int) ($admins->num ?? 0) <= 1) {
+                    Notice::alloc()->set(_t('不能取消自己的管理员权限, 也不能取消最后一个管理员'), 'error');
+                    $this->response->goBack();
+                }
+            }
+        }
         $user['screenName'] = empty($user['screenName'])
             ? $this->request->get('name', '') : $user['screenName'];
         if (empty($user['password'])) {

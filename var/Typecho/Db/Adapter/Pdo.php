@@ -120,7 +120,7 @@ abstract class Pdo implements Adapter
                 $resource->execute();
                 return $resource;
             } catch (\PDOException $e) {
-                if (5 !== (int) $e->getCode()) {
+                if (5 !== (int) ($e->errorInfo[1] ?? 0)) {
                     /** 数据库异常 */
                     throw new SQLException($e->getMessage(), $e->getCode());
                 }

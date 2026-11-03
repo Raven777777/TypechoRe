@@ -456,8 +456,11 @@ require_once __TYPECHO_ROOT_DIR__ . '/var/Typecho/Common.php';
         $tempFile = $configFile . '.' . bin2hex(random_bytes(6)) . '.tmp';
         $configWritten = @file_put_contents($tempFile, $code) !== false;
         if ($configWritten) {
-            @chmod($tempFile, 0644);
+            @chmod($tempFile, 0600);
             $configWritten = @rename($tempFile, $configFile);
+            if ($configWritten) {
+                @chmod($configFile, 0600);
+            }
         }
         if (!$configWritten) {
             @unlink($tempFile);
@@ -628,6 +631,19 @@ function install_csrf_field(): string
 {
     return '<input type="hidden" name="_" value="'
         . htmlspecialchars(install_csrf_token(), ENT_QUOTES, 'UTF-8') . '" />';
+}
+
+/**
+ * 标记第二步已经由当前会话完成, 第三步只允许这个会话继续
+ */
+function install_mark_step2(): void
+{
+    if (install_is_cli()) {
+        return;
+    }
+
+    \Typecho\Common::startSession();
+    $_SESSION['__typecho_install_step2'] = true;
 }
 
 /**
@@ -1047,6 +1063,7 @@ function install_step_2_perform()
 
     $type = install_get_db_type($config['dbAdapter']);
     $dbConfig = [];
+    $writeConfig = false;
 
     foreach ($configMap[$type] as $key => $value) {
         $config[$key] = !isset($config[$key]) ? (install_is_cli() ? $value : null) : $config[$key];
@@ -1078,8 +1095,17 @@ function install_step_2_perform()
         $dbConfig[lcfirst(substr($key, 2))] = $config[$key];
     }
 
-    if (isset($dbConfig['file']) && preg_match("/^[a-z0-9]+\.[a-z0-9]{2,}$/i", $dbConfig['file'])) {
-        $dbConfig['file'] = __DIR__ . '/usr/' . $dbConfig['file'];
+    if (isset($dbConfig['file'])) {
+        if (!install_is_cli()) {
+            // 网页安装只允许本站 usr/ 下的普通文件名, 绝对路径/.. 一律收窄
+            $name = basename(str_replace('\\', '/', (string) $dbConfig['file']));
+            if (!preg_match('/^[a-z0-9][a-z0-9._-]*\.(db|sqlite|sqlite3)$/i', $name)) {
+                install_raise_error(_t('数据库文件名无效'));
+            }
+            $dbConfig['file'] = __DIR__ . '/usr/' . $name;
+        } elseif (preg_match("/^[a-z0-9]+\.[a-z0-9]{2,}$/i", $dbConfig['file'])) {
+            $dbConfig['file'] = __DIR__ . '/usr/' . $dbConfig['file'];
+        }
     }
 
     // check config file
@@ -1100,6 +1126,78 @@ function install_step_2_perform()
             install_raise_error(_t('安装程序捕捉到以下错误: "%s". 程序被终止, 请检查您的配置信息.', $e->getMessage()));
         }
 
+        $writeConfig = true;
+    }
+
+    // DROP + CREATE 放在一个事务里: 中途失败时旧库仍然完整
+    try {
+        $installDb->transaction(function () use ($installDb, $config, $type): void {
+            if ($config['dbNext'] == 'delete') {
+                $tables = [
+                    $config['dbPrefix'] . 'comments',
+                    $config['dbPrefix'] . 'contents',
+                    $config['dbPrefix'] . 'fields',
+                    $config['dbPrefix'] . 'metas',
+                    $config['dbPrefix'] . 'options',
+                    $config['dbPrefix'] . 'passkeys',
+                    $config['dbPrefix'] . 'relationships',
+                    $config['dbPrefix'] . 'users'
+                ];
+                foreach ($tables as $table) {
+                    $installDb->query("DROP TABLE IF EXISTS {$table}");
+                }
+            }
+
+            $scripts = file_get_contents(__TYPECHO_ROOT_DIR__ . '/install/' . $type . '.sql');
+            $scripts = str_replace('typecho_', $config['dbPrefix'], $scripts);
+
+            $scripts = explode(';', $scripts);
+            foreach ($scripts as $script) {
+                $script = trim($script);
+                if ($script) {
+                    $installDb->query($script, \Typecho\Db::WRITE);
+                }
+            }
+        });
+    } catch (\Typecho\Db\Exception $e) {
+        // PDO 抛出的是 SQLSTATE 字符串 ('HY000'), SQLite3 抛出的是数字错误码 (1)。
+        // PHPStan 依据 Throwable::getCode(): int 推断为 int, 这里显式声明联合类型
+        /** @var int|string $rawCode */
+        $rawCode = $e->getCode();
+        $code = (string) $rawCode;
+
+        if (in_array($code, ['HY000', '1'], true)) {
+            if ($config['dbNext'] == 'keep') {
+                if ($writeConfig && !install_check('config')) {
+                    install_config_file($config['dbAdapter'], $config['dbPrefix'], $dbConfig);
+                }
+                if (install_check('db_data')) {
+                    install_success(0);
+                } else {
+                    install_mark_step2();
+                    install_success(3);
+                }
+            } elseif ($config['dbNext'] == 'none') {
+                if ($writeConfig) {
+                    install_remove_config_file();
+                }
+
+                install_raise_error(_t('安装程序检查到原有数据表已经存在.'), [
+                    'delete' => _t('删除原有数据'),
+                    'keep' => _t('使用原有数据')
+                ]);
+            } else {
+                install_remove_config_file();
+                install_raise_error(_t('安装程序捕捉到以下错误: "%s". 程序被终止, 请检查您的配置信息.', $e->getMessage()));
+            }
+        } else {
+            install_remove_config_file();
+
+            install_raise_error(_t('安装程序捕捉到以下错误: "%s". 程序被终止, 请检查您的配置信息.', $e->getMessage()));
+        }
+    }
+
+    if ($writeConfig) {
         $code = install_config_file($config['dbAdapter'], $config['dbPrefix'], $dbConfig);
 
         if (!install_check('config')) {
@@ -1113,69 +1211,7 @@ function install_step_2_perform()
         }
     }
 
-    // delete exists db
-    if ($config['dbNext'] == 'delete') {
-        $tables = [
-            $config['dbPrefix'] . 'comments',
-            $config['dbPrefix'] . 'contents',
-            $config['dbPrefix'] . 'fields',
-            $config['dbPrefix'] . 'metas',
-            $config['dbPrefix'] . 'options',
-            $config['dbPrefix'] . 'passkeys',
-            $config['dbPrefix'] . 'relationships',
-            $config['dbPrefix'] . 'users'
-        ];
-
-        try {
-            foreach ($tables as $table) {
-                $installDb->query("DROP TABLE IF EXISTS {$table}");
-            }
-        } catch (\Typecho\Db\Exception $e) {
-            install_raise_error(_t('安装程序捕捉到以下错误: "%s". 程序被终止, 请检查您的配置信息.', $e->getMessage()));
-        }
-    }
-
-    // init db structure
-    try {
-        $scripts = file_get_contents(__TYPECHO_ROOT_DIR__ . '/install/' . $type . '.sql');
-        $scripts = str_replace('typecho_', $config['dbPrefix'], $scripts);
-
-        $scripts = explode(';', $scripts);
-        foreach ($scripts as $script) {
-            $script = trim($script);
-            if ($script) {
-                $installDb->query($script, \Typecho\Db::WRITE);
-            }
-        }
-    } catch (\Typecho\Db\Exception $e) {
-        // PDO 抛出的是 SQLSTATE 字符串 ('HY000'), SQLite3 抛出的是数字错误码 (1)。
-        // PHPStan 依据 Throwable::getCode(): int 推断为 int, 这里显式声明联合类型
-        /** @var int|string $rawCode */
-        $rawCode = $e->getCode();
-        $code = (string) $rawCode;
-
-        if (in_array($code, ['HY000', '1'], true)) {
-            if ($config['dbNext'] == 'keep') {
-                if (install_check('db_data')) {
-                    install_success(0);
-                } else {
-                    install_success(3);
-                }
-            } elseif ($config['dbNext'] == 'none') {
-                install_remove_config_file();
-
-                install_raise_error(_t('安装程序检查到原有数据表已经存在.'), [
-                    'delete' => _t('删除原有数据'),
-                    'keep' => _t('使用原有数据')
-                ]);
-            }
-        } else {
-            install_remove_config_file();
-
-            install_raise_error(_t('安装程序捕捉到以下错误: "%s". 程序被终止, 请检查您的配置信息.', $e->getMessage()));
-        }
-    }
-
+    install_mark_step2();
     install_success(3);
 }
 
@@ -1280,7 +1316,13 @@ function install_step_3_perform()
         $config['userPassword'] = $defaultPassword;
     }
 
+    $users = $installDb->fetchObject($installDb->select(['COUNT(uid)' => 'num'])->from('table.users'));
+    if ((int) ($users->num ?? 0) > 0) {
+        install_raise_error(_t('用户表已有数据, 安装已终止'));
+    }
+
     try {
+        $installDb->transaction(function () use ($installDb, $config, $options): void {
         // write user
         $installDb->query(
             $installDb->insert('table.users')->rows([
@@ -1372,6 +1414,7 @@ function install_step_3_perform()
                 $installDb->insert('table.options')->rows(['name' => $key, 'user' => 0, 'value' => $value])
             );
         }
+        });
     } catch (\Typecho\Db\Exception $e) {
         install_raise_error($e->getMessage());
     }
@@ -1400,6 +1443,8 @@ function install_dispatch()
     // disable root url on cli mode
     if (install_is_cli()) {
         define('__TYPECHO_ROOT_URL__', 'http://localhost');
+    } else {
+        \Typecho\Common::startSession();
     }
 
     // init default options
@@ -1443,10 +1488,13 @@ function install_dispatch()
                 }
                 break;
             case $step == 3:
-                if (install_check('db_structure')) {
-                    $action = 3;
-                } else {
+                if (!install_check('db_structure')) {
                     install_redirect('install.php?step=2');
+                } elseif (empty($_SESSION['__typecho_install_step2'])) {
+                    // 第三步会创建管理员, 不能只凭一个任何人可领取的 CSRF token 进入
+                    install_redirect('install.php?step=2');
+                } else {
+                    $action = 3;
                 }
                 break;
             default:
