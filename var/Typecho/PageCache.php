@@ -55,13 +55,10 @@ final class PageCache
      */
     private static function rendersWholePage(): bool
     {
-        foreach (array_keys(Plugin::export()['handles'] ?? []) as $handle) {
-            if (str_starts_with(strtolower(ltrim((string) $handle, '\\')), 'index.php:')) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(
+            array_keys(Plugin::export()['handles'] ?? []),
+            static fn($handle): bool => str_starts_with(strtolower(ltrim((string) $handle, '\\')), 'index.php:'),
+        );
     }
 
     public static function key(string $generation, string $rootUrl, ?string $theme, ?string $language): string
@@ -104,23 +101,10 @@ final class PageCache
         if ($dir === null || strlen($body) > self::MAX_SIZE) {
             return false;
         }
-        $temp = @tempnam($dir, '.tmp-');
-        if ($temp === false) {
-            return false;
-        }
-        @chmod($temp, 0600);
-        $written = @file_put_contents($temp, serialize([
+        if (!self::writeAtomic($dir . '/' . $key, serialize([
             'expires' => time() + max(1, min(86400, $ttl)),
             'body' => $body,
-        ]), LOCK_EX) !== false;
-        $target = $dir . '/' . $key;
-        if ($written && !@rename($temp, $target)) {
-            // Windows 不能覆盖已有文件
-            @unlink($target);
-            $written = @rename($temp, $target);
-        }
-        if (!$written) {
-            @unlink($temp);
+        ]), '.tmp-')) {
             return false;
         }
         self::cleanup($dir);
@@ -162,28 +146,31 @@ final class PageCache
         }
 
         $generation = bin2hex(random_bytes(16));
-        $temp = @tempnam(dirname($file), '.generation-');
+        return self::writeAtomic($file, $generation, '.generation-') ? $generation : '';
+    }
+
+    /**
+     * 原子写入: 先写同目录临时文件, 再 rename 覆盖
+     */
+    private static function writeAtomic(string $file, string $contents, string $prefix): bool
+    {
+        $temp = @tempnam(dirname($file), $prefix);
         if ($temp === false) {
-            return '';
+            return false;
         }
 
-        @chmod($temp, 0600);
-        $written = @file_put_contents($temp, $generation, LOCK_EX) !== false;
-        if ($written) {
+        $written = @file_put_contents($temp, $contents) !== false;
+        if ($written && !@rename($temp, $file)) {
+            // Windows 不能覆盖已有文件
+            @unlink($file);
             $written = @rename($temp, $file);
-            if (!$written) {
-                // Windows 不能覆盖已有文件
-                @unlink($file);
-                $written = @rename($temp, $file);
-            }
         }
 
         if (!$written) {
             @unlink($temp);
-            return '';
         }
 
-        return $generation;
+        return $written;
     }
 
     private static function directory(): ?string

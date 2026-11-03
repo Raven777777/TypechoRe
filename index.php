@@ -28,7 +28,7 @@ $cacheKey = '';
 $cachedBody = null;
 try {
     $cacheEnabled = (string) ($options->pageCacheEnabled ?? '1') === '1';
-    $cacheTtl = max(1, min(86400, (int) ($options->pageCacheTtl ?? 60)));
+    $cacheTtl = (int) ($options->pageCacheTtl ?? 60);
     $cacheableRequest = $cacheEnabled && \Typecho\PageCache::eligible();
     if ($cacheableRequest) {
         $cacheGeneration = \Typecho\PageCache::generation();

@@ -46,7 +46,7 @@ class General extends Options implements ActionInterface
     public function checkPageCacheTtl($value): bool
     {
         return is_scalar($value)
-            && preg_match('/^[0-9]+$/D', (string) $value) === 1
+            && ctype_digit((string) $value)
             && (int) $value >= 1
             && (int) $value <= 86400;
     }
@@ -56,11 +56,7 @@ class General extends Options implements ActionInterface
         $this->db->transaction(function () use ($enabled, $ttl): void {
             foreach (['pageCacheEnabled' => $enabled, 'pageCacheTtl' => $ttl] as $name => $value) {
                 $condition = $this->db->sql()->where('name = ?', $name)->where('user = ?', 0);
-                $exists = $this->db->fetchRow($this->db->select('name')->from('table.options')
-                    ->where('name = ?', $name)->where('user = ?', 0)->limit(1));
-                if ($exists !== null) {
-                    $this->update(['value' => (string) $value], $condition);
-                } else {
+                if ($this->update(['value' => (string) $value], $condition) === 0) {
                     $this->insert(['name' => $name, 'user' => 0, 'value' => (string) $value]);
                 }
             }
