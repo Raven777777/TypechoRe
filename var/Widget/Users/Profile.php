@@ -310,6 +310,14 @@ class Profile extends Users implements ActionInterface
             $this->db->sql()->where('uid = ?', $this->user->uid)
         );
 
+        /** 密码变更后删除 Passkey: 被盗会话可能已经注册了攻击者的凭证 */
+        try {
+            $this->db->query($this->db->delete('table.passkeys')
+                ->where('uid = ?', (int) $this->user->uid));
+        } catch (\Typecho\Db\Exception $e) {
+            /** 表可能尚未创建 */
+        }
+
         /** 重新签发本机凭证, 避免自己也被踢下线 */
         $this->user->simpleLogin((int) $this->user->uid, false, 0);
 

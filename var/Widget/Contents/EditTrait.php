@@ -443,6 +443,7 @@ trait EditTrait
                         $this->db->select('mid')
                             ->from('table.metas')
                             ->where('mid = ?', $category)
+                            ->where('table.metas.type = ?', 'category')
                             ->limit(1)
                     )
                 ) {

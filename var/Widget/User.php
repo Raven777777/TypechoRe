@@ -23,18 +23,6 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 class User extends Users
 {
     /**
-     * 只用于空跑一次 bcrypt, 抹平"用户不存在"的响应时间差
-     *
-     * 必须是格式合法的哈希: 格式坏掉时 password_verify() 会立刻返回, 起不到耗时作用。
-     * 这里拼出 60 个字符而不是写一个常量, 因为安全扫描器会把任何 bcrypt 格式的字符串
-     * 当成泄漏的口令哈希来报 (实测两者耗时都是 ~155ms)
-     */
-    private static function dummyPasswordHash(): string
-    {
-        return '$2y$12$' . str_repeat('x', 53);
-    }
-
-    /**
      * 用户组
      *
      * @var array
@@ -199,8 +187,8 @@ class User extends Users
         }
 
         if (empty($user)) {
-            // 用户不存在时也跑一次 bcrypt, 否则响应时间会泄露"用户名是否存在"
-            Common::hashValidate($password, self::dummyPasswordHash());
+            // 不存在用户直接返回: 每次请求跑 dummy bcrypt 会让随机用户名变成 CPU 放大器,
+            // 用户名枚举已由 Login 的按 IP 限速阻挡
             return false;
         }
 
@@ -330,7 +318,7 @@ class User extends Users
         if ($return) {
             return false;
         } else {
-            throw new Widget\Exception(_t('禁止访问'), 403);
+            throw new \Typecho\Widget\Exception(_t('禁止访问'), 403);
         }
     }
 }

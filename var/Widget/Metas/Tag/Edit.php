@@ -286,7 +286,9 @@ class Edit extends Metas implements ActionInterface
 
         if ($tags) {
             foreach ($tags as $tag) {
-                if ($this->delete($this->db->sql()->where('mid = ?', $tag))) {
+                $condition = $this->db->sql()->where('mid = ? AND type = ?', $tag, 'tag');
+
+                if ($this->delete($condition)) {
                     $this->db->query($this->db->delete('table.relationships')->where('mid = ?', $tag));
                     $deleteCount++;
                 }

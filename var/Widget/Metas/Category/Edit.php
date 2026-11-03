@@ -353,17 +353,19 @@ class Edit extends Metas implements ActionInterface
         $deleteCount = 0;
 
         foreach ($categories as $category) {
-            $row = $this->db->fetchObject($this->select()->where('mid = ?', $category));
+            $row = $this->db->fetchObject($this->select()
+                ->where('mid = ? AND type = ?', $category, 'category'));
             $parent = null === $row ? 0 : $row->parent;
 
             if ($row) {
                 // 删除分类要同时清理关系表并把子分类上提, 不能只成功一半
                 $deleted = $this->db->transaction(function () use ($category, $parent): int {
-                    $rows = $this->delete($this->db->sql()->where('mid = ?', $category));
+                    $rows = $this->delete($this->db->sql()->where('mid = ? AND type = ?', $category, 'category'));
 
                     if ($rows > 0) {
                         $this->db->query($this->db->delete('table.relationships')->where('mid = ?', $category));
-                        $this->update(['parent' => $parent], $this->db->sql()->where('parent = ?', $category));
+                        $this->update(['parent' => $parent], $this->db->sql()
+                            ->where('parent = ?', $category)->where('type = ?', 'category'));
                     }
 
                     return $rows;

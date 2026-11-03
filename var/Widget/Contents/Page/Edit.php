@@ -144,7 +144,14 @@ class Edit extends Contents implements ActionInterface
         foreach ($pages as $page) {
             // 标记插件接口
             self::pluginHandle()->call('mark', $status, $page, $this);
-            $condition = $this->db->sql()->where('cid = ?', $page);
+            $condition = $this->db->sql()->where('cid = ? AND (type = ? OR type = ?)', $page, 'page', 'page_draft');
+            $pageObject = $this->db->fetchObject($this->db->select('status')
+                ->from('table.contents')
+                ->where('cid = ? AND (type = ? OR type = ?)', $page, 'page', 'page_draft'));
+
+            if (!$pageObject || !$this->isWriteable(clone $condition)) {
+                continue;
+            }
 
             if ($this->db->query($condition->update('table.contents')->rows(['status' => $status]))) {
                 // 处理草稿
@@ -192,9 +199,15 @@ class Edit extends Contents implements ActionInterface
             // 删除插件接口
             self::pluginHandle()->call('delete', $page, $this);
             $deleted = $this->db->transaction(function () use ($page): bool {
-                $row = $this->db->fetchObject($this->select()->where('cid = ?', $page));
-                $parent = null === $row ? 0 : $row->parent;
-                if (!$this->delete($this->db->sql()->where('cid = ?', $page))) {
+                $condition = $this->db->sql()->where('cid = ? AND (type = ? OR type = ?)', $page, 'page', 'page_draft');
+                $row = $this->db->fetchObject((clone $condition)->select('*')->from('table.contents'));
+
+                if (!$row || !$this->isWriteable(clone $condition)) {
+                    return false;
+                }
+
+                $parent = $row->parent;
+                if (!$this->delete($condition)) {
                     return false;
                 }
                 /** 删除评论 */
@@ -301,8 +314,13 @@ class Edit extends Contents implements ActionInterface
 
         if ($pages) {
             foreach ($pages as $sort => $cid) {
-                $this->db->query($this->db->update('table.contents')->rows(['order' => $sort + 1])
-                    ->where('cid = ?', $cid));
+                $condition = $this->db->sql()->where('cid = ? AND (type = ? OR type = ?)', $cid, 'page', 'page_draft');
+
+                if (!$this->isWriteable(clone $condition)) {
+                    continue;
+                }
+
+                $this->db->query($condition->update('table.contents')->rows(['order' => $sort + 1]));
             }
         }
 

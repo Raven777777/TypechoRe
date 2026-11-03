@@ -97,10 +97,11 @@ function checkAuditRegressions(Typecho\Db $db): void
     $user->push(['uid' => 2]);
     (new ReflectionProperty(Widget\Base::class, 'user'))->setValue($attachment, $user);
     $uploadRoot = (string) constant('__TYPECHO_UPLOAD_ROOT_DIR__');
-    $path = $uploadRoot . '/audit-attachment.txt';
+    $path = $uploadRoot . '/usr/uploads/audit-attachment.txt';
+    is_dir(dirname($path)) || mkdir(dirname($path), 0700, true);
     file_put_contents($path, 'attachment bytes');
     $db->query($db->insert('table.contents')->rows(['cid' => 10, 'type' => 'attachment', 'authorId' => 2, 'parent' => 0,
-        'text' => json_encode(['path' => '/audit-attachment.txt', 'type' => 'txt'])]));
+        'text' => json_encode(['path' => '/usr/uploads/audit-attachment.txt', 'type' => 'txt'])]));
     $candidates = [10];
     $db->query($db->update('table.contents')->rows(['parent' => 1])->where('cid = ?', 10));
     $deleted = 0;
@@ -162,7 +163,8 @@ function checkAuditRegressions(Typecho\Db $db): void
             $security->getTokenUrl('https://blog.test' . $base . $base . '/protected/')];
         foreach ($urls as $url) {
             parse_str((string) parse_url($url, PHP_URL_QUERY), $params);
-            $_SERVER['REQUEST_URI'] = parse_url($url, PHP_URL_PATH);
+            $_SERVER['REQUEST_URI'] = parse_url($url, PHP_URL_PATH)
+                . (parse_url($url, PHP_URL_QUERY) ? '?' . parse_url($url, PHP_URL_QUERY) : '');
             $request = new Typecho\Widget\Request(new Typecho\Request(), new Typecho\Config($params));
             (new ReflectionProperty(Typecho\Widget::class, 'request'))->setValue($security, $request);
             $security->protect();

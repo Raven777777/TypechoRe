@@ -326,8 +326,10 @@ class Edit extends Contents implements ActionInterface
                     $content = $this->toColumn(['cid', 'attachment', 'parent']);
                     $custom = !empty(\Typecho\Plugin::export()['handles']['Widget_Upload:deleteHandle']);
                     if (!$custom) {
-                        $path = Common::url($content['attachment']->path,
-                            defined('__TYPECHO_UPLOAD_ROOT_DIR__') ? __TYPECHO_UPLOAD_ROOT_DIR__ : __TYPECHO_ROOT_DIR__);
+                        $path = Upload::resolveUploadPath((string) $content['attachment']->path);
+                        if ($path === null) {
+                            return false;
+                        }
                         if (file_exists($path) || is_link($path)) {
                             $temporary = @tempnam(dirname($path), '.typechore-delete-');
                             if ($temporary === false) {

@@ -58,10 +58,11 @@ class Login extends Users implements ActionInterface
         ];
         $remember = ($_POST['remember'] ?? '') === '1';
 
-        /** 拦截暴力破解: session 计数可以被客户端丢 cookie 清零, 这里存到临时目录 */
-        $throttleSubject = $credentials['name'] . '|' . $this->request->getIp();
+        /** 拦截暴力破解: 按 IP 和用户名的双桶限速, 防止随机用户名绕过且不产生无限文件 */
+        $ip = $this->request->getIp();
+        $throttleSubject = $credentials['name'] . '|' . $ip;
         // 先记账再验证: 否则并发请求会在任何一次 fail() 写入之前全部通过检查
-        if (Throttle::hit('login', $throttleSubject)) {
+        if (Throttle::hit('login-ip', $ip) || Throttle::hit('login', $throttleSubject)) {
             Notice::alloc()->set(_t('尝试次数过多, 请稍后再试'), 'error');
             $this->response->goBack();
         }
@@ -112,6 +113,7 @@ class Login extends Users implements ActionInterface
         }
 
         Throttle::clear('login', $throttleSubject);
+        Throttle::clear('login-ip', $ip);
 
         self::pluginHandle()->call(
             'loginSuccess',

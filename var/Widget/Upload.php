@@ -38,11 +38,41 @@ class Upload extends Contents implements ActionInterface
             return $result;
         }
 
-        $path = Common::url(
-            $content['attachment']->path,
-            defined('__TYPECHO_UPLOAD_ROOT_DIR__') ? __TYPECHO_UPLOAD_ROOT_DIR__ : __TYPECHO_ROOT_DIR__
-        );
-        return !file_exists($path) || @unlink($path);
+        $path = self::resolveUploadPath((string) $content['attachment']->path);
+        return $path !== null && (!file_exists($path) || @unlink($path));
+    }
+
+    /**
+     * 把数据库中的相对路径解析到上传目录内, 越界返回 null
+     */
+    public static function resolveUploadPath(string $storedPath): ?string
+    {
+        $root = defined('__TYPECHO_UPLOAD_ROOT_DIR__') ? __TYPECHO_UPLOAD_ROOT_DIR__ : __TYPECHO_ROOT_DIR__;
+        $uploadDir = defined('__TYPECHO_UPLOAD_DIR__') ? __TYPECHO_UPLOAD_DIR__ : self::UPLOAD_DIR;
+        $base = realpath(Common::url($uploadDir, $root));
+
+        if ($base === false) {
+            return null;
+        }
+
+        $path = Common::url($storedPath, $root);
+        $real = realpath($path);
+
+        if ($real === false) {
+            // 目标不存在时校验父目录, 避免 ../ 删除任意路径
+            $parent = realpath(dirname($path));
+            if ($parent === false || !self::isUnder($parent, $base)) {
+                return null;
+            }
+            return $parent . DIRECTORY_SEPARATOR . basename($path);
+        }
+
+        return self::isUnder($real, $base) ? $real : null;
+    }
+
+    private static function isUnder(string $path, string $base): bool
+    {
+        return $path === $base || str_starts_with($path, rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR);
     }
 
     /**
@@ -78,12 +108,8 @@ class Upload extends Contents implements ActionInterface
             return $result;
         }
 
-        return file_get_contents(
-            Common::url(
-                $content['attachment']->path,
-                defined('__TYPECHO_UPLOAD_ROOT_DIR__') ? __TYPECHO_UPLOAD_ROOT_DIR__ : __TYPECHO_ROOT_DIR__
-            )
-        );
+        $path = self::resolveUploadPath((string) $content['attachment']->path);
+        return $path === null ? '' : (string) file_get_contents($path);
     }
 
     /**
@@ -190,14 +216,16 @@ class Upload extends Contents implements ActionInterface
 
         $ext = self::getSafeName($file['name']);
 
-        if ($content['attachment']->type != $ext) {
+        if ($content['attachment']->type != $ext || !self::checkFileType($ext)) {
             return false;
         }
 
-        $path = Common::url(
-            $content['attachment']->path,
-            defined('__TYPECHO_UPLOAD_ROOT_DIR__') ? __TYPECHO_UPLOAD_ROOT_DIR__ : __TYPECHO_ROOT_DIR__
-        );
+        $path = self::resolveUploadPath((string) $content['attachment']->path);
+
+        if ($path === null) {
+            return false;
+        }
+
         $dir = dirname($path);
 
         //创建上传目录

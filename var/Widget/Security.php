@@ -20,6 +20,9 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  */
 class Security extends Base
 {
+    /** token 有效期, 同时接受上一窗口以容忍跨窗口提交 */
+    private const TOKEN_TTL = 3600;
+
     /**
      * @var string
      */
@@ -66,7 +69,7 @@ class Security extends Base
     {
         $provided = $this->request->get('_');
 
-        if ($this->enabled && (!is_string($provided) || !hash_equals($this->getToken($this->currentPath()), $provided))) {
+        if ($this->enabled && (!is_string($provided) || !$this->verifyToken($provided, $this->currentPath()))) {
             $this->response->goBack();
         }
     }
@@ -74,23 +77,36 @@ class Security extends Base
     /**
      * 获取token
      *
-     * token 由服务端可知的 secret / authCode / uid 派生, 并绑定到提交目标路径,
-     * 因此一个泄漏的 token 只对生成它的那个端点有效 (例如后台页面 URL 出现在
-     * Referer 或访问日志里时, 无法拿去重放其它后台操作).
+     * token 由服务端可知的 secret / authCode / uid 派生, 并绑定到提交目标路径、
+     * 查询参数 (动作和记录 id) 以及时间窗口, 因此泄漏的 token 只对同一个动作和
+     * 记录有效, 并且会过期.
      *
-     * 绑定的是路径而不是 Referer: Referer 可能被 CSP / 隐私策略剥离, 那会让
-     * 整个后台无法提交; 路径在请求行里, 不受客户端策略影响.
+     * 绑定的是请求行中的信息而不是 Referer: Referer 可能被 CSP / 隐私策略剥离,
+     * 那会让整个后台无法提交.
      *
-     * @param string|null $suffix 绑定的地址 (只取其中的路径部分), null 表示当前请求路径
+     * @param string|null $suffix 绑定的地址 (路径和查询串), null 表示当前请求
      * @return string
      */
     public function getToken(?string $suffix): string
     {
-        return hash('sha256', $this->token . '&csrf&' . $this->normalizeTokenPath($suffix ?? $this->currentPath()));
+        return $this->tokenFor($suffix ?? $this->currentPath(), intdiv(time(), self::TOKEN_TTL));
+    }
+
+    private function tokenFor(string $suffix, int $window): string
+    {
+        return hash('sha256', $this->token . '&csrf&' . $this->normalizeTokenPath($suffix) . '&' . $window);
+    }
+
+    private function verifyToken(string $provided, string $suffix): bool
+    {
+        $window = intdiv(time(), self::TOKEN_TTL);
+
+        return hash_equals($this->tokenFor($suffix, $window), $provided)
+            || hash_equals($this->tokenFor($suffix, $window - 1), $provided);
     }
 
     /**
-     * 当前请求的路径 (不含查询串), 用于 token 校验
+     * 当前请求的路径和查询串, 用于 token 校验
      */
     private function currentPath(): string
     {
@@ -98,11 +114,11 @@ class Security extends Base
     }
 
     /**
-     * 把地址规整成「相对站点根目录、去掉入口脚本」的路径
+     * 把地址规整成「相对站点根目录、去掉入口脚本的路径 + 排序后的查询串」
      *
      * 生成侧 (getTokenUrl 收到的 action 地址) 与校验侧 (REQUEST_URI) 必须
      * 得到完全相同的结果, 否则合法表单会被拒绝. 处理三种差异:
-     * - 绝对地址 / 带查询串的地址 -> 只取 path
+     * - 绝对地址 / 带查询串的地址 -> 只取 path 和 query
      * - 子目录安装 -> 去掉 rootUrl 的路径前缀
      * - 无 rewrite 时的 /index.php/... -> 去掉入口脚本
      */
@@ -132,7 +148,15 @@ class Security extends Base
 
         $path = preg_replace('#^/index\.php(?=/|$)#i', '', $path) ?? $path;
 
-        return '/' . ltrim($path, '/');
+        $query = [];
+        if (is_array($parts) && !empty($parts['query'])) {
+            parse_str($parts['query'], $query);
+        }
+        unset($query['_']);
+        ksort($query);
+        $queryString = http_build_query($query);
+
+        return '/' . ltrim($path, '/') . ('' === $queryString ? '' : '?' . $queryString);
     }
 
     /**

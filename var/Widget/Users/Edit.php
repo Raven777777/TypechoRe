@@ -267,6 +267,16 @@ class Edit extends Users implements ActionInterface
         /** 更新数据 */
         $this->update($user, $this->db->sql()->where('uid = ?', $this->request->get('uid')));
 
+        /** 密码变更后删除 Passkey: 被盗会话可能已经注册了攻击者的凭证 */
+        if (isset($user['password'])) {
+            try {
+                $this->db->query($this->db->delete('table.passkeys')
+                    ->where('uid = ?', (int) $this->request->get('uid')));
+            } catch (\Typecho\Db\Exception $e) {
+                /** 表可能尚未创建 */
+            }
+        }
+
         /** 改的是自己的密码时重新签发本机凭证, 避免自己也被踢下线 */
         if (isset($user['password']) && (int) $this->request->get('uid') === (int) $this->user->uid) {
             $this->user->simpleLogin((int) $this->user->uid, false, 0);

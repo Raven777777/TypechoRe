@@ -250,6 +250,12 @@ location ~* \.(?:db|sqlite|sqlite3)(?:-(?:wal|shm|journal))?$ { deny all; }
 location ~* \.sql$ { deny all; }
 # 后台「备份」导出的 .dat 含全部文章、评论和用户密码摘要, 同样不能直接下载
 location ^~ /usr/backups/ { deny all; }
+# 上传目录是用户可控内容, 禁止其中的脚本被 Web 服务器执行 (Nginx 不读 .htaccess)
+location ^~ /usr/uploads/ {
+    location ~* \.(?:php[0-9]?|pht|phtml|phar|phps|html?|xhtml|shtml|svgz?|xml|xsl|xslt|cgi|pl|asp|aspx|jsp)$ {
+        deny all;
+    }
+}
 ```
 
 ### Apache
@@ -266,7 +272,7 @@ RedirectMatch 403 (?i)^/usr/backups/
 
 ### IIS
 
-发布包自带的 `.htaccess` / `web.config` 会拒绝 `.db`、`.sqlite`、`.sqlite3` 主文件、对应的 `-wal` / `-shm` / `-journal` 辅助文件、`.sql` 与备份 `.dat` 文件，阻止访问 `config.inc.php` 和整个 `usr/backups/` 目录。Apache 需允许 `.htaccess` 中的访问控制规则生效；若 `AllowOverride` 禁用，请在 VirtualHost 中配置等效规则。
+发布包自带的 `.htaccess` / `web.config` 会拒绝 `.db`、`.sqlite`、`.sqlite3` 主文件、对应的 `-wal` / `-shm` / `-journal` 辅助文件、`.sql` 与备份 `.dat` 文件，阻止访问 `config.inc.php` 和整个 `usr/backups/` 目录，并在 `usr/uploads/` 下禁止脚本扩展名。Apache 需允许 `.htaccess` 中的访问控制规则生效；若 `AllowOverride` 禁用，请在 VirtualHost 中配置等效规则。
 
 ### 根治方案
 

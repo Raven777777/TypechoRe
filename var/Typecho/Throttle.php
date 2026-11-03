@@ -16,6 +16,9 @@ final class Throttle
 {
     public const LIMIT = 10;
 
+    /** 单个临时目录最多保留的计数文件数 */
+    public const MAX_FILES = 1000;
+
     /** 计数窗口 (秒) */
     public const WINDOW = 900;
 
@@ -94,14 +97,26 @@ final class Throttle
     }
 
     /**
-     * 清理超出窗口的计数文件
+     * 清理超出窗口的计数文件, 并限制文件总数
      */
     private static function gc(): void
     {
         $dir = self::directory();
+        $files = glob($dir . '/*') ?: [];
+        $alive = [];
 
-        foreach (glob($dir . '/*') ?: [] as $file) {
-            if (time() - (@filemtime($file) ?: 0) > self::WINDOW) {
+        foreach ($files as $file) {
+            $mtime = @filemtime($file) ?: 0;
+            if (time() - $mtime > self::WINDOW) {
+                @unlink($file);
+            } else {
+                $alive[$file] = $mtime;
+            }
+        }
+
+        if (count($alive) > self::MAX_FILES) {
+            asort($alive);
+            foreach (array_slice(array_keys($alive), 0, count($alive) - self::MAX_FILES) as $file) {
                 @unlink($file);
             }
         }

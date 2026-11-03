@@ -22,11 +22,25 @@ function checkFileRegressions(): void
         @rmdir($root);
     });
     Typecho\Plugin::init([]);
-    $path = $root . '/attachment.txt';
+
+    // checkFileType() reads the allowed attachment types from Options.
+    $dbFile = sys_get_temp_dir() . '/typechore-files-db-' . bin2hex(random_bytes(6)) . '.db';
+    register_shutdown_function(static function () use ($dbFile): void {
+        @unlink($dbFile);
+    });
+    $db = new Typecho\Db('SQLite', 'filetest_');
+    $db->addServer(['file' => $dbFile], Typecho\Db::READ | Typecho\Db::WRITE);
+    Typecho\Db::set($db);
+    $db->query('CREATE TABLE filetest_options ("name" varchar(32) NOT NULL, "user" int(10) NOT NULL DEFAULT 0, "value" text)', Typecho\Db::WRITE);
+    $db->query($db->insert('table.options')->rows(['name' => 'theme', 'user' => 0, 'value' => 'default']));
+    $db->query($db->insert('table.options')->rows(['name' => 'attachmentTypes', 'user' => 0, 'value' => '@doc@']));
+
+    $path = $root . '/usr/uploads/attachment.txt';
+    mkdir(dirname($path), 0700, true);
     file_put_contents($path, 'original');
     chmod($path, 0640);
     $content = ['attachment' => (object) [
-        'path' => '/attachment.txt', 'type' => 'txt', 'name' => 'attachment.txt', 'mime' => 'text/plain',
+        'path' => '/usr/uploads/attachment.txt', 'type' => 'txt', 'name' => 'attachment.txt', 'mime' => 'text/plain',
     ]];
     $modified = Widget\Upload::modifyHandle($content, ['name' => 'new.txt', 'bytes' => 'replacement']);
     check(is_array($modified) && $modified['size'] === 11 && file_get_contents($path) === 'replacement',
@@ -69,7 +83,11 @@ function checkFileRegressions(): void
     check(!glob($root . '/.theme-*') && !glob($root . '/.upload-*'), 'atomic write left temporary files');
     check(Widget\Upload::deleteHandle($content) && !file_exists($path), 'attachment deletion ignored configured upload root');
     check(Widget\Upload::deleteHandle($content), 'deleting an already missing attachment failed');
-    mkdir($root . '/cannot-unlink.txt');
-    check(!Widget\Upload::deleteHandle(['attachment' => (object) ['path' => '/cannot-unlink.txt']]),
+    mkdir($root . '/usr/uploads/cannot-unlink.txt');
+    check(!Widget\Upload::deleteHandle(['attachment' => (object) ['path' => '/usr/uploads/cannot-unlink.txt']]),
         'attachment deletion reported a filesystem failure as success');
+
+    Typecho\Widget::destroy();
+    $db->flushPool();
+    @unlink($dbFile);
 }

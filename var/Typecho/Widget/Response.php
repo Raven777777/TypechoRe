@@ -158,7 +158,21 @@ class Response
 
         $this->response->setHeader('Content-Length', (string) filesize($file))
             ->addResponder(function () use ($file) {
-                readfile($file);
+                // 丢掉整文件缓冲, 手动发头后分块输出, 大数据库备份不会撑爆 memory_limit
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+
+                $this->response->sendHeaders();
+                $handle = fopen($file, 'rb');
+
+                if ($handle) {
+                    while (!feof($handle)) {
+                        echo fread($handle, 8192);
+                        flush();
+                    }
+                    fclose($handle);
+                }
             })
             ->respond();
     }

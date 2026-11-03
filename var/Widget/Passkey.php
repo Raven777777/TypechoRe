@@ -114,6 +114,7 @@ class Passkey extends BaseOptions implements ActionInterface
     {
         $state = $this->getState('create');
         $data = $this->input();
+        $this->assertCurrentPassword($data);
         $rp = $this->webAuthn();
 
         // 注册必须属于当前登录用户: 否则在共用机器上, 后一个登录者可以把指纹绑到前一个账号
@@ -258,15 +259,30 @@ class Passkey extends BaseOptions implements ActionInterface
     {
         $rows = $this->db->fetchAll($this->db->select('id', 'name', 'created', 'last_used')
             ->from('table.passkeys')->where('uid = ?', (int) $this->user->uid)->order('id', \Typecho\Db::SORT_DESC));
+        $base = Common::url('/action/passkey', $this->options->index);
+
+        foreach ($rows as &$row) {
+            $row['token'] = $this->security->getToken($base . '?do=delete&id=' . (int) $row['id']);
+        }
+        unset($row);
+
         $this->json(['success' => true, 'items' => $rows]);
     }
 
     private function deletePasskey(): void
     {
         $id = (int) $this->request->get('id', 0);
+        $this->assertCurrentPassword($this->input());
         $this->db->query($this->db->delete('table.passkeys')
             ->where('id = ? AND uid = ?', $id, (int) $this->user->uid));
         $this->json(['success' => true]);
+    }
+
+    private function assertCurrentPassword(array $data): void
+    {
+        if (!Common::hashValidate((string) ($data['password'] ?? ''), (string) $this->user->password)) {
+            throw new WidgetException(_t('当前密码不正确'), 403);
+        }
     }
 
     private function requireAdmin(): void

@@ -440,7 +440,7 @@ function scrollableEditor(el, preview) {
             const t = $(this), lang = t.attr('lang');
 
             if (!lang || confirm(lang)) {
-                table.parents('form').attr('action', t.attr('href')).submit();
+                table.parents('form').attr('action', t.attr('data-action') || t.attr('href')).submit();
             }
 
             return false;

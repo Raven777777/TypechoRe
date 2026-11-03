@@ -502,6 +502,15 @@ function install_check(string $type): bool
             }
 
             try {
+                // SQLite 会为缺失的数据库文件建一个空库; 只有真正的 options 表才算已安装
+                $table = $installDb->getPrefix() . 'options';
+                $exists = $installDb->fetchRow($installDb->select('name')
+                    ->from('sqlite_master')->where('type = ? AND name = ?', 'table', $table));
+
+                if (empty($exists)) {
+                    return false;
+                }
+
                 // check if table exists
                 $installed = $installDb->fetchRow($installDb->select()->from('table.options')
                     ->where('user = 0 AND name = ?', 'installed'));
@@ -521,6 +530,91 @@ function install_check(string $type): bool
         default:
             return false;
     }
+}
+
+/**
+ * 检查安装程序创建的核心表是否都存在
+ */
+function install_db_tables_exist(): bool
+{
+    global $installDb;
+
+    if (empty($installDb)) {
+        return false;
+    }
+
+    try {
+        $prefix = $installDb->getPrefix();
+        $rows = $installDb->fetchAll($installDb->select('name')
+            ->from('sqlite_master')->where('type = ?', 'table'));
+        $names = array_column($rows, 'name');
+
+        foreach (['options', 'users', 'contents', 'metas', 'relationships', 'comments', 'fields'] as $table) {
+            if (!in_array($prefix . $table, $names, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    } catch (\Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * 第三步只创建管理员, 用户表为空时即使会话标记丢了也允许继续
+ */
+function install_users_empty(): bool
+{
+    global $installDb;
+
+    if (empty($installDb)) {
+        return false;
+    }
+
+    try {
+        $users = $installDb->fetchObject($installDb->select(['COUNT(uid)' => 'num'])->from('table.users'));
+        return (int) ($users->num ?? 0) === 0;
+    } catch (\Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * 找出 usr/ 中已经有 Typecho 表结构的数据库, 重装时作为默认值
+ */
+function install_existing_db_file(): ?string
+{
+    $files = glob(__TYPECHO_ROOT_DIR__ . '/usr/*.db') ?: [];
+    $files = array_reverse($files);
+
+    foreach ($files as $file) {
+        try {
+            if (class_exists('\SQLite3')) {
+                $db = new \SQLite3($file, SQLITE3_OPEN_READONLY);
+                $result = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'");
+                $names = [];
+                while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+                    $names[] = $row['name'];
+                }
+                $db->close();
+            } else {
+                $db = new \PDO('sqlite:' . $file);
+                $names = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(\PDO::FETCH_COLUMN);
+                $db = null;
+            }
+        } catch (\Throwable $e) {
+            continue;
+        }
+
+        foreach ($names as $name) {
+            if (str_ends_with((string) $name, 'options') && in_array(substr($name, 0, -7) . 'users', $names, true)) {
+                return basename($file);
+            }
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -1026,7 +1120,7 @@ function install_step_2_perform()
 
     $configMap = [
         'SQLite' => [
-            'dbFile' => __TYPECHO_ROOT_DIR__ . '/usr/' . install_random_db_name() . '.db'
+            'dbFile' => __TYPECHO_ROOT_DIR__ . '/usr/' . (install_existing_db_file() ?? install_random_db_name() . '.db')
         ]
     ];
 
@@ -1160,13 +1254,8 @@ function install_step_2_perform()
             }
         });
     } catch (\Typecho\Db\Exception $e) {
-        // PDO 抛出的是 SQLSTATE 字符串 ('HY000'), SQLite3 抛出的是数字错误码 (1)。
-        // PHPStan 依据 Throwable::getCode(): int 推断为 int, 这里显式声明联合类型
-        /** @var int|string $rawCode */
-        $rawCode = $e->getCode();
-        $code = (string) $rawCode;
-
-        if (in_array($code, ['HY000', '1'], true)) {
+        // PDO 把很多 SQLite 错误都报成 HY000; 只有核心表确实存在时才当作"原有数据"
+        if (install_db_tables_exist() && stripos($e->getMessage(), 'already exists') !== false) {
             if ($config['dbNext'] == 'keep') {
                 if ($writeConfig && !install_check('config')) {
                     install_config_file($config['dbAdapter'], $config['dbPrefix'], $dbConfig);
@@ -1196,6 +1285,9 @@ function install_step_2_perform()
             install_raise_error(_t('安装程序捕捉到以下错误: "%s". 程序被终止, 请检查您的配置信息.', $e->getMessage()));
         }
     }
+
+    // 表已经提交, 先登记第二步: 即使下面写 config 失败, 用户手动补上后也能继续第三步
+    install_mark_step2();
 
     if ($writeConfig) {
         $code = install_config_file($config['dbAdapter'], $config['dbPrefix'], $dbConfig);
@@ -1490,8 +1582,10 @@ function install_dispatch()
             case $step == 3:
                 if (!install_check('db_structure')) {
                     install_redirect('install.php?step=2');
-                } elseif (empty($_SESSION['__typecho_install_step2'])) {
-                    // 第三步会创建管理员, 不能只凭一个任何人可领取的 CSRF token 进入
+                } elseif (empty($_SESSION['__typecho_install_step2'])
+                    && !(install_check('config') && install_users_empty())) {
+                    // 第三步会创建管理员, 不能只凭一个任何人可领取的 CSRF token 进入;
+                    // 但手动补 config 的安装流程没有会话标记, 空用户表时允许继续
                     install_redirect('install.php?step=2');
                 } else {
                     $action = 3;

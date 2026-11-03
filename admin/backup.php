@@ -7,6 +7,11 @@
  * @var Widget\Security $security
  */
 include 'common.php';
+
+if (!$user->pass('administrator', true)) {
+    throw new \Typecho\Widget\Exception(_t('禁止访问'), 403);
+}
+
 include 'header.php';
 include 'menu.php';
 
