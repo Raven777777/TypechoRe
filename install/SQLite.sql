@@ -15,6 +15,7 @@ CREATE TABLE typecho_comments ( "coid" INTEGER NOT NULL PRIMARY KEY,
 
 CREATE INDEX typecho_comments_cid ON typecho_comments ("cid");
 CREATE INDEX typecho_comments_created ON typecho_comments ("created");
+CREATE INDEX typecho_comments_ip ON typecho_comments ("ip");
 
 CREATE TABLE typecho_contents ( "cid" INTEGER NOT NULL PRIMARY KEY, 
 "title" varchar(150) default NULL ,

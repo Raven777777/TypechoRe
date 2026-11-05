@@ -39,7 +39,9 @@ class Init extends Widget
         if (!defined('__TYPECHO_DEBUG__') || !__TYPECHO_DEBUG__) {
             set_exception_handler(function (\Throwable $exception) {
                 Response::getInstance()->clean();
-                ob_end_clean();
+                if (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
 
                 ob_start(function ($content) {
                     Response::getInstance()->sendHeaders();
@@ -47,7 +49,12 @@ class Init extends Widget
                 });
 
                 if (404 == $exception->getCode()) {
-                    ExceptionHandle::alloc();
+                    try {
+                        ExceptionHandle::alloc();
+                    } catch (\Throwable $e) {
+                        // 404 页本身依赖完整初始化与主题渲染, 二次异常 (如主题损坏) 时退回纯文本错误页
+                        Common::error($e);
+                    }
                 } else {
                     Common::error($exception);
                 }

@@ -380,7 +380,8 @@ class Options extends Base
             ) {
                 $this->personalPluginConfig[$pluginName] = new Config($options);
             } else {
-                throw new PluginException(_t('插件%s的配置信息没有找到', $pluginName), 500);
+                // 个人配置从未保存过是常态, 返回空配置而不是 500
+                $this->personalPluginConfig[$pluginName] = new Config([]);
             }
         }
 

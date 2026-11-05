@@ -153,7 +153,16 @@ class Edit extends Contents implements ActionInterface
                 continue;
             }
 
-            if ($this->db->query($condition->update('table.contents')->rows(['status' => $status]))) {
+            // 与 markPost 保持一致: 两次写库包在事务里, 并加 CAS 防止两个管理员互相覆盖
+            $marked = $this->db->transaction(function () use ($condition, $pageObject, $page, $status): bool {
+                /** 只更新仍处于读取时状态的行, 两个管理员同时操作时只有一次会命中 */
+                $updated = $this->db->query($condition->update('table.contents')->rows(['status' => $status])
+                    ->where('status = ?', $pageObject->status));
+
+                if ($updated < 1) {
+                    return false;
+                }
+
                 // 处理草稿
                 $draft = $this->db->fetchRow($this->db->select('cid')
                     ->from('table.contents')
@@ -165,6 +174,10 @@ class Edit extends Contents implements ActionInterface
                         ->where('cid = ?', $draft['cid']));
                 }
 
+                return true;
+            });
+
+            if ($marked) {
                 // 完成标记插件接口
                 self::pluginHandle()->call('finishMark', $status, $page, $this);
 

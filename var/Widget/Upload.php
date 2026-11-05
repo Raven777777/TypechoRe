@@ -131,6 +131,23 @@ class Upload extends Contents implements ActionInterface
     }
 
     /**
+     * 上传/修改完毕回给编辑器的统一字段
+     */
+    private function attachmentStruct(int $cid): array
+    {
+        return [
+            'cid' => $cid,
+            'title' => $this->attachment->name,
+            'type' => $this->attachment->type,
+            'size' => $this->attachment->size,
+            'bytes' => number_format(ceil($this->attachment->size / 1024)) . ' Kb',
+            'isImage' => $this->attachment->isImage,
+            'url' => $this->attachment->url,
+            'permalink' => $this->permalink
+        ];
+    }
+
+    /**
      * 执行升级程序
      *
      * @throws Exception
@@ -179,16 +196,7 @@ class Upload extends Contents implements ActionInterface
                     /** 增加插件接口 */
                     self::pluginHandle()->call('modify', $this);
 
-                    $this->response->throwJson([$this->attachment->url, [
-                        'cid' => $this->cid,
-                        'title' => $this->attachment->name,
-                        'type' => $this->attachment->type,
-                        'size' => $this->attachment->size,
-                        'bytes' => number_format(ceil($this->attachment->size / 1024)) . ' Kb',
-                        'isImage' => $this->attachment->isImage,
-                        'url' => $this->attachment->url,
-                        'permalink' => $this->permalink
-                    ]]);
+                    $this->response->throwJson([$this->attachment->url, $this->attachmentStruct($this->cid)]);
                 }
             }
         }
@@ -229,10 +237,8 @@ class Upload extends Contents implements ActionInterface
         $dir = dirname($path);
 
         //创建上传目录
-        if (!is_dir($dir)) {
-            if (!self::makeUploadDir($dir)) {
-                return false;
-            }
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+            return false;
         }
 
         // 先写临时文件再 rename: 直接 unlink 旧文件后写入失败会把附件弄丢
@@ -300,34 +306,6 @@ class Upload extends Contents implements ActionInterface
     }
 
     /**
-     * 创建上传路径
-     *
-     * @param string $path 路径
-     * @return boolean
-     */
-    private static function makeUploadDir(string $path): bool
-    {
-        $path = preg_replace("/\\\+/", '/', $path);
-        $current = rtrim($path, '/');
-        $last = $current;
-
-        while (!is_dir($current) && false !== strpos($path, '/')) {
-            $last = $current;
-            $current = dirname($current);
-        }
-
-        if ($last == $current) {
-            return true;
-        }
-
-        if (!@mkdir($last, 0755)) {
-            return false;
-        }
-
-        return self::makeUploadDir($path);
-    }
-
-    /**
      * 执行升级程序
      *
      * @throws Exception
@@ -373,16 +351,7 @@ class Upload extends Contents implements ActionInterface
                     /** 增加插件接口 */
                     self::pluginHandle()->call('upload', $this);
 
-                    $this->response->throwJson([$this->attachment->url, [
-                        'cid' => $insertId,
-                        'title' => $this->attachment->name,
-                        'type' => $this->attachment->type,
-                        'size' => $this->attachment->size,
-                        'bytes' => number_format(ceil($this->attachment->size / 1024)) . ' Kb',
-                        'isImage' => $this->attachment->isImage,
-                        'url' => $this->attachment->url,
-                        'permalink' => $this->permalink
-                    ]]);
+                    $this->response->throwJson([$this->attachment->url, $this->attachmentStruct($insertId)]);
                 }
             }
         }
@@ -420,10 +389,8 @@ class Upload extends Contents implements ActionInterface
         ) . '/' . $date->year . '/' . $date->month;
 
         //创建上传目录
-        if (!is_dir($path)) {
-            if (!self::makeUploadDir($path)) {
-                return false;
-            }
+        if (!is_dir($path) && !@mkdir($path, 0755, true)) {
+            return false;
         }
 
         // 128 位随机名, 既不可预测, 也避免并发上传互相覆盖

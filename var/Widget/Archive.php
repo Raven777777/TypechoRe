@@ -8,6 +8,7 @@ use Typecho\Cookie;
 use Typecho\Db;
 use Typecho\Db\Query;
 use Typecho\Router;
+use Typecho\Throttle;
 use Typecho\Widget\Exception as WidgetException;
 use Typecho\Widget\Helper\PageNavigator\Classic;
 use Typecho\Widget\Helper\PageNavigator\Box;
@@ -2090,6 +2091,12 @@ EOF;
         if ('' === str_replace(['%', '_'], '', $keywords)) {
             throw new WidgetException(_t('请求的地址不存在'), 404);
         }
+
+        // 搜索是 LIKE 全表扫描, 每个请求 IP 在时钟窗口内限次, 防止被刷成数据库洪水
+        if (Throttle::tooMany('search', $this->request->getIp())) {
+            throw new WidgetException(_t('搜索请求过于频繁, 请稍后再试'), 429);
+        }
+        Throttle::hit('search', $this->request->getIp());
 
         // 用局部变量接收插件信号, 避免把 $hasPushed 直接以引用交给 trigger()
         $searchPlugged = false;

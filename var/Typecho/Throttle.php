@@ -102,6 +102,9 @@ final class Throttle
     private static function gc(): void
     {
         $dir = self::directory();
+        if ($dir === null) {
+            return;
+        }
         $files = glob($dir . '/*') ?: [];
         $alive = [];
 

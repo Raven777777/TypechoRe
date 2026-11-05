@@ -204,4 +204,55 @@ class Upgrade
         }
         return _t('用户编号不再重复使用');
     }
+
+    /**
+     * 1.3.5: 评论表缺少 ip 索引, 反垃圾频率检查在写锁内扫描整表 (幂等)
+     *
+     * @param Db $db
+     * @param Options|null $options
+     * @return string
+     * @throws \Typecho\Db\Exception
+     */
+    public static function v1_3_5(Db $db, ?Options $options = null): string
+    {
+        $db->query(
+            "CREATE INDEX IF NOT EXISTS {$db->getPrefix()}comments_ip ON {$db->getPrefix()}comments (\"ip\")",
+            Db::WRITE
+        );
+
+        // 搜索路由改为支持含斜线的关键词; 存量路由表仍停在旧正则上, 必须重建,
+        // search_page 要排在 search 之前 (路由首个匹配生效, 顺序错了分页会被吞掉)
+        if ($options !== null) {
+            $routingTable = $options->routingTable;
+            $legacy = $routingTable;
+            unset($legacy[0]);
+
+            if (isset($legacy['search']) || isset($legacy['search_page'])) {
+                foreach (['search', 'search_page'] as $name) {
+                    if (isset($legacy[$name])) {
+                        $legacy[$name]['url'] = str_replace('[keywords]', '[keywords:string:0]', $legacy[$name]['url']);
+                    }
+                }
+                if (isset($legacy['search'], $legacy['search_page'])) {
+                    $searchPage = $legacy['search_page'];
+                    unset($legacy['search_page']);
+                    $search = $legacy['search'];
+                    $position = array_search('search', array_keys($legacy));
+                    $legacy = array_merge(
+                        array_slice($legacy, 0, (int) $position, true),
+                        ['search_page' => $searchPage],
+                        array_slice($legacy, (int) $position, null, true)
+                    );
+                    unset($search);
+                }
+
+                $parsed = (new \Typecho\Router\Parser($legacy))->parse();
+                $db->query($db->update('table.options')
+                    ->rows(['value' => json_encode(array_merge([$parsed], $legacy))])
+                    ->where('name = ?', 'routingTable'));
+            }
+        }
+
+        return _t('已为评论 IP 反垃圾检查添加索引, 并升级搜索路由以支持含斜线的关键词');
+    }
 }

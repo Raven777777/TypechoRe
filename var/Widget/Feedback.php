@@ -99,18 +99,28 @@ class Feedback extends Comments implements ActionInterface
                     $refererHost = $refererPart['host'] ?? '';
                     $currentHost = $currentPart['host'] ?? '';
 
-                    if (
-                        empty($refererHost) || $refererHost != $currentHost ||
-                        0 !== strpos(($refererPart['path'] ?? ''), ($currentPart['path'] ?? ''))
-                    ) {
+                    // 前缀必须停在路径段边界, 否则 /archives/12/ 会被 /archives/1/ 的文章接受
+                    $refererHost = (string) ($refererPart['host'] ?? '');
+                    $currentHost = (string) ($currentPart['host'] ?? '');
+                    $checkReferer = static function (array $refererPart, array $currentPart) use ($refererHost, $currentHost): bool {
+                        $refererPath = (string) ($refererPart['path'] ?? '');
+                        $currentPath = (string) ($currentPart['path'] ?? '');
+                        if ('' === $refererHost || $refererHost != $currentHost) {
+                            return false;
+                        }
+                        if (0 !== strpos($refererPath, $currentPath)) {
+                            return false;
+                        }
+                        $rest = substr($refererPath, strlen($currentPath));
+                        return $rest === '' || $rest[0] === '/';
+                    };
+
+                    if (!$checkReferer($refererPart, $currentPart)) {
                         //自定义首页支持
                         if ('page:' . $content->cid == $this->options->frontPage) {
                             $currentPart = parse_url(rtrim($this->options->siteUrl, '/') . '/');
 
-                            if (
-                                $refererHost != ($currentPart['host'] ?? '') ||
-                                0 !== strpos(($refererPart['path'] ?? ''), ($currentPart['path'] ?? ''))
-                            ) {
+                            if (!$checkReferer($refererPart, $currentPart)) {
                                 throw new Exception(_t('评论来源页错误.'), 403);
                             }
                         } else {
@@ -273,9 +283,14 @@ class Feedback extends Comments implements ActionInterface
         $this->response->redirect($this->permalink);
     }
 
-    private function insertComment(array $comment): int
+    private function insertComment(array $comment, ?callable $dbChecks = null): int
     {
-        return $this->db->transaction(function () use ($comment): int {
+        return $this->db->transaction(function () use ($comment, $dbChecks): int {
+            // 依赖库中数据的检查必须在写锁内执行, 避免并发请求同时通过、和插入一手撞索引
+            if ($dbChecks !== null) {
+                $dbChecks();
+            }
+
             $isEditor = $this->user->pass('editor', true);
 
             if (!$isEditor && $this->content->authorId != $this->user->uid
@@ -316,15 +331,6 @@ class Feedback extends Comments implements ActionInterface
             return;
         }
 
-        /** 如果库中已经存在当前ip为spam的trackback则直接拒绝 */
-        if (
-            $this->size($this->select()
-                ->where('status = ? AND ip = ?', 'spam', $this->request->getIp())) > 0
-        ) {
-            /** 使用404告诉机器人 */
-            throw new Exception(_t('找不到内容'), 404);
-        }
-
         $trackback = [
             'cid' => $this->content->cid,
             'created' => $this->options->time,
@@ -358,20 +364,29 @@ class Feedback extends Comments implements ActionInterface
         /** 截取长度 */
         $trackback['text'] = Common::subStr($trackback['text'], 0, 100, '[...]');
 
-        /** 如果库中已经存在重复url则直接拒绝 */
-        if (
-            $this->size($this->select()
-                ->where('cid = ? AND url = ? AND type <> ?', $this->content->cid, $trackback['url'], 'comment')) > 0
-        ) {
-            /** 使用403告诉机器人 */
-            throw new Exception(_t('禁止重复提交'), 403);
-        }
-
         /** 生成过滤器 */
         $trackback = self::pluginHandle()->filter('trackback', $trackback, $this->content);
 
-        /** 添加引用 */
-        $this->insertComment($trackback);
+        /** 添加引用 (依赖库中数据的检查移入插入事务, 见 insertComment) */
+        $this->insertComment($trackback, function () use ($trackback): void {
+            /** 如果库中已经存在当前ip为spam的trackback则直接拒绝 */
+            if (
+                $this->size($this->select()
+                    ->where('status = ? AND ip = ?', 'spam', $this->request->getIp())) > 0
+            ) {
+                /** 使用404告诉机器人 */
+                throw new Exception(_t('找不到内容'), 404);
+            }
+
+            /** 如果库中已经存在重复url则直接拒绝 */
+            if (
+                $this->size($this->select()
+                    ->where('cid = ? AND url = ? AND type <> ?', $this->content->cid, $trackback['url'], 'comment')) > 0
+            ) {
+                /** 使用403告诉机器人 */
+                throw new Exception(_t('禁止重复提交'), 403);
+            }
+        });
 
         /** 评论完成接口 */
         self::pluginHandle()->call('finishTrackback', $this);

@@ -49,6 +49,13 @@ check(
     'page cache toggle validation rejected a valid value'
 );
 check(!$general->checkPageCacheEnabled('2'), 'page cache toggle validation accepted an invalid value');
+// maxLength 边界必须按文档语义 (最多 N 个字符) 放行恰好 N 个字符
+check(\Typecho\Validate::maxLength(str_repeat('a', 32), 32), 'maxLength rejected a string matching the documented maximum');
+check(!\Typecho\Validate::maxLength(str_repeat('a', 33), 32), 'maxLength accepted a string 1 over the documented maximum');
+// 邮箱验证: 引号/逗号等不再 "清洗后对比" 消失
+$cookieStyle = 'a,"b"@example.com';
+check(!\Typecho\Validate::email($cookieStyle), 'email validation accepted a quoted local part');
+check(\Typecho\Validate::email('user@example.com'), 'email validation rejected a plain address');
 check(
     $general->checkPageCacheTtl('1') && $general->checkPageCacheTtl('86400'),
     'page cache TTL validation rejected a boundary value'

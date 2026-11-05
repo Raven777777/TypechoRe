@@ -36,9 +36,13 @@ class Edit extends Options implements ActionInterface
     {
         $theme = trim($theme, './');
         if (is_dir($this->options->themeFile($theme))) {
-            /** 删除原外观设置信息 */
-            $oldTheme = $this->options->missingTheme ?: $this->options->theme;
-            $this->delete($this->db->sql()->where('name = ?', 'theme:' . $oldTheme));
+            /** 删除原外观设置信息 (仅在外观真正变化时; 重启用当前主题应保留既有配置) */
+            if ($theme !== $this->options->theme || !empty($this->options->missingTheme)) {
+                $oldTheme = $this->options->missingTheme ?: $this->options->theme;
+                $this->delete($this->db->sql()->where('name = ?', 'theme:' . $oldTheme));
+            } else {
+                $oldTheme = $theme;
+            }
 
             $this->update(['value' => $theme], $this->db->sql()->where('name = ?', 'theme'));
 

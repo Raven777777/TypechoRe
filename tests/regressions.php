@@ -206,6 +206,38 @@ function checkRegressions(Db $db, string $sqliteFile): void
     $comment['created'] = 1060;
     $insert->invoke($feedback, $comment);
     check($count('comments') === 2, 'comment at interval boundary was rejected');
+
+    // 路由表自洽: 自己生成的完整路径必须能被路由表匹配回来 (含空格/斜线的关键词,
+    // getPathInfo 会先 urldecode, 所以正则里见到的就是真实斜线)
+    $routes = [
+        // search_page 必须在 search 前面: 路由首个匹配生效, 顺序错了分页会被吞掉
+        'search_page' => ['url' => '/search/[keywords:string:0]/[page:digital]/', 'widget' => '\Widget\Archive', 'action' => 'render'],
+        'search'      => ['url' => '/search/[keywords:string:0]/', 'widget' => '\Widget\Archive', 'action' => 'render'],
+        'post'        => ['url' => '/archives/[cid:digital]/', 'widget' => '\Widget\Archive', 'action' => 'render'],
+        'category'    => ['url' => '/category/[directory]/', 'widget' => '\Widget\Archive', 'action' => 'render'],
+    ];
+    $parsed = (new Typecho\Router\Parser($routes))->parse();
+    foreach (
+        [
+            '/search/three%20words/' => ['search', ['keywords' => 'three words']], // getPathInfo 会先 urldecode
+            '/search/React/node/' => ['search', ['keywords' => 'React/node']],
+            '/search/three%20words/3/' => ['search_page', ['keywords' => 'three words', 'page' => '3']],
+            '/archives/12/' => ['post', ['cid' => '12']],
+            '/category/some-slug/' => ['category', ['directory' => 'some-slug']],
+        ] as $path => [$expected, $expectedParams]
+    ) {
+        $path = urldecode($path); // 与 Request::getPathInfo 的解码行为一致
+        $matched = false;
+        foreach ($parsed as $route) {
+            if (preg_match($route['regx'], $path, $m)) {
+                unset($m[0]);
+                $matched = $route['params'] && array_combine($route['params'], $m) == $expectedParams;
+                break;
+            }
+        }
+        check($matched, "route failed to round-trip {$path}");
+        unset($matched);
+    }
     if (function_exists('pcntl_fork')) {
         $pipes = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
         $pids = [];

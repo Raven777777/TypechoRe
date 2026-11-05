@@ -74,7 +74,8 @@ class Parser
         } elseif (2 == $paramsNum) {
             return sprintf($this->defaultRegex[$params[1]], '+');
         } elseif (3 == $paramsNum) {
-            return sprintf($this->defaultRegex[$params[1]], $params[2] > 0 ? '{' . $params[2] . '}' : '*');
+            // :0 不限量时惰性匹配 (`.*?`), 否则贪婪组会把路由尾部 (如 /search/x/2/ 的页码) 一并吞进参数
+            return sprintf($this->defaultRegex[$params[1]], $params[2] > 0 ? '{' . $params[2] . '}' : '*?');
         } elseif (4 == $paramsNum) {
             return sprintf($this->defaultRegex[$params[1]], '{' . $params[2] . ',' . $params[3] . '}');
         }

@@ -136,9 +136,18 @@ function install_get_default_routers(): array
                 'widget' => '\Widget\Archive',
                 'action' => 'render',
             ],
+        // search_page 必须排在 search 之前: 路由按定义顺序首个匹配生效,
+        // 带页码的地址不能被 search 路由先吞掉
+        'search_page'        =>
+            [
+                // 关键词可能包含斜线 (如 "React/node"), 不能用单段匹配
+                'url'    => '/search/[keywords:string:0]/[page:digital]/',
+                'widget' => '\Widget\Archive',
+                'action' => 'render',
+            ],
         'search'             =>
             [
-                'url'    => '/search/[keywords]/',
+                'url'    => '/search/[keywords:string:0]/',
                 'widget' => '\Widget\Archive',
                 'action' => 'render',
             ],
@@ -169,12 +178,6 @@ function install_get_default_routers(): array
         'author_page'        =>
             [
                 'url'    => '/author/[uid:digital]/[page:digital]/',
-                'widget' => '\Widget\Archive',
-                'action' => 'render',
-            ],
-        'search_page'        =>
-            [
-                'url'    => '/search/[keywords]/[page:digital]/',
                 'widget' => '\Widget\Archive',
                 'action' => 'render',
             ],

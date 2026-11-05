@@ -41,21 +41,24 @@ class Ajax extends BaseOptions implements ActionInterface
         $this->security->protect();
         $size = $this->request->filter('int')->get('size');
 
-        if (
-            $this->db->fetchObject($this->db->select(['COUNT(*)' => 'num'])
-                ->from('table.options')->where('name = ? AND user = ?', 'editorSize', $this->user->uid))->num > 0
-        ) {
-            parent::update(
-                ['value' => $size],
-                $this->db->sql()->where('name = ? AND user = ?', 'editorSize', $this->user->uid)
-            );
-        } else {
-            parent::insert([
-                'name'  => 'editorSize',
-                'value' => $size,
-                'user'  => $this->user->uid
-            ]);
-        }
+        // 串行化 check-then-write, 避免并发下撞 name+user 唯一索引
+        $this->db->transaction(function () use ($size) {
+            if (
+                $this->db->fetchObject($this->db->select(['COUNT(*)' => 'num'])
+                    ->from('table.options')->where('name = ? AND user = ?', 'editorSize', $this->user->uid))->num > 0
+            ) {
+                parent::update(
+                    ['value' => $size],
+                    $this->db->sql()->where('name = ? AND user = ?', 'editorSize', $this->user->uid)
+                );
+            } else {
+                parent::insert([
+                    'name'  => 'editorSize',
+                    'value' => $size,
+                    'user'  => $this->user->uid
+                ]);
+            }
+        });
     }
 
     /**

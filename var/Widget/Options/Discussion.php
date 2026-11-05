@@ -55,9 +55,7 @@ class Discussion extends Options implements ActionInterface
             'commentsPostInterval',
             'commentsRequireModeration',
             'commentsRequireUrl',
-            'commentsHTMLTagAllowed',
-            'commentsStopWords',
-            'commentsIpBlackList'
+            'commentsHTMLTagAllowed'
         );
         $settings['commentsShow'] = $this->request->getArray('commentsShow');
         $settings['commentsPost'] = $this->request->getArray('commentsPost');

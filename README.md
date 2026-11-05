@@ -23,6 +23,12 @@
 
 文档位于 [`docs/`](docs/)，来源：https://github.com/benzBrake/typecho-docs ，并已根据本仓库代码现状核验更新。
 
+> **反向代理 / CDN 注意**：客户端 IP 默认取自 TCP 连接的对端地址（`getIp()`）。
+> 若站点挂在 Nginx / Cloudflare 等代理后面且需要按真实客户端 IP 做评论 IP 限频、搜索限频等，
+> 必须在 `config.inc.php` 中定义 `__TYPECHO_TRUSTED_PROXIES__`（IP 或 CIDR，逗号分隔），
+> 例如 `define('__TYPECHO_TRUSTED_PROXIES__', '10.0.0.0/8,192.168.1.1');`。
+> 未配置时 `X-Forwarded-For` 头不会被采纳（防止伪造），所有访客都会被视为代理的 IP。
+
 文档：
 
 * [部署与恢复及生产包构建](docs/guide/deployment.md)

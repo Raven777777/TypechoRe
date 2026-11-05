@@ -261,24 +261,27 @@ class Profile extends Users implements ActionInterface
         $settings['defaultAllowPing'] = in_array('ping', $defaultAllow) ? 1 : 0;
         $settings['defaultAllowFeed'] = in_array('feed', $defaultAllow) ? 1 : 0;
 
-        foreach ($settings as $name => $value) {
-            if (
-                $this->db->fetchObject($this->db->select(['COUNT(*)' => 'num'])
-                    ->from('table.options')->where('name = ? AND user = ?', $name, $this->user->uid))->num > 0
-            ) {
-                Options::alloc()
-                    ->update(
-                        ['value' => $value],
-                        $this->db->sql()->where('name = ? AND user = ?', $name, $this->user->uid)
-                    );
-            } else {
-                Options::alloc()->insert([
-                    'name'  => $name,
-                    'value' => $value,
-                    'user'  => $this->user->uid
-                ]);
+        // 串行化 check-then-write, 避免并发下撞 name+user 唯一索引
+        $this->db->transaction(function () use ($settings): void {
+            foreach ($settings as $name => $value) {
+                if (
+                    $this->db->fetchObject($this->db->select(['COUNT(*)' => 'num'])
+                        ->from('table.options')->where('name = ? AND user = ?', $name, $this->user->uid))->num > 0
+                ) {
+                    Options::alloc()
+                        ->update(
+                            ['value' => $value],
+                            $this->db->sql()->where('name = ? AND user = ?', $name, $this->user->uid)
+                        );
+                } else {
+                    Options::alloc()->insert([
+                        'name'  => $name,
+                        'value' => $value,
+                        'user'  => $this->user->uid
+                    ]);
+                }
             }
-        }
+        });
 
         Notice::alloc()->set(_t("设置已经保存"), 'success');
         $this->response->goBack();
@@ -411,23 +414,26 @@ class Profile extends Users implements ActionInterface
         unset($settings['do'], $settings['plugin']);
         $name = '_plugin:' . $pluginName;
 
+        // 串行化 check-then-write, 避免并发下撞 name+user 唯一索引
         if (!$this->personalConfigHandle($className, $settings)) {
-            if (
-                $this->db->fetchObject($this->db->select(['COUNT(*)' => 'num'])
-                    ->from('table.options')->where('name = ? AND user = ?', $name, $this->user->uid))->num > 0
-            ) {
-                Options::alloc()
-                    ->update(
-                        ['value' => json_encode($settings)],
-                        $this->db->sql()->where('name = ? AND user = ?', $name, $this->user->uid)
-                    );
-            } else {
-                Options::alloc()->insert([
-                    'name'  => $name,
-                    'value' => json_encode($settings),
-                    'user'  => $this->user->uid
-                ]);
-            }
+            $this->db->transaction(function () use ($name, $settings): void {
+                if (
+                    $this->db->fetchObject($this->db->select(['COUNT(*)' => 'num'])
+                        ->from('table.options')->where('name = ? AND user = ?', $name, $this->user->uid))->num > 0
+                ) {
+                    Options::alloc()
+                        ->update(
+                            ['value' => json_encode($settings)],
+                            $this->db->sql()->where('name = ? AND user = ?', $name, $this->user->uid)
+                        );
+                } else {
+                    Options::alloc()->insert([
+                        'name'  => $name,
+                        'value' => json_encode($settings),
+                        'user'  => $this->user->uid
+                    ]);
+                }
+            });
         }
 
         /** 提示信息 */

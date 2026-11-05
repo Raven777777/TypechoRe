@@ -79,7 +79,14 @@ class GetText
         $this->enable_cache = $enable_cache;
         $this->STREAM = @fopen($file, 'rb');
 
-        $unpacked = unpack('c', $this->read(4));
+        // 截断 (不足 4 字节) 的 .mo 不能让 unpack 抛错
+        $head = fread($this->STREAM, 4);
+        if (strlen((string) $head) < 4) {
+            $this->error = 1; // not MO file
+            return;
+        }
+
+        $unpacked = unpack('c', $head);
         $magic = array_shift($unpacked);
 
         if (-34 == $magic) {
@@ -164,7 +171,10 @@ class GetText
         $key = $single . chr(0) . $plural;
 
 
-        if ($this->enable_cache) {
+        // 截断的 .mo 可能导致表未加载/损坏, 缓存不可用时回退到原文而不是 TypeError
+        $cached = $this->enable_cache && is_array($this->cache_translations);
+
+        if ($cached) {
             if (!array_key_exists($key, $this->cache_translations)) {
                 return ($number != 1) ? $plural : $single;
             } else {
@@ -748,7 +758,7 @@ class GetText
         // cache header field for plural forms
         if (!is_string($this->pluralHeader)) {
             if ($this->enable_cache) {
-                $header = $this->cache_translations[""];
+                $header = is_array($this->cache_translations) ? $this->cache_translations[""] : null;
             } else {
                 $header = $this->getTranslationString(0);
             }
